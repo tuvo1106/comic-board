@@ -189,20 +189,18 @@ data/             sqlite + covers/ (gitignored)
 
 Ordered; each is a self-contained slice.
 
-### 8.1 Accounts & ownership (email/password) — _in progress_
-- **Schema:** `User(email UNIQUE, passwordHash, createdAt)`, `Session(userId, expiresAt)`.
-  Add nullable `userId` to `Comic` and `Board`; backfill existing rows to a
-  bootstrap user during migration.
-- **Auth:** hand-rolled session auth — hash with argon2/bcrypt, opaque session id
-  in an HTTP-only, SameSite=Lax cookie, `Session` row with expiry. No third-party
-  service. Middleware resolves the session and rejects unauthenticated `/api/*`.
-- **Scoping:** every comic/board query filters by the current `userId`; the query
-  layer is the single choke point, so UI code is largely untouched. Uploads,
-  boards, and ratings attach the owner.
-- **UI:** `/signup` and `/login` pages (email + password), a user menu with logout
-  in the top bar. Unauthenticated visitors are redirected to `/login`.
-- **Boards belong to users** — "My Comics" becomes per-user; a user only sees
-  their own boards/tabs.
+### 8.1 Accounts & ownership (email/password) — _done_
+- **better-auth** (email/password) with the Drizzle/sqlite adapter; `user`,
+  `session`, `account`, `verification` tables. Sessions in an HTTP-only cookie.
+- Nullable `userId` FK on `comics` and `boards`. Seeded data is **unowned**
+  (`userId` null); a `databaseHooks.user.create.after` hook makes the **first
+  account claim** all unowned comics/boards.
+- **Scoping:** every query in `db/queries.ts` takes a `userId` and filters/sets by
+  it (a null userId = the unowned pool for seeding). API routes resolve the
+  session (`getUserId`) and 401 when absent.
+- **UI:** `/signup` and `/login` pages, a user menu with logout in the top bar,
+  `middleware.ts` optimistic cookie gate redirecting unauthenticated page views to
+  `/login`, and a client 401 → `/login` redirect.
 
 ### 8.2 Ratings (1–5 stars)
 - `Comic.rating` INTEGER (1–5, null = unrated). `PATCH /api/comics/:id` accepts it.
@@ -224,6 +222,9 @@ Ordered; each is a self-contained slice.
   that installs Chrome, or keep local-only initially.
 
 ### 8.5 Later (design-for, don't build yet)
+- **Spec-driven behaviors** — convert the current feature set + ad-hoc test flows
+  into structured specs (per-feature behavior specs / BDD-style test descriptions)
+  the unit + integration suites map onto. Formalize eventually.
 - **Cloud storage** via the existing `StorageAdapter`.
 - **Smart boards** — a board backed by a stored filter query (live counterpart to
   save-view snapshots); `Board.query` JSON column.

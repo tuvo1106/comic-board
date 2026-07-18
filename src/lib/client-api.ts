@@ -14,6 +14,10 @@ import type { BoardDTO, ComicDTO, MetaDTO } from "./types";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("Not signed in");
+  }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
@@ -102,6 +106,10 @@ export function useUploadComic() {
       form.append("file", file);
       form.append("meta", JSON.stringify(meta));
       const res = await fetch("/api/comics", { method: "POST", body: form });
+      if (res.status === 401 && typeof window !== "undefined") {
+        window.location.href = "/login";
+        throw new Error("Not signed in");
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "Upload failed");

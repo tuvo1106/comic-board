@@ -23,7 +23,15 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const DATA_DIR = path.join(ROOT, "data", "test");
 const DB_PATH = path.join(DATA_DIR, "test.db");
 const DIST_DIR = ".next-itest"; // separate build dir so a running dev server isn't disturbed
-const env = { ...process.env, DATA_DIR, DATABASE_PATH: DB_PATH, NEXT_DIST_DIR: DIST_DIR };
+const env = {
+  ...process.env,
+  DATA_DIR,
+  DATABASE_PATH: DB_PATH,
+  NEXT_DIST_DIR: DIST_DIR,
+  // Auth origin must match this test server, not the dev server's .env value.
+  BETTER_AUTH_URL: BASE,
+  BETTER_AUTH_SECRET: "integration-test-secret",
+};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fails = [];
@@ -68,12 +76,27 @@ try {
     defaultViewport: { width: 1440, height: 1000 },
   });
   const p = await browser.newPage();
+
+  // Everything is gated behind auth; sign up the first account (which claims the
+  // seeded, unowned data) before exercising the board.
+  await p.goto(`${BASE}/signup`, { waitUntil: "networkidle0" });
+  await sleep(600);
+  await p.type("input[type='email']", "itest@example.com");
+  await p.type("input[type='password']", "integration123");
+  await Promise.all([
+    p.waitForNavigation({ waitUntil: "networkidle0" }).catch(() => {}),
+    p.click("button[type='submit']"),
+  ]);
+  await sleep(1200);
+  ck(new URL(p.url()).pathname === "/", "signup lands on the board (first user claims seed data)");
+
   const imgs = () => p.$$eval("main img[src*='thumb.webp']", (e) => e.length);
   const sortLabel = () =>
     p.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent).find((t) => t && t.includes("Sort:")));
 
-  const total = await (await fetch(`${BASE}/api/comics`)).json();
-  const N = total.length;
+  // Authenticated fetches must run in the browser (which holds the session cookie).
+  const apiJson = (path) => p.evaluate((pth) => fetch(pth).then((r) => r.json()), path);
+  const N = (await apiJson("/api/comics")).length;
 
   await p.goto(BASE, { waitUntil: "networkidle0" });
   await sleep(800);
@@ -153,13 +176,13 @@ try {
   await save.click();
   await sleep(800);
   ck(await p.evaluate(() => document.body.innerText.includes("Integration Tester")), "edit shows immediately in the modal");
-  const persisted = await (await fetch(`${BASE}/api/comics/${cid}`)).json();
+  const persisted = await apiJson(`/api/comics/${cid}`);
   ck(persisted.artists.includes("Integration Tester"), "edit persisted server-side");
   await p.keyboard.press("Escape");
   await sleep(400);
 
   // Custom board defaults to Manual sort.
-  const boards = await (await fetch(`${BASE}/api/boards`)).json();
+  const boards = await apiJson("/api/boards");
   if (boards[0]) {
     await p.goto(`${BASE}/board/${boards[0].id}`, { waitUntil: "networkidle0" });
     await sleep(700);

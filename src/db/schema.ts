@@ -6,6 +6,7 @@ import {
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
+import { user } from "./auth-schema";
 
 /**
  * A single comic cover + its metadata.
@@ -17,6 +18,9 @@ import {
  */
 export const comics = sqliteTable("comics", {
   id: text("id").primaryKey(),
+  // Owner. Nullable so pre-auth rows can be backfilled; the query layer scopes
+  // every read/write by the current user.
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
   series: text("series").notNull(),
   issueNumber: text("issue_number"),
   publisher: text("publisher"),
@@ -33,6 +37,8 @@ export const comics = sqliteTable("comics", {
 /** A user-created board. "My Comics" is virtual and never has a row here. */
 export const boards = sqliteTable("boards", {
   id: text("id").primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }), // owner
+
   name: text("name").notNull(),
   tabPosition: real("tab_position").notNull(),
   createdAt: integer("created_at").notNull(),

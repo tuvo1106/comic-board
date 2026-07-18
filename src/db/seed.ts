@@ -365,9 +365,10 @@ async function clearAll() {
 async function main() {
   await clearAll();
 
+  // Seeded data is unowned (userId null) until the first account claims it.
   const boardIds = new Map<string, string>();
   for (const name of ["Vintage Vault", "All In"]) {
-    boardIds.set(name, createBoard(name).id);
+    boardIds.set(name, createBoard(null, name).id);
   }
 
   let count = 0;
@@ -375,6 +376,7 @@ async function main() {
     const buf = await fs.readFile(path.join(IMAGES_DIR, rc.file));
     const image = await processUpload(buf);
     const comic = createComic({
+      userId: null,
       series: rc.series,
       issueNumber: rc.issue,
       publisher: rc.publisher,
@@ -388,7 +390,7 @@ async function main() {
     });
     for (const b of rc.boards) {
       const id = boardIds.get(b);
-      if (id) addComicToBoard(id, comic.id);
+      if (id) addComicToBoard(null, id, comic.id);
     }
     count++;
     process.stdout.write(".");

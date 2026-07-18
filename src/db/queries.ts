@@ -1,4 +1,5 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
 import { positionAfterMax } from "@/lib/fractional-index";
 import { storage } from "@/lib/storage";
@@ -23,8 +24,17 @@ import {
 /** Either the top-level db handle or a transaction handle (same connection). */
 type DBOrTx = typeof db | Parameters<Parameters<(typeof db)["transaction"]>[0]>[0];
 
+// Every exported query takes the current user's id and scopes reads/writes to
+// it, so users never see or touch each other's comics and boards. A null userId
+// means the "unowned" pool (seeded data before anyone signs up); the first
+// account to sign up claims it (see auth databaseHooks).
+function ownedBy(col: SQLiteColumn, userId: string | null): SQL {
+  return userId == null ? isNull(col) : eq(col, userId);
+}
+
 // ---------------------------------------------------------------------------
-// Artists / characters (normalized, deduped case-insensitively)
+// Normalized name tables (authors/artists/characters/tags are shared globally;
+// a comic's associations are user-scoped via the comic itself)
 // ---------------------------------------------------------------------------
 
 function upsertNames(
@@ -36,11 +46,7 @@ function upsertNames(
     const name = raw.trim();
     if (!name) continue;
     const key = nameKey(name);
-    const existing = db
-      .select({ id: table.id })
-      .from(table)
-      .where(eq(table.nameKey, key))
-      .get();
+    const existing = db.select({ id: table.id }).from(table).where(eq(table.nameKey, key)).get();
     if (existing) {
       ids.push(existing.id);
     } else {
@@ -87,7 +93,7 @@ function rowToDTO(
   };
 }
 
-/** Batch-load authors, artists, characters, and board memberships. */
+/** Batch-load authors, artists, characters, tags, and board memberships. */
 function loadRelations(comicIds: string[]) {
   const authorsByComic = new Map<string, string[]>();
   const artistsByComic = new Map<string, string[]>();
@@ -98,82 +104,64 @@ function loadRelations(comicIds: string[]) {
     return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic };
   }
 
-  const au = db
+  const push = (m: Map<string, string[]>, k: string, v: string) => {
+    const list = m.get(k) ?? [];
+    list.push(v);
+    m.set(k, list);
+  };
+
+  for (const r of db
     .select({ comicId: comicAuthors.comicId, name: authors.name })
     .from(comicAuthors)
     .innerJoin(authors, eq(authors.id, comicAuthors.authorId))
     .where(inArray(comicAuthors.comicId, comicIds))
-    .all();
-  for (const r of au) {
-    const list = authorsByComic.get(r.comicId) ?? [];
-    list.push(r.name);
-    authorsByComic.set(r.comicId, list);
-  }
+    .all())
+    push(authorsByComic, r.comicId, r.name);
 
-  const ar = db
+  for (const r of db
     .select({ comicId: comicArtists.comicId, name: artists.name })
     .from(comicArtists)
     .innerJoin(artists, eq(artists.id, comicArtists.artistId))
     .where(inArray(comicArtists.comicId, comicIds))
-    .all();
-  for (const r of ar) {
-    const list = artistsByComic.get(r.comicId) ?? [];
-    list.push(r.name);
-    artistsByComic.set(r.comicId, list);
-  }
+    .all())
+    push(artistsByComic, r.comicId, r.name);
 
-  const ch = db
+  for (const r of db
     .select({ comicId: comicCharacters.comicId, name: characters.name })
     .from(comicCharacters)
     .innerJoin(characters, eq(characters.id, comicCharacters.characterId))
     .where(inArray(comicCharacters.comicId, comicIds))
-    .all();
-  for (const r of ch) {
-    const list = charsByComic.get(r.comicId) ?? [];
-    list.push(r.name);
-    charsByComic.set(r.comicId, list);
-  }
+    .all())
+    push(charsByComic, r.comicId, r.name);
 
-  const tg = db
+  for (const r of db
     .select({ comicId: comicTags.comicId, name: tags.name })
     .from(comicTags)
     .innerJoin(tags, eq(tags.id, comicTags.tagId))
     .where(inArray(comicTags.comicId, comicIds))
-    .all();
-  for (const r of tg) {
-    const list = tagsByComic.get(r.comicId) ?? [];
-    list.push(r.name);
-    tagsByComic.set(r.comicId, list);
-  }
+    .all())
+    push(tagsByComic, r.comicId, r.name);
 
-  const bc = db
+  for (const r of db
     .select({ comicId: boardComics.comicId, boardId: boardComics.boardId })
     .from(boardComics)
     .where(inArray(boardComics.comicId, comicIds))
-    .all();
-  for (const r of bc) {
-    const list = boardsByComic.get(r.comicId) ?? [];
-    list.push(r.boardId);
-    boardsByComic.set(r.comicId, list);
-  }
+    .all())
+    push(boardsByComic, r.comicId, r.boardId);
 
   return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic };
 }
+
+const sortNames = (a: string[]) => [...a].sort((x, y) => x.localeCompare(y));
 
 function attachRelations(rows: ComicRow[]): ComicDTO[] {
   const rel = loadRelations(rows.map((r) => r.id));
   return rows.map((row) =>
     rowToDTO(row, {
-      authors: (rel.authorsByComic.get(row.id) ?? []).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-      artists: (rel.artistsByComic.get(row.id) ?? []).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-      characters: (rel.charsByComic.get(row.id) ?? []).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-      tags: (rel.tagsByComic.get(row.id) ?? []).sort((a, b) => a.localeCompare(b)),
+      authors: sortNames(rel.authorsByComic.get(row.id) ?? []),
+      artists: sortNames(rel.artistsByComic.get(row.id) ?? []),
+      characters: sortNames(rel.charsByComic.get(row.id) ?? []),
+      tags: sortNames(rel.tagsByComic.get(row.id) ?? []),
       boardIds: rel.boardsByComic.get(row.id) ?? [],
     }),
   );
@@ -183,30 +171,38 @@ function attachRelations(rows: ComicRow[]): ComicDTO[] {
 // Comics
 // ---------------------------------------------------------------------------
 
-export function listComics(boardId?: string | null): ComicDTO[] {
+export function listComics(userId: string, boardId?: string | null): ComicDTO[] {
   if (boardId) {
     const rows = db
       .select({ comic: comics, pos: boardComics.position })
       .from(boardComics)
       .innerJoin(comics, eq(comics.id, boardComics.comicId))
-      .where(eq(boardComics.boardId, boardId))
+      .where(and(eq(boardComics.boardId, boardId), eq(comics.userId, userId)))
       .orderBy(boardComics.position)
       .all();
-    // Override position with the per-board position for ordering on the client.
-    const withBoardPos = rows.map((r) => ({ ...r.comic, position: r.pos }));
-    return attachRelations(withBoardPos);
+    return attachRelations(rows.map((r) => ({ ...r.comic, position: r.pos })));
   }
-  const rows = db.select().from(comics).orderBy(comics.position).all();
+  const rows = db
+    .select()
+    .from(comics)
+    .where(eq(comics.userId, userId))
+    .orderBy(comics.position)
+    .all();
   return attachRelations(rows);
 }
 
-export function getComic(id: string): ComicDTO | null {
-  const row = db.select().from(comics).where(eq(comics.id, id)).get();
+export function getComic(userId: string, id: string): ComicDTO | null {
+  const row = db
+    .select()
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .get();
   if (!row) return null;
   return attachRelations([row])[0];
 }
 
 export interface CreateComicInput {
+  userId: string | null; // null = unowned (seed); real id from the API
   series: string;
   issueNumber?: string | null;
   publisher?: string | null;
@@ -227,12 +223,14 @@ export function createComic(input: CreateComicInput): ComicDTO {
     const maxPos = tx
       .select({ m: sql<number>`max(${comics.position})` })
       .from(comics)
+      .where(ownedBy(comics.userId, input.userId))
       .get();
     const position = positionAfterMax(maxPos?.m ?? null);
 
     tx.insert(comics)
       .values({
         id,
+        userId: input.userId,
         series: input.series,
         issueNumber: input.issueNumber ?? null,
         publisher: input.publisher ?? null,
@@ -247,28 +245,22 @@ export function createComic(input: CreateComicInput): ComicDTO {
       })
       .run();
 
-    const authorIds = upsertNames(authors, input.authors);
-    for (const authorId of authorIds) {
+    for (const authorId of upsertNames(authors, input.authors))
       tx.insert(comicAuthors).values({ comicId: id, authorId }).onConflictDoNothing().run();
-    }
-    const artistIds = upsertNames(artists, input.artists);
-    for (const artistId of artistIds) {
+    for (const artistId of upsertNames(artists, input.artists))
       tx.insert(comicArtists).values({ comicId: id, artistId }).onConflictDoNothing().run();
-    }
-    const characterIds = upsertNames(characters, input.characters);
-    for (const characterId of characterIds) {
-      tx.insert(comicCharacters)
-        .values({ comicId: id, characterId })
-        .onConflictDoNothing()
-        .run();
-    }
-    const tagIds = upsertNames(tags, input.tags);
-    for (const tagId of tagIds) {
+    for (const characterId of upsertNames(characters, input.characters))
+      tx.insert(comicCharacters).values({ comicId: id, characterId }).onConflictDoNothing().run();
+    for (const tagId of upsertNames(tags, input.tags))
       tx.insert(comicTags).values({ comicId: id, tagId }).onConflictDoNothing().run();
-    }
 
     for (const boardId of input.boardIds) {
-      addComicToBoardTx(tx, boardId, id, now);
+      const owned = tx
+        .select({ id: boards.id })
+        .from(boards)
+        .where(and(eq(boards.id, boardId), ownedBy(boards.userId, input.userId)))
+        .get();
+      if (owned) addComicToBoardTx(tx, boardId, id, now);
     }
 
     return getComicTx(tx, id)!;
@@ -286,9 +278,17 @@ export interface UpdateComicInput {
   tags?: string[];
 }
 
-export function updateComic(id: string, input: UpdateComicInput): ComicDTO | null {
-  const exists = db.select({ id: comics.id }).from(comics).where(eq(comics.id, id)).get();
-  if (!exists) return null;
+export function updateComic(
+  userId: string,
+  id: string,
+  input: UpdateComicInput,
+): ComicDTO | null {
+  const owned = db
+    .select({ id: comics.id })
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .get();
+  if (!owned) return null;
 
   return db.transaction((tx) => {
     const fields: Partial<ComicRow> = {};
@@ -302,51 +302,54 @@ export function updateComic(id: string, input: UpdateComicInput): ComicDTO | nul
 
     if (input.authors !== undefined) {
       tx.delete(comicAuthors).where(eq(comicAuthors.comicId, id)).run();
-      for (const authorId of upsertNames(authors, input.authors)) {
+      for (const authorId of upsertNames(authors, input.authors))
         tx.insert(comicAuthors).values({ comicId: id, authorId }).onConflictDoNothing().run();
-      }
     }
     if (input.artists !== undefined) {
       tx.delete(comicArtists).where(eq(comicArtists.comicId, id)).run();
-      for (const artistId of upsertNames(artists, input.artists)) {
+      for (const artistId of upsertNames(artists, input.artists))
         tx.insert(comicArtists).values({ comicId: id, artistId }).onConflictDoNothing().run();
-      }
     }
     if (input.characters !== undefined) {
       tx.delete(comicCharacters).where(eq(comicCharacters.comicId, id)).run();
-      for (const characterId of upsertNames(characters, input.characters)) {
-        tx.insert(comicCharacters)
-          .values({ comicId: id, characterId })
-          .onConflictDoNothing()
-          .run();
-      }
+      for (const characterId of upsertNames(characters, input.characters))
+        tx.insert(comicCharacters).values({ comicId: id, characterId }).onConflictDoNothing().run();
     }
     if (input.tags !== undefined) {
       tx.delete(comicTags).where(eq(comicTags.comicId, id)).run();
-      for (const tagId of upsertNames(tags, input.tags)) {
+      for (const tagId of upsertNames(tags, input.tags))
         tx.insert(comicTags).values({ comicId: id, tagId }).onConflictDoNothing().run();
-      }
     }
     return getComicTx(tx, id)!;
   });
 }
 
-export async function deleteComic(id: string): Promise<boolean> {
-  const row = db.select().from(comics).where(eq(comics.id, id)).get();
+export async function deleteComic(userId: string, id: string): Promise<boolean> {
+  const row = db
+    .select()
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .get();
   if (!row) return false;
-  // Cascades remove join rows via FK ON DELETE CASCADE.
-  db.delete(comics).where(eq(comics.id, id)).run();
+  db.delete(comics).where(eq(comics.id, id)).run(); // cascades join rows
   await storage.delete(row.imagePath);
   await storage.delete(row.thumbPath);
   return true;
 }
 
 export function updateComicPosition(
+  userId: string,
   comicId: string,
   position: number,
   boardId?: string | null,
 ): boolean {
   if (boardId) {
+    const owned = db
+      .select({ id: boards.id })
+      .from(boards)
+      .where(and(eq(boards.id, boardId), eq(boards.userId, userId)))
+      .get();
+    if (!owned) return false;
     const res = db
       .update(boardComics)
       .set({ position })
@@ -354,7 +357,11 @@ export function updateComicPosition(
       .run();
     return res.changes > 0;
   }
-  const res = db.update(comics).set({ position }).where(eq(comics.id, comicId)).run();
+  const res = db
+    .update(comics)
+    .set({ position })
+    .where(and(eq(comics.id, comicId), eq(comics.userId, userId)))
+    .run();
   return res.changes > 0;
 }
 
@@ -362,8 +369,13 @@ export function updateComicPosition(
 // Boards
 // ---------------------------------------------------------------------------
 
-export function listBoards(): BoardDTO[] {
-  const rows = db.select().from(boards).orderBy(boards.tabPosition).all();
+export function listBoards(userId: string): BoardDTO[] {
+  const rows = db
+    .select()
+    .from(boards)
+    .where(eq(boards.userId, userId))
+    .orderBy(boards.tabPosition)
+    .all();
   const counts = db
     .select({ boardId: boardComics.boardId, c: sql<number>`count(*)` })
     .from(boardComics)
@@ -379,27 +391,31 @@ export function listBoards(): BoardDTO[] {
   }));
 }
 
-export function createBoard(name: string, comicIds?: string[]): BoardDTO {
+export function createBoard(
+  userId: string | null,
+  name: string,
+  comicIds?: string[],
+): BoardDTO {
   const id = newId();
   const now = Date.now();
   return db.transaction((tx) => {
     const maxPos = tx
       .select({ m: sql<number>`max(${boards.tabPosition})` })
       .from(boards)
+      .where(ownedBy(boards.userId, userId))
       .get();
     const tabPosition = positionAfterMax(maxPos?.m ?? null);
-    tx.insert(boards).values({ id, name, tabPosition, createdAt: now }).run();
+    tx.insert(boards).values({ id, userId, name, tabPosition, createdAt: now }).run();
 
     if (comicIds && comicIds.length > 0) {
-      // Preserve the given order as the board's initial ordering.
       let pos = 1;
       for (const comicId of comicIds) {
-        const exists = tx
+        const owned = tx
           .select({ id: comics.id })
           .from(comics)
-          .where(eq(comics.id, comicId))
+          .where(and(eq(comics.id, comicId), ownedBy(comics.userId, userId)))
           .get();
-        if (!exists) continue;
+        if (!owned) continue;
         tx.insert(boardComics)
           .values({ boardId: id, comicId, position: pos, addedAt: now })
           .onConflictDoNothing()
@@ -417,6 +433,7 @@ export function createBoard(name: string, comicIds?: string[]): BoardDTO {
 }
 
 export function updateBoard(
+  userId: string,
   id: string,
   fields: { name?: string; tabPosition?: number },
 ): boolean {
@@ -424,21 +441,23 @@ export function updateBoard(
   if (fields.name !== undefined) set.name = fields.name;
   if (fields.tabPosition !== undefined) set.tabPosition = fields.tabPosition;
   if (Object.keys(set).length === 0) return true;
-  const res = db.update(boards).set(set).where(eq(boards.id, id)).run();
+  const res = db
+    .update(boards)
+    .set(set)
+    .where(and(eq(boards.id, id), eq(boards.userId, userId)))
+    .run();
   return res.changes > 0;
 }
 
-export function deleteBoard(id: string): boolean {
-  const res = db.delete(boards).where(eq(boards.id, id)).run();
+export function deleteBoard(userId: string, id: string): boolean {
+  const res = db
+    .delete(boards)
+    .where(and(eq(boards.id, id), eq(boards.userId, userId)))
+    .run();
   return res.changes > 0;
 }
 
-function addComicToBoardTx(
-  tx: DBOrTx,
-  boardId: string,
-  comicId: string,
-  now: number,
-): void {
+function addComicToBoardTx(tx: DBOrTx, boardId: string, comicId: string, now: number): void {
   const maxPos = tx
     .select({ m: sql<number>`max(${boardComics.position})` })
     .from(boardComics)
@@ -451,15 +470,33 @@ function addComicToBoardTx(
     .run();
 }
 
-export function addComicToBoard(boardId: string, comicId: string): boolean {
-  const board = db.select({ id: boards.id }).from(boards).where(eq(boards.id, boardId)).get();
-  const comic = db.select({ id: comics.id }).from(comics).where(eq(comics.id, comicId)).get();
+export function addComicToBoard(
+  userId: string | null,
+  boardId: string,
+  comicId: string,
+): boolean {
+  const board = db
+    .select({ id: boards.id })
+    .from(boards)
+    .where(and(eq(boards.id, boardId), ownedBy(boards.userId, userId)))
+    .get();
+  const comic = db
+    .select({ id: comics.id })
+    .from(comics)
+    .where(and(eq(comics.id, comicId), ownedBy(comics.userId, userId)))
+    .get();
   if (!board || !comic) return false;
   addComicToBoardTx(db, boardId, comicId, Date.now());
   return true;
 }
 
-export function removeComicFromBoard(boardId: string, comicId: string): boolean {
+export function removeComicFromBoard(userId: string, boardId: string, comicId: string): boolean {
+  const board = db
+    .select({ id: boards.id })
+    .from(boards)
+    .where(and(eq(boards.id, boardId), eq(boards.userId, userId)))
+    .get();
+  if (!board) return false;
   const res = db
     .delete(boardComics)
     .where(and(eq(boardComics.boardId, boardId), eq(boardComics.comicId, comicId)))
@@ -468,13 +505,14 @@ export function removeComicFromBoard(boardId: string, comicId: string): boolean 
 }
 
 // ---------------------------------------------------------------------------
-// Meta (distinct values + counts for filters)
+// Meta (distinct values + counts, scoped to the user's comics) — form autocomplete
 // ---------------------------------------------------------------------------
 
-export function getMeta(): MetaDTO {
+export function getMeta(userId: string): MetaDTO {
   const series = db
     .select({ value: comics.series, count: sql<number>`count(*)` })
     .from(comics)
+    .where(eq(comics.userId, userId))
     .groupBy(comics.series)
     .orderBy(comics.series)
     .all();
@@ -482,72 +520,72 @@ export function getMeta(): MetaDTO {
   const publisherRows = db
     .select({ value: comics.publisher, count: sql<number>`count(*)` })
     .from(comics)
-    .where(sql`${comics.publisher} is not null and ${comics.publisher} != ''`)
+    .where(
+      and(eq(comics.userId, userId), sql`${comics.publisher} is not null and ${comics.publisher} != ''`),
+    )
     .groupBy(comics.publisher)
     .orderBy(comics.publisher)
     .all();
 
+  // Facet name lists scoped to the user's comics via inner joins.
   const authorRows = db
-    .select({ value: authors.name, count: sql<number>`count(${comicAuthors.comicId})` })
-    .from(authors)
-    .leftJoin(comicAuthors, eq(comicAuthors.authorId, authors.id))
+    .select({ value: authors.name, count: sql<number>`count(*)` })
+    .from(comicAuthors)
+    .innerJoin(comics, and(eq(comics.id, comicAuthors.comicId), eq(comics.userId, userId)))
+    .innerJoin(authors, eq(authors.id, comicAuthors.authorId))
     .groupBy(authors.id)
     .orderBy(authors.name)
     .all();
-
   const artistRows = db
-    .select({ value: artists.name, count: sql<number>`count(${comicArtists.comicId})` })
-    .from(artists)
-    .leftJoin(comicArtists, eq(comicArtists.artistId, artists.id))
+    .select({ value: artists.name, count: sql<number>`count(*)` })
+    .from(comicArtists)
+    .innerJoin(comics, and(eq(comics.id, comicArtists.comicId), eq(comics.userId, userId)))
+    .innerJoin(artists, eq(artists.id, comicArtists.artistId))
     .groupBy(artists.id)
     .orderBy(artists.name)
     .all();
-
   const characterRows = db
-    .select({
-      value: characters.name,
-      count: sql<number>`count(${comicCharacters.comicId})`,
-    })
-    .from(characters)
-    .leftJoin(comicCharacters, eq(comicCharacters.characterId, characters.id))
+    .select({ value: characters.name, count: sql<number>`count(*)` })
+    .from(comicCharacters)
+    .innerJoin(comics, and(eq(comics.id, comicCharacters.comicId), eq(comics.userId, userId)))
+    .innerJoin(characters, eq(characters.id, comicCharacters.characterId))
     .groupBy(characters.id)
     .orderBy(characters.name)
     .all();
-
   const tagRows = db
-    .select({ value: tags.name, count: sql<number>`count(${comicTags.comicId})` })
-    .from(tags)
-    .leftJoin(comicTags, eq(comicTags.tagId, tags.id))
+    .select({ value: tags.name, count: sql<number>`count(*)` })
+    .from(comicTags)
+    .innerJoin(comics, and(eq(comics.id, comicTags.comicId), eq(comics.userId, userId)))
+    .innerJoin(tags, eq(tags.id, comicTags.tagId))
     .groupBy(tags.id)
     .orderBy(tags.name)
     .all();
 
   return {
     series: series.filter((s) => s.count > 0),
-    publishers: publisherRows
-      .filter((p): p is { value: string; count: number } => Boolean(p.value) && p.count > 0),
-    authors: authorRows.filter((a) => a.count > 0),
-    artists: artistRows.filter((a) => a.count > 0),
-    characters: characterRows.filter((c) => c.count > 0),
-    tags: tagRows.filter((t) => t.count > 0),
+    publishers: publisherRows.filter(
+      (p): p is { value: string; count: number } => Boolean(p.value) && p.count > 0,
+    ),
+    authors: authorRows,
+    artists: artistRows,
+    characters: characterRows,
+    tags: tagRows,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Transaction-scoped read helpers
+// Transaction-scoped read helper
 // ---------------------------------------------------------------------------
 
 function getComicTx(tx: DBOrTx, id: string): ComicDTO | null {
   const row = tx.select().from(comics).where(eq(comics.id, id)).get();
   if (!row) return null;
-  // Relations are read on the same connection; better-sqlite3 is synchronous so
-  // this is consistent within the transaction.
   const rel = loadRelations([id]);
   return rowToDTO(row, {
-    authors: (rel.authorsByComic.get(id) ?? []).sort((a, b) => a.localeCompare(b)),
-    artists: (rel.artistsByComic.get(id) ?? []).sort((a, b) => a.localeCompare(b)),
-    characters: (rel.charsByComic.get(id) ?? []).sort((a, b) => a.localeCompare(b)),
-    tags: (rel.tagsByComic.get(id) ?? []).sort((a, b) => a.localeCompare(b)),
+    authors: sortNames(rel.authorsByComic.get(id) ?? []),
+    artists: sortNames(rel.artistsByComic.get(id) ?? []),
+    characters: sortNames(rel.charsByComic.get(id) ?? []),
+    tags: sortNames(rel.tagsByComic.get(id) ?? []),
     boardIds: rel.boardsByComic.get(id) ?? [],
   });
 }

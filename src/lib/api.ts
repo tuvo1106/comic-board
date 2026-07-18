@@ -13,6 +13,10 @@ export function notFound(message = "Not found") {
   return NextResponse.json({ error: message }, { status: 404 });
 }
 
+export function unauthorized(message = "Not signed in") {
+  return NextResponse.json({ error: message }, { status: 401 });
+}
+
 /** Wrap a route body so thrown ZodErrors become 400s and others become 500s. */
 export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
   try {

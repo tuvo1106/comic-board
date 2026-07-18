@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { signOut, useSession } from "@/lib/auth-client";
+import { Menu, MenuItem } from "@/components/ui/Menu";
 import { Search, Upload } from "@/components/ui/icons";
 
 interface Props {
@@ -38,7 +41,52 @@ export function TopBar({ search, onSearch, onUpload }: Props) {
           <Upload className="h-4 w-4" />
           Upload
         </button>
+
+        <UserMenu />
       </div>
     </header>
+  );
+}
+
+function UserMenu() {
+  const { data } = useSession();
+  const router = useRouter();
+  const user = data?.user;
+  const initial = (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
+
+  return (
+    <Menu
+      align="right"
+      widthClass="w-56"
+      trigger={({ toggle }) => (
+        <button
+          onClick={toggle}
+          className="grid h-9 w-9 place-items-center rounded-full bg-surface-2 text-sm font-semibold text-fg ring-1 ring-border transition hover:ring-accent/50"
+          title={user?.email ?? "Account"}
+        >
+          {initial}
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <div className="px-2.5 py-1.5">
+            <p className="truncate text-sm font-medium text-fg">{user?.name || "Signed in"}</p>
+            <p className="truncate text-xs text-muted">{user?.email}</p>
+          </div>
+          <div className="my-1 h-px bg-border" />
+          <MenuItem
+            onClick={async () => {
+              close();
+              await signOut();
+              router.push("/login");
+              router.refresh();
+            }}
+          >
+            Sign out
+          </MenuItem>
+        </>
+      )}
+    </Menu>
   );
 }
