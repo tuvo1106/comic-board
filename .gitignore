@@ -1,0 +1,17 @@
+/node_modules
+/.next
+/.next-itest
+/out
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# local data (sqlite db + uploaded covers)
+/data
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.env*
+!.env.example

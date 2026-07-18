@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/*
+  Comic Board design tokens.
+  Dark, gallery-like surface so the covers carry the color.
+*/
+@theme {
+  --color-bg: #0e0f13;
+  --color-surface: #16181f;
+  --color-surface-2: #1e212b;
+  --color-border: #2a2e3a;
+  --color-fg: #eef0f5;
+  --color-muted: #9aa2b4;
+  --color-accent: #6d8bff;
+  --color-accent-fg: #ffffff;
+  --color-danger: #ff5c72;
+
+  --radius-card: 12px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Thin, unobtrusive scrollbars on the dark surface. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* Respect reduced-motion: Motion reads this too, but kill CSS transitions as well. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
