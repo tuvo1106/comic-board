@@ -163,7 +163,7 @@ export function ComicDetail({ id, asModal }: Props) {
       <div className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl ring-1 ring-border md:flex-row">
         {/* Cover — shared element with the board card. */}
         <div className="flex items-center justify-center bg-black/40 p-4 md:w-[55%]">
-          {comic && (
+          {comic ? (
             <motion.img
               layoutId={`cover-${id}`}
               src={comic.imageUrl}
@@ -171,6 +171,10 @@ export function ComicDetail({ id, asModal }: Props) {
               className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
             />
+          ) : (
+            // Reserve the cover space while loading (cold deep-link) so the panel
+            // opens full-size instead of a small box that grows.
+            <div className="aspect-[2/3] h-[45vh] max-w-full animate-pulse rounded-lg bg-surface-2 md:h-[76vh]" />
           )}
         </div>
 

@@ -110,6 +110,10 @@ export function BoardView({ boardId }: { boardId?: string }) {
             onReorder={onReorder}
             onOpen={(c: ComicDTO) => {
               navOrder.set(filtered.map((x) => x.id));
+              // Prime the detail cache for the visible comics so the modal (and
+              // ←/→ nav) render fully at once instead of flashing a small,
+              // still-loading panel that then grows in.
+              for (const x of filtered) qc.setQueryData(keys.comic(x.id), x);
               router.push(`/comic/${c.id}`);
             }}
             renderMenu={(c: ComicDTO) => (
