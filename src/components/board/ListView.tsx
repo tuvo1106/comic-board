@@ -27,6 +27,7 @@ export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, o
     authors: (meta?.authors ?? []).map((a) => a.value),
     artists: (meta?.artists ?? []).map((a) => a.value),
     tags: (meta?.tags ?? []).map((t) => t.value),
+    publishers: (meta?.publishers ?? []).map((p) => p.value),
   };
 
   const sortProps = { active: sortField, dir: sortDir, onSort };
@@ -101,7 +102,7 @@ function Row({
   comic: ComicDTO;
   currentBoardId?: string;
   onOpen: () => void;
-  suggestions: { authors: string[]; artists: string[]; tags: string[] };
+  suggestions: { authors: string[]; artists: string[]; tags: string[]; publishers: string[] };
 }) {
   const update = useUpdateComic();
   const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) =>
@@ -124,7 +125,11 @@ function Row({
 
       <EditText value={comic.series} placeholder="Series" onCommit={(v) => save({ series: v.trim() || comic.series })} />
       <EditText value={comic.issueNumber ?? ""} placeholder="—" onCommit={(v) => save({ issueNumber: v.trim() || null })} />
-      <EditText value={comic.publisher ?? ""} placeholder="—" onCommit={(v) => save({ publisher: v.trim() || null })} />
+      <EditPublisher
+        value={comic.publisher ?? ""}
+        suggestions={suggestions.publishers}
+        onCommit={(v) => save({ publisher: v.trim() || null })}
+      />
       <EditDate value={comic.coverDate} onCommit={(v) => save({ coverDate: v || null })} />
 
       <EditTags values={comic.authors} suggestions={suggestions.authors} placeholder="—" onCommit={(v) => save({ authors: v })} />
@@ -184,6 +189,80 @@ function EditText({
       }}
       className="w-full rounded border border-accent bg-surface-2 px-1 py-1 outline-none"
     />
+  );
+}
+
+/** Inline publisher cell: click-to-edit text with an autocomplete dropdown of
+ *  known publishers. Free text is still allowed for new ones. */
+function EditPublisher({
+  value,
+  suggestions,
+  onCommit,
+}: {
+  value: string;
+  suggestions: string[];
+  onCommit: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = (v: string) => {
+    setEditing(false);
+    if (v !== value) onCommit(v);
+  };
+
+  const matches = suggestions
+    .filter((s) => {
+      const q = draft.trim().toLowerCase();
+      return q ? s.toLowerCase().includes(q) && s.toLowerCase() !== q : true;
+    })
+    .slice(0, 8);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="truncate rounded px-1 py-1 text-left hover:bg-surface-2"
+        title="Click to edit"
+      >
+        {value || <span className="text-muted">—</span>}
+      </button>
+    );
+  }
+  return (
+    <div ref={ref} className="relative">
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commit(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit(draft);
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="w-full rounded border border-accent bg-surface-2 px-1 py-1 outline-none"
+      />
+      {matches.length > 0 && (
+        <div className="absolute left-0 top-full z-50 mt-1 max-h-52 w-max min-w-full overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-2xl">
+          {matches.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => commit(s)}
+              className="block w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-surface-2"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
