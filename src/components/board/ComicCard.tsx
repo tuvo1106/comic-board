@@ -4,6 +4,17 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import type { ComicDTO } from "@/lib/types";
 
+// Decode the full-size cover ahead of a click (on hover/touch-start) so the
+// detail modal opens on an already-decoded image instead of briefly showing the
+// darkened card through the not-yet-loaded modal image. Deduped per URL.
+const preloaded = new Set<string>();
+function preloadFull(url: string) {
+  if (typeof window === "undefined" || preloaded.has(url)) return;
+  preloaded.add(url);
+  const img = new window.Image();
+  img.src = url;
+}
+
 interface Props {
   comic: ComicDTO;
   height: number;
@@ -27,6 +38,7 @@ export function ComicCard({ comic, height, onOpen, menu, noLayoutId }: Props) {
       className="group relative h-full w-full cursor-pointer select-none overflow-hidden rounded-[var(--radius-card)] bg-surface-2 shadow-md ring-1 ring-white/5 transition-[box-shadow,transform] duration-150 ease-out hover:z-10 hover:shadow-xl"
       style={{ height }}
       onClick={onOpen}
+      onPointerEnter={() => preloadFull(comic.imageUrl)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
