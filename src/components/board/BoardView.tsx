@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { keys, useComics, useUpdatePosition } from "@/lib/client-api";
@@ -28,6 +28,7 @@ import type { ReorderResult } from "./Masonry";
  */
 export function BoardView({ boardId }: { boardId?: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { filters, update, clear } = useFilters();
   // My Comics defaults to cover date; custom boards default to their manual
   // (drag) order.
@@ -114,7 +115,10 @@ export function BoardView({ boardId }: { boardId?: string }) {
               // ←/→ nav) render fully at once instead of flashing a small,
               // still-loading panel that then grows in.
               for (const x of filtered) qc.setQueryData(keys.comic(x.id), x);
-              router.push(`/comic/${c.id}`);
+              // Carry the board's filter/sort query into the modal URL so the
+              // board underneath keeps its state (no reshuffle on open).
+              const qs = searchParams.toString();
+              router.push(`/comic/${c.id}${qs ? `?${qs}` : ""}`);
             }}
             renderMenu={(c: ComicDTO) => (
               <ComicCardMenu comic={c} currentBoardId={boardId} />

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   useAddToBoard,
@@ -73,12 +73,16 @@ export function ComicDetail({ id, asModal }: Props) {
     else router.push("/");
   }, [asModal, router]);
 
+  const searchParams = useSearchParams();
   const { prev, next } = navOrder.neighbors(id);
   const goto = useCallback(
     (target: string | null) => {
-      if (target) router.replace(`/comic/${target}`, { scroll: false });
+      if (!target) return;
+      // Keep the board's filter/sort params so the board underneath is stable.
+      const qs = searchParams.toString();
+      router.replace(`/comic/${target}${qs ? `?${qs}` : ""}`, { scroll: false });
     },
-    [router],
+    [router, searchParams],
   );
 
   useEffect(() => {

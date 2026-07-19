@@ -151,6 +151,25 @@ try {
   const reload = await p.$$eval("main img[src*='thumb.webp']", (els) => els.map((e) => e.getAttribute("alt")));
   ck(JSON.stringify(reload) === JSON.stringify(after), "reorder persists across reload");
 
+  // Regression: opening a comic must not reshuffle the board underneath — the
+  // board's filter/sort params are carried into the modal URL.
+  await p.goto(`${BASE}/?publisher=DC&sort=series`, { waitUntil: "networkidle0" });
+  await sleep(700);
+  const filteredCount = await imgs();
+  await (await p.$$("main img[src*='thumb.webp']"))[0].click();
+  await sleep(700);
+  ck(
+    /[?&]publisher=DC/.test(p.url()) && /[?&]sort=series/.test(p.url()),
+    "opening a comic keeps the board's filter+sort in the URL",
+  );
+  ck(
+    (await imgs()) === filteredCount,
+    `board underneath keeps its filtered subset, not reshuffled (${await imgs()} vs ${filteredCount})`,
+  );
+  await p.keyboard.press("Escape");
+  await p.goto(BASE, { waitUntil: "networkidle0" }); // reset to a clean board URL
+  await sleep(500);
+
   // Detail modal opens with the full-size cover (shared element).
   await (await p.$$("main img[src*='thumb.webp']"))[0].click();
   await sleep(700);
@@ -161,7 +180,7 @@ try {
     .then(() => true)
     .catch(() => false);
   ck(gotFull, "modal shows full-size cover");
-  const cid = p.url().split("/comic/")[1];
+  const cid = p.url().split("/comic/")[1].split("?")[0];
 
   // Edit persists + modal reflects it immediately.
   const [edit] = await p.$$("xpath/.//button[contains(.,'Edit')]");
