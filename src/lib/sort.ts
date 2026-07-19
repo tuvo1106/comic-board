@@ -1,6 +1,6 @@
 import type { ComicDTO } from "./types";
 
-export type SortKey = "added" | "coverDate" | "series" | "manual";
+export type SortKey = "added" | "coverDate" | "series" | "rating" | "manual";
 
 export const DEFAULT_SORT: SortKey = "manual";
 
@@ -8,11 +8,14 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "manual", label: "Manual order" },
   { value: "coverDate", label: "Cover date" },
   { value: "added", label: "Date added" },
+  { value: "rating", label: "Rating" },
   { value: "series", label: "Series" },
 ];
 
 export function isSortKey(v: string | null): v is SortKey {
-  return v === "added" || v === "coverDate" || v === "series" || v === "manual";
+  return (
+    v === "added" || v === "coverDate" || v === "series" || v === "rating" || v === "manual"
+  );
 }
 
 /** Leading integer of an issue string ("Annual 1" -> 1, "300" -> 300). */
@@ -45,5 +48,8 @@ export function sortComics(comics: ComicDTO[], key: SortKey): ComicDTO[] {
         (a, b) =>
           a.series.localeCompare(b.series) || issueNumber(a.issueNumber) - issueNumber(b.issueNumber),
       );
+    case "rating":
+      // Highest rating first; unrated sinks to the bottom.
+      return out.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
   }
 }

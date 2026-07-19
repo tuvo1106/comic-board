@@ -25,6 +25,7 @@ export const comics = sqliteTable("comics", {
   issueNumber: text("issue_number"),
   publisher: text("publisher"),
   coverDate: text("cover_date"), // ISO yyyy-mm-dd
+  rating: real("rating"), // 0.5–5 stars in 0.5 steps; null = unrated
   imagePath: text("image_path").notNull(),
   thumbPath: text("thumb_path").notNull(),
   blurDataUrl: text("blur_data_url").notNull(),

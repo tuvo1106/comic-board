@@ -2,10 +2,15 @@
  * Seed the board from the real cover images in ./images. Metadata is
  * hand-authored (best-effort — refine any of it via the in-app Edit button).
  *
+ * Creates the seed user first, then seeds the whole collection under them, so
+ * there's a known account to log in with. Configure the creds via
+ * SEED_USER_EMAIL / SEED_USER_PASSWORD (defaults below).
+ *
  * Run with `npm run db:seed`. Clears existing data first so it can be re-run.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { db } from "./client";
 import {
   artists,
@@ -20,11 +25,16 @@ import {
   comics,
   tags,
 } from "./schema";
+import { account, session, user, verification } from "./auth-schema";
+import { auth } from "@/lib/auth";
 import { COVERS_ROOT } from "@/lib/storage";
 import { processUpload } from "@/lib/images";
 import { addComicToBoard, createBoard, createComic } from "./queries";
 
 const IMAGES_DIR = path.join(process.cwd(), "images");
+const SEED_EMAIL = process.env.SEED_USER_EMAIL || "tuvo@example.com";
+const SEED_PASSWORD = process.env.SEED_USER_PASSWORD || "comicboard123";
+const SEED_NAME = process.env.SEED_USER_NAME || "Tu";
 
 interface RealCover {
   file: string;
@@ -39,7 +49,7 @@ interface RealCover {
   boards: string[]; // board names to add to
 }
 
-const REAL: RealCover[] = [
+export const REAL: RealCover[] = [
   // --- Classics / facsimiles ---
   {
     file: "amazing-spider-man-14-a.jpg",
@@ -359,16 +369,25 @@ async function clearAll() {
   db.delete(artists).run();
   db.delete(characters).run();
   db.delete(tags).run();
+  db.delete(session).run();
+  db.delete(account).run();
+  db.delete(verification).run();
+  db.delete(user).run();
   await fs.rm(COVERS_ROOT, { recursive: true, force: true });
 }
 
 async function main() {
   await clearAll();
 
-  // Seeded data is unowned (userId null) until the first account claims it.
+  // Create the seed user first, then seed the whole collection under them.
+  const signup = await auth.api.signUpEmail({
+    body: { email: SEED_EMAIL, password: SEED_PASSWORD, name: SEED_NAME },
+  });
+  const userId = signup.user.id;
+
   const boardIds = new Map<string, string>();
   for (const name of ["Vintage Vault", "All In"]) {
-    boardIds.set(name, createBoard(null, name).id);
+    boardIds.set(name, createBoard(userId, name).id);
   }
 
   let count = 0;
@@ -376,7 +395,7 @@ async function main() {
     const buf = await fs.readFile(path.join(IMAGES_DIR, rc.file));
     const image = await processUpload(buf);
     const comic = createComic({
-      userId: null,
+      userId,
       series: rc.series,
       issueNumber: rc.issue,
       publisher: rc.publisher,
@@ -390,19 +409,24 @@ async function main() {
     });
     for (const b of rc.boards) {
       const id = boardIds.get(b);
-      if (id) addComicToBoard(null, id, comic.id);
+      if (id) addComicToBoard(userId, id, comic.id);
     }
     count++;
     process.stdout.write(".");
   }
   process.stdout.write("\n");
 
-  console.log(`Seeded ${count} comics and 2 boards.`);
+  console.log(`Seeded ${count} comics and 2 boards under ${SEED_EMAIL}.`);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
+// Only seed when this file is run directly (`tsx src/db/seed.ts`), never as a
+// side effect of importing it (e.g. importing REAL from another module).
+const isEntrypoint = process.argv[1] === fileURLToPath(import.meta.url);
+if (isEntrypoint) {
+  main()
+    .then(() => process.exit(0))
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    });
+}

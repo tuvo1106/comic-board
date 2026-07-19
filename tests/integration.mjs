@@ -31,6 +31,9 @@ const env = {
   // Auth origin must match this test server, not the dev server's .env value.
   BETTER_AUTH_URL: BASE,
   BETTER_AUTH_SECRET: "integration-test-secret",
+  // Known seed account to log in with.
+  SEED_USER_EMAIL: "itest@example.com",
+  SEED_USER_PASSWORD: "integration123",
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -77,18 +80,18 @@ try {
   });
   const p = await browser.newPage();
 
-  // Everything is gated behind auth; sign up the first account (which claims the
-  // seeded, unowned data) before exercising the board.
-  await p.goto(`${BASE}/signup`, { waitUntil: "networkidle0" });
+  // Everything is gated behind auth; log in with the seed account (which owns
+  // the seeded collection) before exercising the board.
+  await p.goto(`${BASE}/login`, { waitUntil: "networkidle0" });
   await sleep(600);
-  await p.type("input[type='email']", "itest@example.com");
-  await p.type("input[type='password']", "integration123");
+  await p.type("input[type='email']", env.SEED_USER_EMAIL);
+  await p.type("input[type='password']", env.SEED_USER_PASSWORD);
   await Promise.all([
     p.waitForNavigation({ waitUntil: "networkidle0" }).catch(() => {}),
     p.click("button[type='submit']"),
   ]);
   await sleep(1200);
-  ck(new URL(p.url()).pathname === "/", "signup lands on the board (first user claims seed data)");
+  ck(new URL(p.url()).pathname === "/", "login with seed account lands on the board");
 
   const imgs = () => p.$$eval("main img[src*='thumb.webp']", (e) => e.length);
   const sortLabel = () =>
@@ -178,6 +181,18 @@ try {
   ck(await p.evaluate(() => document.body.innerText.includes("Integration Tester")), "edit shows immediately in the modal");
   const persisted = await apiJson(`/api/comics/${cid}`);
   ck(persisted.artists.includes("Integration Tester"), "edit persisted server-side");
+
+  // Regression: rating a comic (a partial { rating } patch) must NOT wipe its
+  // other metadata (authors/artists/characters/tags).
+  const starBtns = await p.$$("button[aria-label$='stars']");
+  await starBtns[7].click(); // 8th half-target = 4.0 stars
+  await sleep(500);
+  const afterRate = await apiJson(`/api/comics/${cid}`);
+  ck(
+    afterRate.rating === 4 && afterRate.artists.includes("Integration Tester"),
+    `rating keeps other metadata (rating=${afterRate.rating}, artists kept=${afterRate.artists.includes("Integration Tester")})`,
+  );
+
   await p.keyboard.press("Escape");
   await sleep(400);
 

@@ -41,6 +41,16 @@ describe("sortComics", () => {
     expect(ids(sortComics(comics, "series"))).toEqual(["asm14", "asm300", "bat1"]);
   });
 
+  it("rating = highest first, unrated last, supports 0.5 steps", () => {
+    const comics = [
+      makeComic({ id: "three", rating: 3 }),
+      makeComic({ id: "unrated", rating: null }),
+      makeComic({ id: "four-half", rating: 4.5 }),
+      makeComic({ id: "half", rating: 0.5 }),
+    ];
+    expect(ids(sortComics(comics, "rating"))).toEqual(["four-half", "three", "half", "unrated"]);
+  });
+
   it("does not mutate the input array", () => {
     const comics = [makeComic({ position: 2 }), makeComic({ position: 1 })];
     const snapshot = ids(comics);

@@ -11,6 +11,7 @@ export function makeComic(over: Partial<ComicDTO> = {}): ComicDTO {
     issueNumber: "1",
     publisher: null,
     coverDate: null,
+    rating: null,
     imageUrl: "/img.webp",
     thumbUrl: "/thumb.webp",
     blurDataUrl: "data:,",

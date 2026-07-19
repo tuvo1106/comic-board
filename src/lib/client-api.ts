@@ -90,6 +90,7 @@ export interface UploadArgs {
     issueNumber?: string | null;
     publisher?: string | null;
     coverDate?: string | null;
+    rating?: number | null;
     authors: string[];
     artists: string[];
     characters: string[];
@@ -127,6 +128,7 @@ export interface UpdateComicArgs {
     issueNumber?: string | null;
     publisher?: string | null;
     coverDate?: string | null;
+    rating?: number | null;
     authors?: string[];
     artists?: string[];
     characters?: string[];

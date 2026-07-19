@@ -78,6 +78,7 @@ function rowToDTO(
     issueNumber: row.issueNumber,
     publisher: row.publisher,
     coverDate: row.coverDate,
+    rating: row.rating,
     imageUrl: storage.getUrl(row.imagePath),
     thumbUrl: storage.getUrl(row.thumbPath),
     blurDataUrl: row.blurDataUrl,
@@ -207,6 +208,7 @@ export interface CreateComicInput {
   issueNumber?: string | null;
   publisher?: string | null;
   coverDate?: string | null;
+  rating?: number | null;
   authors: string[];
   artists: string[]; // cover artists
   characters: string[];
@@ -235,6 +237,7 @@ export function createComic(input: CreateComicInput): ComicDTO {
         issueNumber: input.issueNumber ?? null,
         publisher: input.publisher ?? null,
         coverDate: input.coverDate ?? null,
+        rating: input.rating ?? null,
         imagePath: input.image.imagePath,
         thumbPath: input.image.thumbPath,
         blurDataUrl: input.image.blurDataUrl,
@@ -272,6 +275,7 @@ export interface UpdateComicInput {
   issueNumber?: string | null;
   publisher?: string | null;
   coverDate?: string | null;
+  rating?: number | null;
   authors?: string[];
   artists?: string[];
   characters?: string[];
@@ -296,6 +300,7 @@ export function updateComic(
     if (input.issueNumber !== undefined) fields.issueNumber = input.issueNumber;
     if (input.publisher !== undefined) fields.publisher = input.publisher;
     if (input.coverDate !== undefined) fields.coverDate = input.coverDate;
+    if (input.rating !== undefined) fields.rating = input.rating;
     if (Object.keys(fields).length > 0) {
       tx.update(comics).set(fields).where(eq(comics.id, id)).run();
     }

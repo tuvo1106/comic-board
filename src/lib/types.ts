@@ -6,6 +6,7 @@ export interface ComicDTO {
   issueNumber: string | null;
   publisher: string | null;
   coverDate: string | null;
+  rating: number | null; // 0.5–5 in 0.5 steps; null = unrated
   imageUrl: string; // full-size
   thumbUrl: string; // masonry thumbnail
   blurDataUrl: string;

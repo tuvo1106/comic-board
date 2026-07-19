@@ -57,6 +57,7 @@ export async function POST(req: Request) {
       issueNumber: meta.issueNumber ?? null,
       publisher: meta.publisher ?? null,
       coverDate: meta.coverDate ?? null,
+      rating: meta.rating ?? null,
       authors: meta.authors,
       artists: meta.artists,
       characters: meta.characters,

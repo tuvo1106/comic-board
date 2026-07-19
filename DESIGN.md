@@ -192,9 +192,11 @@ Ordered; each is a self-contained slice.
 ### 8.1 Accounts & ownership (email/password) — _done_
 - **better-auth** (email/password) with the Drizzle/sqlite adapter; `user`,
   `session`, `account`, `verification` tables. Sessions in an HTTP-only cookie.
-- Nullable `userId` FK on `comics` and `boards`. Seeded data is **unowned**
-  (`userId` null); a `databaseHooks.user.create.after` hook makes the **first
-  account claim** all unowned comics/boards.
+- Nullable `userId` FK on `comics` and `boards`. **The seed creates the owner
+  first** (known creds via `SEED_USER_EMAIL`/`SEED_USER_PASSWORD`, defaults in
+  `seed.ts`) and seeds the whole collection under them. A
+  `databaseHooks.user.create.after` hook remains as a safety net: the first
+  account claims any genuinely unowned rows (e.g. a real pre-auth migration).
 - **Scoping:** every query in `db/queries.ts` takes a `userId` and filters/sets by
   it (a null userId = the unowned pool for seeding). API routes resolve the
   session (`getUserId`) and 401 when absent.

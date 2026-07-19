@@ -15,6 +15,7 @@ import { navOrder } from "@/lib/nav-order";
 import type { ComicDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Menu } from "@/components/ui/Menu";
+import { StarRating } from "@/components/ui/StarRating";
 import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataForm";
 import {
   Check,
@@ -211,6 +212,13 @@ export function ComicDetail({ id, asModal }: Props) {
               transition={{ delay: 0.05 }}
               className="flex-1 space-y-5 overflow-y-auto p-5"
             >
+              <Field label="Your rating">
+                <StarRating
+                  value={comic.rating}
+                  onChange={(rating) => updateComic.mutate({ id, patch: { rating } })}
+                />
+              </Field>
+
               {(comic.publisher || comic.coverDate) && (
                 <div className="flex flex-wrap gap-x-6 gap-y-3">
                   {comic.publisher && (
