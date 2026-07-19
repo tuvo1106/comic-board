@@ -186,9 +186,32 @@ try {
   await sleep(500);
 
   // Detail modal opens with the full-size cover (shared element).
-  await (await p.$$("main img[src*='thumb.webp']"))[0].click();
+  // Regression: opening the modal must NOT scroll the board underneath (the
+  // fixed overlay used to drag the page to its DOM position, the bottom).
+  // Scroll down first, then open a still-visible card via a real DOM click
+  // (evaluate, so puppeteer doesn't auto-scroll the element into view).
+  await p.evaluate(() => window.scrollTo(0, 500));
+  await sleep(150);
+  const scrollBefore = await p.evaluate(() => window.scrollY);
+  await p.evaluate(() => {
+    const vh = window.innerHeight;
+    const img = [...document.querySelectorAll("main img[src*='thumb.webp']")].find((im) => {
+      const r = im.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= vh;
+    });
+    (img.closest("button") ?? img).click();
+  });
   await sleep(700);
   ck(/\/comic\//.test(p.url()), "clicking a card opens a comic route");
+  const scrollAfter = await p.evaluate(() => window.scrollY);
+  ck(
+    Math.abs(scrollAfter - scrollBefore) < 50,
+    `modal open keeps the board scroll position (${scrollBefore} -> ${scrollAfter})`,
+  );
+  ck(
+    await p.evaluate(() => getComputedStyle(document.body).overflow === "hidden"),
+    "background scroll is locked while the modal is open",
+  );
   // First navigation to the modal route can cold-compile; wait for the image.
   const gotFull = await p
     .waitForSelector("img[src*='full.webp']", { timeout: 8000 })
