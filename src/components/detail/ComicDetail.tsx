@@ -85,6 +85,17 @@ export function ComicDetail({ id, asModal }: Props) {
     [router, searchParams],
   );
 
+  // Lock background scroll while the modal is open so the board underneath
+  // stays put instead of scrolling behind the backdrop.
+  useEffect(() => {
+    if (!asModal) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [asModal]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (editing) {

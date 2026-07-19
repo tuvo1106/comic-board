@@ -82,7 +82,9 @@ export function BoardView({ boardId }: { boardId?: string }) {
     navOrder.set(filtered.map((x) => x.id));
     for (const x of filtered) qc.setQueryData(keys.comic(x.id), x);
     const qs = searchParams.toString();
-    router.push(`/comic/${c.id}${qs ? `?${qs}` : ""}`);
+    // scroll:false — the modal is a fixed overlay; without this Next scrolls the
+    // board underneath to the modal's DOM position (the bottom of the page).
+    router.push(`/comic/${c.id}${qs ? `?${qs}` : ""}`, { scroll: false });
   };
 
   return (
