@@ -103,8 +103,13 @@ export function BoardView({ boardId }: { boardId?: string }) {
               {filtered.length} {filtered.length === 1 ? "cover" : "covers"}
             </p>
             <div className="flex items-center gap-2">
-              <SortSelector field={sortField} dir={sortDir} onSelect={setSort} />
-              {view === "grid" && <ColumnSelector value={columns} onChange={setColumns} />}
+              {/* List view sorts via its column headers, so the dropdown is grid-only. */}
+              {view === "grid" && (
+                <>
+                  <SortSelector field={sortField} dir={sortDir} onSelect={setSort} />
+                  <ColumnSelector value={columns} onChange={setColumns} />
+                </>
+              )}
               <ViewToggle value={view} onChange={setView} />
             </div>
           </div>
