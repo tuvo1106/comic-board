@@ -143,8 +143,17 @@ try {
     await sleep(20);
   }
   await sleep(200);
+  // Wait for the position PATCH to actually persist before reloading (the CI
+  // runner is slow enough that a fixed sleep can race the request).
+  const posPersisted = p
+    .waitForResponse(
+      (r) => /\/api\/comics\/[^/]+\/position/.test(r.url()) && r.request().method() === "PATCH",
+      { timeout: 10000 },
+    )
+    .catch(() => null);
   await p.mouse.up();
-  await sleep(800);
+  await posPersisted;
+  await sleep(300);
   const after = await p.$$eval("main img[src*='thumb.webp']", (els) => els.map((e) => e.getAttribute("alt")));
   ck(JSON.stringify(before) !== JSON.stringify(after), "drag changes order");
   await p.goto(`${BASE}/?sort=manual`, { waitUntil: "networkidle0" });
