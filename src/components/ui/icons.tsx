@@ -111,3 +111,18 @@ export const Layers = (p: SVGProps<SVGSVGElement>) => (
     <path d="m3 17 9 5 9-5" />
   </Icon>
 );
+
+export const Grid = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </Icon>
+);
+
+export const List = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </Icon>
+);

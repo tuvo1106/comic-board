@@ -19,7 +19,8 @@ import puppeteer from "puppeteer-core";
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const PORT = 3940;
 const BASE = `http://localhost:${PORT}`;
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CHROME =
+  process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const DATA_DIR = path.join(ROOT, "data", "test");
 const DB_PATH = path.join(DATA_DIR, "test.db");
 const DIST_DIR = ".next-itest"; // separate build dir so a running dev server isn't disturbed
@@ -75,7 +76,7 @@ try {
   browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: true,
-    args: ["--no-sandbox"],
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
     defaultViewport: { width: 1440, height: 1000 },
   });
   const p = await browser.newPage();
@@ -246,6 +247,38 @@ try {
   }, PNG);
   ck(badStatus === 400, `empty series is rejected with 400 (got ${badStatus})`);
   await p.evaluate((id) => fetch(`/api/comics/${id}`, { method: "DELETE" }), up.body.id);
+
+  // List view: grid⇄list toggle renders rows; inline editing persists a field
+  // without wiping the row's other metadata.
+  await p.goto(BASE, { waitUntil: "networkidle0" });
+  await sleep(500);
+  await (await p.$$("button[aria-label='List view']"))[0].click();
+  await sleep(700);
+  ck((await imgs()) === N, `list view renders all ${N} rows`);
+  const rows = await apiJson("/api/comics");
+  rows.sort((a, b) => (b.coverDate || "").localeCompare(a.coverDate || ""));
+  const row0 = rows[0];
+  await p.evaluate((pub) => {
+    const cell = [...document.querySelectorAll("main button[title='Click to edit']")].find(
+      (b) => b.textContent.trim() === pub,
+    );
+    cell?.click();
+  }, row0.publisher);
+  await sleep(300);
+  await p.evaluate(() => {
+    document.activeElement.value = "";
+  });
+  await p.keyboard.type("ListEdited");
+  await p.keyboard.press("Enter");
+  await sleep(700);
+  const rowAfter = await apiJson(`/api/comics/${row0.id}`);
+  ck(rowAfter.publisher === "ListEdited", "list view inline edit persists");
+  ck(
+    JSON.stringify(rowAfter.artists) === JSON.stringify(row0.artists),
+    "list view inline edit keeps the row's other metadata",
+  );
+  await (await p.$$("button[aria-label='Grid view']"))[0].click();
+  await sleep(400);
 
   // Custom board defaults to Manual sort.
   const boards = await apiJson("/api/boards");

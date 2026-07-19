@@ -1,0 +1,212 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useMeta, useUpdateComic } from "@/lib/client-api";
+import type { ComicDTO } from "@/lib/types";
+import { StarRating } from "@/components/ui/StarRating";
+import { TagInput } from "@/components/ui/TagInput";
+import { ComicCardMenu } from "./ComicCardMenu";
+
+const COLS =
+  "grid-cols-[44px_minmax(150px,1.5fr)_56px_minmax(90px,0.8fr)_128px_minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_140px_36px]";
+
+interface Props {
+  comics: ComicDTO[];
+  currentBoardId?: string;
+  onOpen: (comic: ComicDTO) => void;
+}
+
+export function ListView({ comics, currentBoardId, onOpen }: Props) {
+  const { data: meta } = useMeta();
+  const suggestions = {
+    authors: (meta?.authors ?? []).map((a) => a.value),
+    artists: (meta?.artists ?? []).map((a) => a.value),
+    tags: (meta?.tags ?? []).map((t) => t.value),
+  };
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <div className="min-w-[900px]">
+        {/* Header */}
+        <div
+          className={`grid ${COLS} gap-2 border-b border-border bg-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted`}
+        >
+          <span />
+          <span>Series</span>
+          <span>#</span>
+          <span>Publisher</span>
+          <span>Cover date</span>
+          <span>Author</span>
+          <span>Cover Artist</span>
+          <span>Tags</span>
+          <span>Rating</span>
+          <span />
+        </div>
+        {comics.map((c) => (
+          <Row
+            key={c.id}
+            comic={c}
+            currentBoardId={currentBoardId}
+            onOpen={() => onOpen(c)}
+            suggestions={suggestions}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Row({
+  comic,
+  currentBoardId,
+  onOpen,
+  suggestions,
+}: {
+  comic: ComicDTO;
+  currentBoardId?: string;
+  onOpen: () => void;
+  suggestions: { authors: string[]; artists: string[]; tags: string[] };
+}) {
+  const update = useUpdateComic();
+  const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) =>
+    update.mutate({ id: comic.id, patch });
+
+  return (
+    <div
+      className={`grid ${COLS} items-center gap-2 border-b border-border px-3 py-1.5 text-sm transition hover:bg-surface/50`}
+    >
+      <button onClick={onOpen} className="group relative h-12 w-9 overflow-hidden rounded ring-1 ring-white/10">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={comic.thumbUrl}
+          alt={comic.series}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          style={{ backgroundImage: `url(${comic.blurDataUrl})`, backgroundSize: "cover" }}
+        />
+      </button>
+
+      <EditText value={comic.series} placeholder="Series" onCommit={(v) => save({ series: v.trim() || comic.series })} />
+      <EditText value={comic.issueNumber ?? ""} placeholder="—" onCommit={(v) => save({ issueNumber: v.trim() || null })} />
+      <EditText value={comic.publisher ?? ""} placeholder="—" onCommit={(v) => save({ publisher: v.trim() || null })} />
+      <EditDate value={comic.coverDate} onCommit={(v) => save({ coverDate: v || null })} />
+
+      <EditTags values={comic.authors} suggestions={suggestions.authors} placeholder="—" onCommit={(v) => save({ authors: v })} />
+      <EditTags values={comic.artists} suggestions={suggestions.artists} placeholder="—" onCommit={(v) => save({ artists: v })} />
+      <EditTags values={comic.tags} suggestions={suggestions.tags} placeholder="—" onCommit={(v) => save({ tags: v })} />
+
+      <StarRating value={comic.rating} size={16} onChange={(rating) => save({ rating })} />
+
+      <ComicCardMenu comic={comic} currentBoardId={currentBoardId} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline editable cells
+// ---------------------------------------------------------------------------
+
+function EditText({
+  value,
+  placeholder,
+  onCommit,
+}: {
+  value: string;
+  placeholder: string;
+  onCommit: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="truncate rounded px-1 py-1 text-left hover:bg-surface-2"
+        title="Click to edit"
+      >
+        {value || <span className="text-muted">{placeholder}</span>}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        if (draft !== value) onCommit(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setDraft(value);
+          setEditing(false);
+        }
+      }}
+      className="w-full rounded border border-accent bg-surface-2 px-1 py-1 outline-none"
+    />
+  );
+}
+
+function EditDate({ value, onCommit }: { value: string | null; onCommit: (v: string) => void }) {
+  return (
+    <input
+      type="date"
+      value={value ?? ""}
+      onChange={(e) => onCommit(e.target.value)}
+      className="w-full rounded border border-transparent bg-transparent px-1 py-1 text-sm outline-none hover:border-border focus:border-accent [color-scheme:dark]"
+    />
+  );
+}
+
+function EditTags({
+  values,
+  suggestions,
+  placeholder,
+  onCommit,
+}: {
+  values: string[];
+  suggestions: string[];
+  placeholder: string;
+  onCommit: (v: string[]) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setEditing(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="flex min-h-8 flex-wrap items-center gap-1 rounded px-1 py-1 text-left hover:bg-surface-2"
+        title="Click to edit"
+      >
+        {values.length ? (
+          values.map((v) => (
+            <span key={v} className="rounded bg-surface-2 px-1.5 py-0.5 text-xs ring-1 ring-border">
+              {v}
+            </span>
+          ))
+        ) : (
+          <span className="text-muted">{placeholder}</span>
+        )}
+      </button>
+    );
+  }
+  return (
+    <div ref={ref}>
+      <TagInput values={values} suggestions={suggestions} onChange={onCommit} placeholder="Add…" />
+    </div>
+  );
+}

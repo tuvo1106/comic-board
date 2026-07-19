@@ -9,15 +9,18 @@ import { applyFilters, filtersActive } from "@/lib/filters";
 import { navOrder } from "@/lib/nav-order";
 import { useColumns } from "@/lib/use-columns";
 import { useSort } from "@/lib/use-sort";
+import { useView } from "@/lib/use-view";
 import { sortComics } from "@/lib/sort";
 import type { ComicDTO } from "@/lib/types";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { Masonry } from "./Masonry";
+import { ListView } from "./ListView";
 import { TopBar } from "./TopBar";
 import { BoardTabs } from "./BoardTabs";
 import { ComicCardMenu } from "./ComicCardMenu";
 import { ColumnSelector } from "./ColumnSelector";
 import { SortSelector } from "./SortSelector";
+import { ViewToggle } from "./ViewToggle";
 import { UploadModal } from "@/components/upload/UploadModal";
 import { ImageIcon } from "@/components/ui/icons";
 import type { ReorderResult } from "./Masonry";
@@ -36,6 +39,7 @@ export function BoardView({ boardId }: { boardId?: string }) {
   const { data: comics, isLoading, isError, error } = useComics(boardId ?? null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [columns, setColumns] = useColumns();
+  const [view, setView] = useView();
   const qc = useQueryClient();
   const updatePosition = useUpdatePosition();
 
@@ -69,6 +73,16 @@ export function BoardView({ boardId }: { boardId?: string }) {
   );
   const isFiltering = filtersActive(filters);
 
+  // Open the detail modal for a comic (shared by grid + list views): record the
+  // visible order for ←/→ nav, prime the detail cache so it renders instantly,
+  // and carry the board's filter/sort query so the board underneath is stable.
+  const openComic = (c: ComicDTO) => {
+    navOrder.set(filtered.map((x) => x.id));
+    for (const x of filtered) qc.setQueryData(keys.comic(x.id), x);
+    const qs = searchParams.toString();
+    router.push(`/comic/${c.id}${qs ? `?${qs}` : ""}`);
+  };
+
   return (
     <div className="min-h-screen">
       <TopBar search={searchInput} onSearch={onSearch} onUpload={() => setUploadOpen(true)} />
@@ -88,7 +102,8 @@ export function BoardView({ boardId }: { boardId?: string }) {
             </p>
             <div className="flex items-center gap-2">
               <SortSelector value={sort} onChange={setSort} />
-              <ColumnSelector value={columns} onChange={setColumns} />
+              {view === "grid" && <ColumnSelector value={columns} onChange={setColumns} />}
+              <ViewToggle value={view} onChange={setView} />
             </div>
           </div>
         )}
@@ -102,29 +117,22 @@ export function BoardView({ boardId }: { boardId?: string }) {
         {comics && comics.length > 0 && filtered.length === 0 && (
           <NoMatches onClear={clear} />
         )}
-        {filtered.length > 0 && (
-          <Masonry
-            comics={filtered}
-            columns={columns}
-            stagger={!isFiltering}
-            draggable={sort === "manual"}
-            onReorder={onReorder}
-            onOpen={(c: ComicDTO) => {
-              navOrder.set(filtered.map((x) => x.id));
-              // Prime the detail cache for the visible comics so the modal (and
-              // ←/→ nav) render fully at once instead of flashing a small,
-              // still-loading panel that then grows in.
-              for (const x of filtered) qc.setQueryData(keys.comic(x.id), x);
-              // Carry the board's filter/sort query into the modal URL so the
-              // board underneath keeps its state (no reshuffle on open).
-              const qs = searchParams.toString();
-              router.push(`/comic/${c.id}${qs ? `?${qs}` : ""}`);
-            }}
-            renderMenu={(c: ComicDTO) => (
-              <ComicCardMenu comic={c} currentBoardId={boardId} />
-            )}
-          />
-        )}
+        {filtered.length > 0 &&
+          (view === "list" ? (
+            <ListView comics={filtered} currentBoardId={boardId} onOpen={openComic} />
+          ) : (
+            <Masonry
+              comics={filtered}
+              columns={columns}
+              stagger={!isFiltering}
+              draggable={sort === "manual"}
+              onReorder={onReorder}
+              onOpen={openComic}
+              renderMenu={(c: ComicDTO) => (
+                <ComicCardMenu comic={c} currentBoardId={boardId} />
+              )}
+            />
+          ))}
       </main>
     </div>
   );

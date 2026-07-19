@@ -210,13 +210,15 @@ Ordered; each is a self-contained slice.
 - **Sort:** add **"Rating (high→low)"** to the sort options (unrated sinks last),
   plus a rating facet/filter is a later nicety.
 
-### 8.3 List view with inline row editing
-- A **grid ⇄ list** view toggle in the board toolbar (persisted like column density).
-- List view: a table of rows (thumbnail, series, issue, publisher, cover date,
-  authors, artists, tags, **rating stars**), each cell/row **editable in place** via
-  the shared field primitives — no modal round-trip. Saves through `PATCH /api/comics/:id`
-  with the same optimistic-cache flow as the modal edit.
-- Sorting/filtering/search apply identically to both views.
+### 8.3 List view with inline row editing — _done_
+- A **grid ⇄ list** view toggle in the board toolbar (`useView`, persisted in
+  localStorage like column density). Column density control hides in list mode.
+- List view: a table of rows (thumbnail → detail, series, issue, publisher, cover
+  date, authors, cover artists, tags, **rating stars**, row "…" menu). Every field
+  is **editable in place** — click-to-edit text/date cells, inline `TagInput` for
+  the multi-value fields, always-live `StarRating` — saving through
+  `PATCH /api/comics/:id` with the modal edit's optimistic-cache flow. No modal.
+- Sorting/filtering/search apply identically to both views (both render `filtered`).
 
 ### 8.4 CI
 - GitHub Actions on push/PR: Node 22, `npm ci`, `tsc --noEmit`, `npm test`, `npm run build`.
@@ -239,6 +241,6 @@ Ordered; each is a self-contained slice.
 
 ## 9. Release
 
-- **1.0** = accounts + ownership (§8.1), ratings (§8.2), list view (§8.3), CI (§8.4),
-  on top of the shipped board experience.
-- Committed to git with CI green; tag `v1.0.0` once §8.1–8.4 land.
+- **1.0** = accounts + ownership (§8.1 ✓), ratings (§8.2 ✓), list view (§8.3 ✓),
+  CI (§8.4 ✓), on top of the shipped board experience — **all landed**.
+- On `main`, CI green. Ready to tag `v1.0.0`.
