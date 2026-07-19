@@ -62,14 +62,19 @@ async function waitForServer() {
   throw new Error("server did not become ready");
 }
 
-// --- setup: isolated db ---
+// --- setup: isolated db + production build ---
 fs.rmSync(DATA_DIR, { recursive: true, force: true });
 fs.mkdirSync(DATA_DIR, { recursive: true });
 console.log("• migrating + seeding isolated test db…");
 run("npm", ["run", "db:migrate"]);
 run("npm", ["run", "db:seed"]);
 
-const server = spawn("npx", ["next", "dev", "-p", String(PORT)], { cwd: ROOT, env });
+// Run against a production build (next start), not next dev: dev compiles routes
+// on demand, and those unpredictable cold-compile times make the browser waits
+// flaky on slow CI runners. A prebuilt server responds instantly.
+console.log("• building the app…");
+run("npx", ["next", "build"]);
+const server = spawn("npx", ["next", "start", "-p", String(PORT)], { cwd: ROOT, env });
 let browser;
 try {
   await waitForServer();
