@@ -185,6 +185,7 @@ export function ComicDetail({ id, asModal }: Props) {
               src={comic.imageUrl}
               alt={comic.series}
               className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
+              layoutCrossfade={false}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
             />
           ) : (
