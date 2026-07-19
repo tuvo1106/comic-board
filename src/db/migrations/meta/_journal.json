@@ -15,6 +15,20 @@
       "when": 1784415007829,
       "tag": "0001_lonely_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784473498495,
+      "tag": "0002_broad_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784473523784,
+      "tag": "0003_military_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

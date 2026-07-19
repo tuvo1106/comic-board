@@ -51,6 +51,7 @@ beforeEach(() => {
     "board_comics",
     "comics",
     "boards",
+    "publishers",
     "authors",
     "artists",
     "characters",
@@ -148,6 +149,50 @@ describe("getMeta is scoped to the caller", () => {
     expect(metaA.publishers.map((p) => p.value)).toEqual(["Marvel"]);
     const metaB = q.getMeta(userB);
     expect(metaB.artists.map((a) => a.value)).toEqual(["Frank Miller"]);
+  });
+});
+
+describe("normalized publishers", () => {
+  it("dedupes publishers case-insensitively into one shared row", () => {
+    const a = makeComic(userA, { publisher: "Marvel" });
+    const b = makeComic(userB, { publisher: "marvel" });
+    // Both comics resolve to the same canonical display name (first writer wins).
+    expect(q.getComic(userA, a.id)!.publisher).toBe("Marvel");
+    expect(q.getComic(userB, b.id)!.publisher).toBe("Marvel");
+  });
+
+  it("updateComic re-links the publisher and blank clears it", () => {
+    const c = makeComic(userA, { publisher: "Marvel" });
+    q.updateComic(userA, c.id, { publisher: "Image" });
+    expect(q.getComic(userA, c.id)!.publisher).toBe("Image");
+    q.updateComic(userA, c.id, { publisher: null });
+    expect(q.getComic(userA, c.id)!.publisher).toBeNull();
+  });
+
+  it("renaming a publisher applies to every comic that uses it", () => {
+    const c1 = makeComic(userA, { publisher: "Marvel" });
+    const c2 = makeComic(userA, { publisher: "Marvel" });
+    expect(q.renamePublisher(userA, "Marvel", "Marvel Comics")).toBe(true);
+    expect(q.getComic(userA, c1.id)!.publisher).toBe("Marvel Comics");
+    expect(q.getComic(userA, c2.id)!.publisher).toBe("Marvel Comics");
+    expect(q.getMeta(userA).publishers.map((p) => p.value)).toEqual(["Marvel Comics"]);
+  });
+
+  it("a user cannot rename a publisher they don't use", () => {
+    const c = makeComic(userA, { publisher: "Marvel" });
+    expect(q.renamePublisher(userB, "Marvel", "HACKED")).toBe(false);
+    expect(q.getComic(userA, c.id)!.publisher).toBe("Marvel");
+  });
+
+  it("renaming onto an existing publisher merges them", () => {
+    const c1 = makeComic(userA, { publisher: "Marvel" });
+    const c2 = makeComic(userA, { publisher: "DC" });
+    expect(q.renamePublisher(userA, "DC", "Marvel")).toBe(true);
+    expect(q.getComic(userA, c1.id)!.publisher).toBe("Marvel");
+    expect(q.getComic(userA, c2.id)!.publisher).toBe("Marvel");
+    // One publisher remains for this user, with the combined count.
+    const facet = q.getMeta(userA).publishers;
+    expect(facet).toEqual([{ value: "Marvel", count: 2 }]);
   });
 });
 

@@ -131,6 +131,33 @@ try {
   });
   ck(dcOptCount === dcCount, `facet dropdown count matches rendered subset (${dcOptCount} vs ${dcCount})`);
 
+  // Rename a publisher inline (pencil) — the new name applies to every comic
+  // that used it (normalized publishers). The dropdown is still open here.
+  await p.evaluate(() => document.querySelector("button[aria-label='Rename DC']").click());
+  await sleep(200);
+  await p.evaluate(() => {
+    document.activeElement.value = "";
+  });
+  await p.keyboard.type("DC Comics");
+  await p.keyboard.press("Enter");
+  await sleep(900);
+  const metaAfter = await apiJson("/api/meta");
+  const renamed = metaAfter.publishers.find((x) => x.value === "DC Comics");
+  ck(
+    !!renamed && renamed.count === dcCount,
+    `renaming DC -> "DC Comics" applies to all ${dcCount} comics (got ${renamed?.count})`,
+  );
+  ck(!metaAfter.publishers.some((x) => x.value === "DC"), 'old "DC" publisher is gone');
+  // Restore the name (via the API) so later DC-filter checks still have data.
+  await p.evaluate(() =>
+    fetch("/api/publishers", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from: "DC Comics", to: "DC" }),
+    }).then((r) => r.json()),
+  );
+  await sleep(300);
+
   // Drag-reorder persists (Manual sort). Go to a fresh board in manual order.
   await p.goto(`${BASE}/?sort=manual`, { waitUntil: "networkidle0" });
   await sleep(800);

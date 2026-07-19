@@ -227,6 +227,20 @@ export function useDeleteBoard() {
   });
 }
 
+export function useRenamePublisher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { from: string; to: string }) =>
+      jsonFetch("/api/publishers", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(args),
+      }),
+    // A rename can touch any comic's publisher, so refresh the comic world.
+    onSuccess: () => invalidateComicWorld(qc),
+  });
+}
+
 export function useAddToBoard() {
   const qc = useQueryClient();
   return useMutation({

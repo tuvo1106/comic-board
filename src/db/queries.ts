@@ -17,6 +17,7 @@ import {
   comicCharacters,
   comicTags,
   comics,
+  publishers,
   tags,
   type ComicRow,
 } from "./schema";
@@ -58,6 +59,23 @@ function upsertNames(
   return ids;
 }
 
+/** Resolve a publisher name to its (find-or-created) row id; null clears it. */
+function upsertPublisher(name: string | null | undefined): string | null {
+  if (name == null) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const key = nameKey(trimmed);
+  const existing = db
+    .select({ id: publishers.id })
+    .from(publishers)
+    .where(eq(publishers.nameKey, key))
+    .get();
+  if (existing) return existing.id;
+  const id = newId();
+  db.insert(publishers).values({ id, name: trimmed, nameKey: key }).run();
+  return id;
+}
+
 // ---------------------------------------------------------------------------
 // Mapping rows -> DTOs
 // ---------------------------------------------------------------------------
@@ -65,6 +83,7 @@ function upsertNames(
 function rowToDTO(
   row: ComicRow,
   names: {
+    publisher: string | null;
     authors: string[];
     artists: string[];
     characters: string[];
@@ -76,7 +95,7 @@ function rowToDTO(
     id: row.id,
     series: row.series,
     issueNumber: row.issueNumber,
-    publisher: row.publisher,
+    publisher: names.publisher,
     coverDate: row.coverDate,
     rating: row.rating,
     imageUrl: storage.getUrl(row.imagePath),
@@ -101,9 +120,18 @@ function loadRelations(comicIds: string[]) {
   const charsByComic = new Map<string, string[]>();
   const tagsByComic = new Map<string, string[]>();
   const boardsByComic = new Map<string, string[]>();
+  const publisherByComic = new Map<string, string>();
   if (comicIds.length === 0) {
-    return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic };
+    return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic, publisherByComic };
   }
+
+  for (const r of db
+    .select({ comicId: comics.id, name: publishers.name })
+    .from(comics)
+    .innerJoin(publishers, eq(publishers.id, comics.publisherId))
+    .where(inArray(comics.id, comicIds))
+    .all())
+    publisherByComic.set(r.comicId, r.name);
 
   const push = (m: Map<string, string[]>, k: string, v: string) => {
     const list = m.get(k) ?? [];
@@ -150,7 +178,7 @@ function loadRelations(comicIds: string[]) {
     .all())
     push(boardsByComic, r.comicId, r.boardId);
 
-  return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic };
+  return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic, publisherByComic };
 }
 
 const sortNames = (a: string[]) => [...a].sort((x, y) => x.localeCompare(y));
@@ -159,6 +187,7 @@ function attachRelations(rows: ComicRow[]): ComicDTO[] {
   const rel = loadRelations(rows.map((r) => r.id));
   return rows.map((row) =>
     rowToDTO(row, {
+      publisher: rel.publisherByComic.get(row.id) ?? null,
       authors: sortNames(rel.authorsByComic.get(row.id) ?? []),
       artists: sortNames(rel.artistsByComic.get(row.id) ?? []),
       characters: sortNames(rel.charsByComic.get(row.id) ?? []),
@@ -235,7 +264,7 @@ export function createComic(input: CreateComicInput): ComicDTO {
         userId: input.userId,
         series: input.series,
         issueNumber: input.issueNumber ?? null,
-        publisher: input.publisher ?? null,
+        publisherId: upsertPublisher(input.publisher),
         coverDate: input.coverDate ?? null,
         rating: input.rating ?? null,
         imagePath: input.image.imagePath,
@@ -298,7 +327,7 @@ export function updateComic(
     const fields: Partial<ComicRow> = {};
     if (input.series !== undefined) fields.series = input.series;
     if (input.issueNumber !== undefined) fields.issueNumber = input.issueNumber;
-    if (input.publisher !== undefined) fields.publisher = input.publisher;
+    if (input.publisher !== undefined) fields.publisherId = upsertPublisher(input.publisher);
     if (input.coverDate !== undefined) fields.coverDate = input.coverDate;
     if (input.rating !== undefined) fields.rating = input.rating;
     if (Object.keys(fields).length > 0) {
@@ -523,13 +552,12 @@ export function getMeta(userId: string): MetaDTO {
     .all();
 
   const publisherRows = db
-    .select({ value: comics.publisher, count: sql<number>`count(*)` })
+    .select({ value: publishers.name, count: sql<number>`count(*)` })
     .from(comics)
-    .where(
-      and(eq(comics.userId, userId), sql`${comics.publisher} is not null and ${comics.publisher} != ''`),
-    )
-    .groupBy(comics.publisher)
-    .orderBy(comics.publisher)
+    .innerJoin(publishers, eq(publishers.id, comics.publisherId))
+    .where(eq(comics.userId, userId))
+    .groupBy(publishers.id)
+    .orderBy(publishers.name)
     .all();
 
   // Facet name lists scoped to the user's comics via inner joins.
@@ -579,6 +607,70 @@ export function getMeta(userId: string): MetaDTO {
 }
 
 // ---------------------------------------------------------------------------
+// Publishers (managed set)
+// ---------------------------------------------------------------------------
+
+/**
+ * Rename a publisher. Because comics reference the publisher row, the new name
+ * applies to every comic that uses it at once. If a publisher with the new name
+ * already exists, the two are merged (comics repointed, the old row deleted).
+ *
+ * The user must actually use the publisher (own a comic with it) to rename it;
+ * the mutation itself operates on the globally-shared row, consistent with how
+ * authors/artists/tags are shared. Returns false if not found/authorized or the
+ * new name is blank.
+ */
+export function renamePublisher(userId: string, currentName: string, newName: string): boolean {
+  const trimmed = newName.trim();
+  if (!trimmed) return false;
+  const currentKey = nameKey(currentName);
+
+  return db.transaction((tx) => {
+    const target = tx
+      .select({ id: publishers.id, nameKey: publishers.nameKey })
+      .from(publishers)
+      .where(eq(publishers.nameKey, currentKey))
+      .get();
+    if (!target) return false;
+
+    // Authorization: the user must own at least one comic with this publisher.
+    const used = tx
+      .select({ id: comics.id })
+      .from(comics)
+      .where(and(eq(comics.publisherId, target.id), eq(comics.userId, userId)))
+      .get();
+    if (!used) return false;
+
+    const newKey = nameKey(trimmed);
+    if (newKey === target.nameKey) {
+      // Same identity — just a display/case change.
+      tx.update(publishers).set({ name: trimmed }).where(eq(publishers.id, target.id)).run();
+      return true;
+    }
+
+    const collision = tx
+      .select({ id: publishers.id })
+      .from(publishers)
+      .where(eq(publishers.nameKey, newKey))
+      .get();
+    if (collision) {
+      // Merge: repoint every comic onto the existing row, drop the orphan.
+      tx.update(comics)
+        .set({ publisherId: collision.id })
+        .where(eq(comics.publisherId, target.id))
+        .run();
+      tx.delete(publishers).where(eq(publishers.id, target.id)).run();
+    } else {
+      tx.update(publishers)
+        .set({ name: trimmed, nameKey: newKey })
+        .where(eq(publishers.id, target.id))
+        .run();
+    }
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Transaction-scoped read helper
 // ---------------------------------------------------------------------------
 
@@ -587,6 +679,7 @@ function getComicTx(tx: DBOrTx, id: string): ComicDTO | null {
   if (!row) return null;
   const rel = loadRelations([id]);
   return rowToDTO(row, {
+    publisher: rel.publisherByComic.get(id) ?? null,
     authors: sortNames(rel.authorsByComic.get(id) ?? []),
     artists: sortNames(rel.artistsByComic.get(id) ?? []),
     characters: sortNames(rel.charsByComic.get(id) ?? []),

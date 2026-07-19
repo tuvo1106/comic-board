@@ -23,7 +23,11 @@ export const comics = sqliteTable("comics", {
   userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
   series: text("series").notNull(),
   issueNumber: text("issue_number"),
-  publisher: text("publisher"),
+  // Normalized publisher (managed set); null = no publisher. Renaming the
+  // publisher row updates every comic that references it.
+  publisherId: text("publisher_id").references(() => publishers.id, {
+    onDelete: "set null",
+  }),
   coverDate: text("cover_date"), // ISO yyyy-mm-dd
   rating: real("rating"), // 0.5–5 stars in 0.5 steps; null = unrated
   imagePath: text("image_path").notNull(),
@@ -60,6 +64,17 @@ export const boardComics = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.boardId, t.comicId] })],
 );
+
+/**
+ * Publishers are a managed, globally-shared set (like authors/artists/tags),
+ * deduped case-insensitively by `nameKey`. A comic references one via
+ * `comics.publisherId`, so renaming a row applies to every comic at once.
+ */
+export const publishers = sqliteTable("publishers", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  nameKey: text("name_key").notNull().unique(),
+});
 
 export const authors = sqliteTable("authors", {
   id: text("id").primaryKey(),

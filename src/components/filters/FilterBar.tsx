@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { useCreateBoard } from "@/lib/client-api";
+import { useCreateBoard, useRenamePublisher } from "@/lib/client-api";
 import { useFilters } from "@/lib/use-filters";
 import { computeFacets, countActive, filtersActive } from "@/lib/filters";
 import type { ComicDTO } from "@/lib/types";
@@ -23,6 +23,8 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
   const meta = useMemo(() => computeFacets(boardComics), [boardComics]);
   const { filters, update, clear, toggle } = useFilters();
   const active = filtersActive(filters);
+  const renamePublisher = useRenamePublisher();
+  const { toast } = useToast();
 
   return (
     <div className="sticky top-[99px] z-20 border-b border-border bg-bg/70 backdrop-blur-xl">
@@ -32,6 +34,22 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
           options={meta.publishers ?? []}
           selected={filters.publishers}
           onToggle={(v) => toggle("publishers", v)}
+          onRename={(from, to) =>
+            renamePublisher.mutate(
+              { from, to },
+              {
+                onSuccess: () => {
+                  // A selected filter chip still holds the old name; move it over.
+                  if (filters.publishers.includes(from)) {
+                    toggle("publishers", from);
+                    toggle("publishers", to);
+                  }
+                  toast(`Renamed “${from}” to “${to}”`, "success");
+                },
+                onError: (e) => toast((e as Error).message, "error"),
+              },
+            )
+          }
         />
         <MultiSelect
           label="Author"
