@@ -180,24 +180,7 @@ export function ComicDetail({ id, asModal }: Props) {
         {/* Cover — shared element with the board card. */}
         <div className="flex items-center justify-center bg-black/40 p-4 md:w-[55%]">
           {comic ? (
-            <motion.img
-              layoutId={`cover-${id}`}
-              src={comic.imageUrl}
-              alt={comic.series}
-              className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
-              // Reserve the cover's aspect box and show the color blur preview
-              // while the full-size image decodes — avoids a grey flash for
-              // covers that aren't already in the browser cache.
-              style={{
-                aspectRatio: `${comic.width} / ${comic.height}`,
-                backgroundImage: `url(${comic.blurDataUrl})`,
-                backgroundSize: "cover",
-              }}
-              // Keep the cover opaque through the fly-in: the shared-element
-              // opacity crossfade otherwise let the dark board/backdrop show
-              // through the half-faded image ("darker, then full color").
-              transition={{ type: "spring", stiffness: 320, damping: 34, opacity: { duration: 0 } }}
-            />
+            <ModalCover comic={comic} />
           ) : (
             // Reserve the cover space while loading (cold deep-link) so the panel
             // opens full-size instead of a small box that grows.
@@ -378,6 +361,40 @@ export function ComicDetail({ id, asModal }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The modal cover, shared-element-linked to the board card via `layoutId`.
+ * Renders the thumbnail first — it's already decoded on the card, so it paints
+ * instantly and bright — then swaps to the full-size image once it loads. This
+ * avoids the "darker, then full" flash a low-res/blur placeholder produced. The
+ * opacity transition is pinned to 0 so the shared-element crossfade can't fade
+ * the cover through the dark backdrop mid-flight.
+ */
+function ModalCover({ comic }: { comic: ComicDTO }) {
+  const [src, setSrc] = useState(comic.thumbUrl);
+  useEffect(() => {
+    setSrc(comic.thumbUrl);
+    const img = new window.Image();
+    img.src = comic.imageUrl;
+    const upgrade = () => setSrc(comic.imageUrl);
+    if (img.complete) upgrade();
+    else img.onload = upgrade;
+    return () => {
+      img.onload = null;
+    };
+  }, [comic.thumbUrl, comic.imageUrl]);
+
+  return (
+    <motion.img
+      layoutId={`cover-${comic.id}`}
+      src={src}
+      alt={comic.series}
+      className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
+      style={{ aspectRatio: `${comic.width} / ${comic.height}` }}
+      transition={{ type: "spring", stiffness: 320, damping: 34, opacity: { duration: 0 } }}
+    />
   );
 }
 
