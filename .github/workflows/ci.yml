@@ -31,3 +31,27 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      # Drives the real app in headless Chrome against an isolated DB/port/build
+      # dir (all torn down by the script).
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
