@@ -215,6 +215,38 @@ try {
   await p.keyboard.press("Escape");
   await sleep(400);
 
+  // Upload: POST /api/comics (multipart) creates a comic owned by the user, with
+  // a generated thumbnail + dimensions; empty series is rejected.
+  const PNG =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const beforeUpload = (await apiJson("/api/comics")).length;
+  const up = await p.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const form = new FormData();
+    form.append("file", new File([bytes], "t.png", { type: "image/png" }));
+    form.append(
+      "meta",
+      JSON.stringify({ series: "Uploaded Test", issueNumber: "99", publisher: "TestPub", authors: ["Test Author"], tags: ["uploaded"] }),
+    );
+    const r = await fetch("/api/comics", { method: "POST", body: form });
+    return { status: r.status, body: await r.json() };
+  }, PNG);
+  ck(up.status === 201 && up.body.series === "Uploaded Test", `upload API creates a comic (status ${up.status})`);
+  ck(
+    !!up.body.thumbUrl && up.body.width > 0 && up.body.authors.includes("Test Author"),
+    "uploaded comic has generated thumb + dimensions + metadata",
+  );
+  ck((await apiJson("/api/comics")).length === beforeUpload + 1, "comic count +1 after upload");
+  const badStatus = await p.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const form = new FormData();
+    form.append("file", new File([bytes], "t.png", { type: "image/png" }));
+    form.append("meta", JSON.stringify({ series: "" })); // empty series is invalid
+    return (await fetch("/api/comics", { method: "POST", body: form })).status;
+  }, PNG);
+  ck(badStatus === 400, `empty series is rejected with 400 (got ${badStatus})`);
+  await p.evaluate((id) => fetch(`/api/comics/${id}`, { method: "DELETE" }), up.body.id);
+
   // Custom board defaults to Manual sort.
   const boards = await apiJson("/api/boards");
   if (boards[0]) {
