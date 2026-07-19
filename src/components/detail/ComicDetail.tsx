@@ -193,7 +193,10 @@ export function ComicDetail({ id, asModal }: Props) {
                 backgroundImage: `url(${comic.blurDataUrl})`,
                 backgroundSize: "cover",
               }}
-              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              // Keep the cover opaque through the fly-in: the shared-element
+              // opacity crossfade otherwise let the dark board/backdrop show
+              // through the half-faded image ("darker, then full color").
+              transition={{ type: "spring", stiffness: 320, damping: 34, opacity: { duration: 0 } }}
             />
           ) : (
             // Reserve the cover space while loading (cold deep-link) so the panel
