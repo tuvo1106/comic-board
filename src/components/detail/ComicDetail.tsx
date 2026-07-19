@@ -57,6 +57,28 @@ export function ComicDetail({ id, asModal }: Props) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ComicFormValue | null>(null);
 
+  // A cold open mounts the <img> before full.webp has decoded, so the shared
+  // element measures a zero-size box and the fly-in is skipped. Start from the
+  // board's already-decoded thumbnail (same aspect ratio) and swap to the full
+  // image only once it has decoded.
+  const imageUrl = comic?.imageUrl;
+  const [decodedUrl, setDecodedUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!imageUrl) return;
+    let cancelled = false;
+    const img = new window.Image();
+    img.src = imageUrl;
+    img
+      .decode()
+      .catch(() => {}) // on decode failure, swap anyway — same as loading it directly
+      .then(() => {
+        if (!cancelled) setDecodedUrl(imageUrl);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [imageUrl]);
+
   const startEdit = () => {
     if (comic) {
       setForm(toForm(comic));
@@ -182,7 +204,7 @@ export function ComicDetail({ id, asModal }: Props) {
           {comic ? (
             <motion.img
               layoutId={`cover-${id}`}
-              src={comic.imageUrl}
+              src={decodedUrl === comic.imageUrl ? comic.imageUrl : comic.thumbUrl}
               alt={comic.series}
               className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
               layoutCrossfade={false}

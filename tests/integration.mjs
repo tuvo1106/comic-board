@@ -295,6 +295,84 @@ try {
   await p.keyboard.press("Escape");
   await sleep(400);
 
+  // Regression (issue #1): during the modal-open fly-in the cover must render
+  // at full opacity from its first frame — the shared-layout crossfade used to
+  // fade it 0->1 over the black backdrop, showing a darkened cover for ~150ms.
+  // And a cold open (full image never prefetched) must still get a real fly-in
+  // with decoded pixels: the undecoded <img> used to measure 0x0, skipping the
+  // flight entirely. Sample every rAF while opening and assert on the frames.
+  const sampleModalOpen = async (open) => {
+    await p.evaluate(() => {
+      window.__flight = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const t = performance.now() - t0;
+        const root = [...document.querySelectorAll("div.fixed")].find((d) =>
+          d.className.includes("z-[70]"),
+        );
+        const img = root && root.querySelector("img");
+        if (img) {
+          const r = img.getBoundingClientRect();
+          window.__flight.push({
+            t,
+            opacity: getComputedStyle(img).opacity,
+            naturalWidth: img.naturalWidth,
+            w: Math.round(r.width),
+          });
+        }
+        if (t < 1200) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await open();
+    await sleep(1400);
+    return p.evaluate(() => window.__flight);
+  };
+
+  // Warm open: hover first (preloads + decodes the full image), then click.
+  await p.goto(BASE, { waitUntil: "networkidle0" });
+  await sleep(700);
+  const warmBox = await p.evaluate(() => {
+    const img = document.querySelector("main img[src*='thumb.webp']");
+    const r = img.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await p.mouse.move(warmBox.x, warmBox.y);
+  await sleep(500);
+  let flight = await sampleModalOpen(() => p.mouse.click(warmBox.x, warmBox.y));
+  ck(
+    flight.length > 5 && flight.every((f) => f.opacity === "1"),
+    `warm open: cover stays at full opacity through the fly-in (${flight.length} frames)`,
+  );
+  ck(flight[0]?.naturalWidth > 0, "warm open: cover has decoded pixels from the first frame");
+  await p.keyboard.press("Escape");
+  await sleep(600);
+
+  // Cold open: keyboard-activate a card that was never hovered, so full.webp
+  // was never requested. The thumbnail fallback must give the shared element
+  // real dimensions immediately, so the fly-in runs (width grows over frames).
+  await p.goto(BASE, { waitUntil: "networkidle0" });
+  await sleep(700);
+  await p.evaluate(() => {
+    const thumbs = [...document.querySelectorAll("main img[src*='thumb.webp']")];
+    thumbs[thumbs.length - 1].closest("[role='button']").focus();
+  });
+  flight = await sampleModalOpen(() => p.keyboard.press("Enter"));
+  ck(
+    flight.length > 5 && flight[0]?.naturalWidth > 0,
+    "cold open: cover renders decoded (thumbnail) pixels from the first frame",
+  );
+  ck(
+    flight.length > 5 && flight[0].w < flight[flight.length - 1].w - 40,
+    `cold open: fly-in actually runs (cover grows ${flight[0]?.w}px -> ${flight[flight.length - 1]?.w}px)`,
+  );
+  ck(
+    flight.every((f) => f.opacity === "1"),
+    "cold open: cover stays at full opacity through the fly-in",
+  );
+  await p.keyboard.press("Escape");
+  await sleep(600);
+
   // Upload: POST /api/comics (multipart) creates a comic owned by the user, with
   // a generated thumbnail + dimensions; empty series is rejected.
   const PNG =
