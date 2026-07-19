@@ -35,7 +35,9 @@ export function BoardView({ boardId }: { boardId?: string }) {
   const { filters, update, clear } = useFilters();
   // My Comics defaults to cover date; custom boards default to their manual
   // (drag) order.
-  const [sort, setSort] = useSort(boardId ? "manual" : "coverDate");
+  const { field: sortField, dir: sortDir, setSort } = useSort(
+    boardId ? "manual" : "coverDate",
+  );
   const { data: comics, isLoading, isError, error } = useComics(boardId ?? null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [columns, setColumns] = useColumns();
@@ -68,8 +70,8 @@ export function BoardView({ boardId }: { boardId?: string }) {
   };
 
   const filtered = useMemo(
-    () => (comics ? sortComics(applyFilters(comics, filters), sort) : []),
-    [comics, filters, sort],
+    () => (comics ? sortComics(applyFilters(comics, filters), sortField, sortDir) : []),
+    [comics, filters, sortField, sortDir],
   );
   const isFiltering = filtersActive(filters);
 
@@ -101,7 +103,7 @@ export function BoardView({ boardId }: { boardId?: string }) {
               {filtered.length} {filtered.length === 1 ? "cover" : "covers"}
             </p>
             <div className="flex items-center gap-2">
-              <SortSelector value={sort} onChange={setSort} />
+              <SortSelector field={sortField} dir={sortDir} onSelect={setSort} />
               {view === "grid" && <ColumnSelector value={columns} onChange={setColumns} />}
               <ViewToggle value={view} onChange={setView} />
             </div>
@@ -119,13 +121,20 @@ export function BoardView({ boardId }: { boardId?: string }) {
         )}
         {filtered.length > 0 &&
           (view === "list" ? (
-            <ListView comics={filtered} currentBoardId={boardId} onOpen={openComic} />
+            <ListView
+              comics={filtered}
+              currentBoardId={boardId}
+              onOpen={openComic}
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={setSort}
+            />
           ) : (
             <Masonry
               comics={filtered}
               columns={columns}
               stagger={!isFiltering}
-              draggable={sort === "manual"}
+              draggable={sortField === "manual"}
               onReorder={onReorder}
               onOpen={openComic}
               renderMenu={(c: ComicDTO) => (

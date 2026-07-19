@@ -2,34 +2,52 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
-import { isSortKey, type SortKey } from "./sort";
+import { NATURAL_DIR, isSortDir, isSortField, type SortDir, type SortField } from "./sort";
+
+export interface SortState {
+  field: SortField;
+  dir: SortDir;
+  /** Choose a field; choosing the current field toggles the direction. */
+  setSort: (field: SortField) => void;
+}
 
 /**
- * Sort order backed by the URL (`?sort=`), so it's shareable and pairs with the
- * filter params. When `?sort=` is absent the caller's `defaultSort` applies —
- * this differs per board (My Comics defaults to cover date, custom boards to
- * manual). Selecting the default clears the param to keep the URL clean.
+ * Sort field + direction, backed by the URL (`?sort=` / `?dir=`) so it's
+ * shareable and pairs with filters. Absent `sort` = the caller's `defaultField`
+ * (My Comics → cover date, custom boards → manual); absent `dir` = the field's
+ * natural direction. Both are omitted from the URL when at their defaults.
  */
-export function useSort(defaultSort: SortKey): [SortKey, (key: SortKey) => void] {
+export function useSort(defaultField: SortField): SortState {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const sort = useMemo<SortKey>(() => {
+  const field = useMemo<SortField>(() => {
     const v = searchParams.get("sort");
-    return isSortKey(v) ? v : defaultSort;
-  }, [searchParams, defaultSort]);
+    return isSortField(v) ? v : defaultField;
+  }, [searchParams, defaultField]);
+
+  const dir = useMemo<SortDir>(() => {
+    const v = searchParams.get("dir");
+    return isSortDir(v) ? v : NATURAL_DIR[field];
+  }, [searchParams, field]);
 
   const setSort = useCallback(
-    (key: SortKey) => {
+    (next: SortField) => {
+      const nextDir: SortDir =
+        next === field ? (dir === "asc" ? "desc" : "asc") : NATURAL_DIR[next];
+
       const params = new URLSearchParams(searchParams.toString());
-      if (key === defaultSort) params.delete("sort");
-      else params.set("sort", key);
+      if (next === defaultField) params.delete("sort");
+      else params.set("sort", next);
+      if (nextDir === NATURAL_DIR[next]) params.delete("dir");
+      else params.set("dir", nextDir);
+
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [router, pathname, searchParams, defaultSort],
+    [router, pathname, searchParams, field, dir, defaultField],
   );
 
-  return [sort, setSort];
+  return { field, dir, setSort };
 }

@@ -291,6 +291,24 @@ try {
     JSON.stringify(rowAfter.artists) === JSON.stringify(row0.artists),
     "list view inline edit keeps the row's other metadata",
   );
+  // Sortable list-view headers: clicking "Series" sorts A→Z; clicking again flips Z→A.
+  const seriesInDom = async () =>
+    p.evaluate(() => {
+      const wrap = document.querySelector("main .overflow-x-auto > div");
+      return [...wrap.children]
+        .slice(1) // drop the header row
+        .map((r) => r.children[1]?.textContent.trim() ?? "");
+    });
+  const monotonic = (arr, up) =>
+    arr.every((s, i) => i === 0 || (up ? arr[i - 1].localeCompare(s) <= 0 : arr[i - 1].localeCompare(s) >= 0));
+
+  await (await p.$$("button[title='Sort by Series']"))[0].click();
+  await sleep(400);
+  ck(monotonic(await seriesInDom(), true), "clicking Series header sorts rows A→Z");
+  await (await p.$$("button[title='Sort by Series']"))[0].click();
+  await sleep(400);
+  ck(monotonic(await seriesInDom(), false), "clicking Series header again flips to Z→A");
+
   await (await p.$$("button[aria-label='Grid view']"))[0].click();
   await sleep(400);
 

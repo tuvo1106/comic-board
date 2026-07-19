@@ -90,6 +90,18 @@ export const ChevronDown = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+export const ArrowUp = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </Icon>
+);
+
+export const ArrowDown = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M12 5v14M19 12l-7 7-7-7" />
+  </Icon>
+);
+
 export const Filter = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />

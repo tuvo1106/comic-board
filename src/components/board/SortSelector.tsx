@@ -1,49 +1,60 @@
 "use client";
 
-import { SORT_OPTIONS, type SortKey } from "@/lib/sort";
+import { SORT_LABELS, SORT_MENU_FIELDS, type SortDir, type SortField } from "@/lib/sort";
 import { Menu, MenuItem } from "@/components/ui/Menu";
-import { Check, ChevronDown } from "@/components/ui/icons";
+import { ArrowDown, ArrowUp, ChevronDown } from "@/components/ui/icons";
 
 export function SortSelector({
-  value,
-  onChange,
+  field,
+  dir,
+  onSelect,
 }: {
-  value: SortKey;
-  onChange: (key: SortKey) => void;
+  field: SortField;
+  dir: SortDir;
+  onSelect: (field: SortField) => void;
 }) {
-  const current = SORT_OPTIONS.find((o) => o.value === value) ?? SORT_OPTIONS[0];
+  const DirArrow = dir === "asc" ? ArrowUp : ArrowDown;
   return (
     <Menu
       align="right"
-      widthClass="w-44"
+      widthClass="w-48"
       trigger={({ toggle, open }) => (
         <button
           onClick={toggle}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted transition hover:text-fg"
         >
           <span className="text-muted">Sort:</span>
-          <span className="text-fg">{current.label}</span>
+          <span className="text-fg">{SORT_LABELS[field]}</span>
+          {field !== "manual" && <DirArrow className="h-3 w-3 text-muted" />}
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
       )}
     >
       {(close) =>
-        SORT_OPTIONS.map((o) => (
-          <MenuItem
-            key={o.value}
-            icon={
-              <Check
-                className={`h-4 w-4 ${o.value === value ? "opacity-100" : "opacity-0"}`}
-              />
-            }
-            onClick={() => {
-              onChange(o.value);
-              close();
-            }}
-          >
-            {o.label}
-          </MenuItem>
-        ))
+        SORT_MENU_FIELDS.map((f) => {
+          const active = f === field;
+          const ActiveArrow = dir === "asc" ? ArrowUp : ArrowDown;
+          return (
+            <MenuItem
+              key={f}
+              icon={
+                active && f !== "manual" ? (
+                  <ActiveArrow className="h-4 w-4 text-accent" />
+                ) : (
+                  <span className={`inline-block h-4 w-4 ${active ? "text-accent" : "opacity-0"}`}>
+                    •
+                  </span>
+                )
+              }
+              onClick={() => {
+                onSelect(f); // choosing the active field toggles direction
+                if (!active) close();
+              }}
+            >
+              {SORT_LABELS[f]}
+            </MenuItem>
+          );
+        })
       }
     </Menu>
   );

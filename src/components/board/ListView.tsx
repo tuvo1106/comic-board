@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMeta, useUpdateComic } from "@/lib/client-api";
 import type { ComicDTO } from "@/lib/types";
+import type { SortDir, SortField } from "@/lib/sort";
 import { StarRating } from "@/components/ui/StarRating";
 import { TagInput } from "@/components/ui/TagInput";
+import { ArrowDown, ArrowUp } from "@/components/ui/icons";
 import { ComicCardMenu } from "./ComicCardMenu";
 
 const COLS =
@@ -14,15 +16,20 @@ interface Props {
   comics: ComicDTO[];
   currentBoardId?: string;
   onOpen: (comic: ComicDTO) => void;
+  sortField: SortField;
+  sortDir: SortDir;
+  onSort: (field: SortField) => void;
 }
 
-export function ListView({ comics, currentBoardId, onOpen }: Props) {
+export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, onSort }: Props) {
   const { data: meta } = useMeta();
   const suggestions = {
     authors: (meta?.authors ?? []).map((a) => a.value),
     artists: (meta?.artists ?? []).map((a) => a.value),
     tags: (meta?.tags ?? []).map((t) => t.value),
   };
+
+  const sortProps = { active: sortField, dir: sortDir, onSort };
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -32,14 +39,14 @@ export function ListView({ comics, currentBoardId, onOpen }: Props) {
           className={`grid ${COLS} gap-2 border-b border-border bg-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted`}
         >
           <span />
-          <span>Series</span>
-          <span>#</span>
-          <span>Publisher</span>
-          <span>Cover date</span>
+          <SortHeader field="series" label="Series" {...sortProps} />
+          <SortHeader field="issue" label="#" {...sortProps} />
+          <SortHeader field="publisher" label="Publisher" {...sortProps} />
+          <SortHeader field="coverDate" label="Cover date" {...sortProps} />
           <span>Author</span>
           <span>Cover Artist</span>
           <span>Tags</span>
-          <span>Rating</span>
+          <SortHeader field="rating" label="Rating" {...sortProps} />
           <span />
         </div>
         {comics.map((c) => (
@@ -53,6 +60,35 @@ export function ListView({ comics, currentBoardId, onOpen }: Props) {
         ))}
       </div>
     </div>
+  );
+}
+
+function SortHeader({
+  field,
+  label,
+  active,
+  dir,
+  onSort,
+}: {
+  field: SortField;
+  label: string;
+  active: SortField;
+  dir: SortDir;
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = active === field;
+  const Arrow = dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      onClick={() => onSort(field)}
+      className={`inline-flex items-center gap-1 truncate text-left uppercase tracking-wide transition hover:text-fg ${
+        isActive ? "text-fg" : ""
+      }`}
+      title={`Sort by ${label}`}
+    >
+      <span className="truncate">{label}</span>
+      {isActive && <Arrow className="h-3 w-3 shrink-0" />}
+    </button>
   );
 }
 
