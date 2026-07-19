@@ -100,6 +100,16 @@ try {
   ck(new URL(p.url()).pathname === "/", "login with seed account lands on the board");
 
   const imgs = () => p.$$eval("main img[src*='thumb.webp']", (e) => e.length);
+  // The board's "N covers" counter reflects the full (filtered) dataset, unlike
+  // the mounted <img> count, which is a windowed subset now that the masonry is
+  // virtualized. Use it whenever we mean "how much data is on this board".
+  const coverCount = () =>
+    p.evaluate(() => {
+      const el = [...document.querySelectorAll("p")].find((n) =>
+        /^\d+\s+covers?$/.test(n.textContent.trim()),
+      );
+      return el ? Number(el.textContent.trim().match(/^(\d+)/)[1]) : null;
+    });
   const sortLabel = () =>
     p.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent).find((t) => t && t.includes("Sort:")));
 
@@ -109,7 +119,11 @@ try {
 
   await p.goto(BASE, { waitUntil: "networkidle0" });
   await sleep(800);
-  ck((await imgs()) === N, `board renders all ${N} covers`);
+  ck((await coverCount()) === N, `board reports all ${N} covers`);
+  // Virtualization: only a viewport-sized window of cards is mounted, so the
+  // rendered <img> count is a non-empty subset of the full board.
+  const mounted = await imgs();
+  ck(mounted > 0 && mounted < N, `masonry virtualizes (mounted ${mounted} of ${N})`);
   ck(/Cover date/.test(await sortLabel()), "My Comics defaults to Cover date sort");
 
   // Regression: client-side filter via click must render the subset (not 0).
@@ -119,8 +133,9 @@ try {
   const [dc] = await p.$$("xpath/.//button[contains(., 'DC')]");
   await dc.click();
   await sleep(900);
-  const dcCount = await imgs();
-  ck(dcCount > 0 && dcCount < N, `clicking Publisher>DC renders a non-empty subset (${dcCount})`);
+  const dcCount = await coverCount();
+  ck(dcCount > 0 && dcCount < N, `clicking Publisher>DC filters to a subset (${dcCount})`);
+  ck((await imgs()) > 0, "filtered board still renders its (windowed) covers");
   // board-scoped facet count matches what renders (option text is like "DC14")
   const dcOptCount = await p.evaluate(() => {
     const btn = [...document.querySelectorAll("button")].find((b) =>
@@ -129,7 +144,7 @@ try {
     const m = btn && btn.textContent.replace(/\s+/g, "").match(/(\d+)$/);
     return m ? Number(m[1]) : null;
   });
-  ck(dcOptCount === dcCount, `facet dropdown count matches rendered subset (${dcOptCount} vs ${dcCount})`);
+  ck(dcOptCount === dcCount, `facet dropdown count matches board count (${dcOptCount} vs ${dcCount})`);
 
   // Rename a publisher inline (pencil) — the new name applies to every comic
   // that used it (normalized publishers). The dropdown is still open here.

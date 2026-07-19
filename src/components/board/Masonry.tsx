@@ -15,22 +15,25 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable";
-import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMeasureWidth } from "@/lib/use-measure";
-import { positionBetween } from "@/lib/fractional-index";
+import { swapReorder, type ReorderUpdate } from "@/lib/reorder";
 import type { ComicDTO } from "@/lib/types";
-import { computeMasonry, type Placement } from "./masonry-layout";
+import { computeMasonry, placementsInRange, type Placement } from "./masonry-layout";
 import { ComicCard } from "./ComicCard";
 
+// How far above and below the viewport to keep cards mounted, so scrolling
+// reveals already-rendered cards instead of blank space. Roughly a screenful.
+const WINDOW_BUFFER = 800;
+
 export interface ReorderResult {
-  movedId: string;
-  newPosition: number;
+  /** Position writes to persist — a swap trades the two cards' exact positions. */
+  updates: ReorderUpdate[];
   orderedIds: string[];
 }
 
@@ -55,9 +58,27 @@ export function Masonry({
   onReorder,
   columns = null,
 }: Props) {
-  const { ref, width } = useMeasureWidth<HTMLDivElement>();
+  const { ref: measureRef, width } = useMeasureWidth<HTMLDivElement>();
   const [items, setItems] = useState<ComicDTO[]>(comics);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // The grid element, tracked alongside the width observer so we can read its
+  // document offset for windowing (getBoundingClientRect on scroll).
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const setContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      measureRef(node);
+    },
+    [measureRef],
+  );
+
+  // The entrance stagger should play once (initial load), not every time a card
+  // scrolls into the window. A ref (not state) so flipping it never re-renders.
+  const enteredRef = useRef(false);
+  useEffect(() => {
+    enteredRef.current = true;
+  }, []);
 
   // Keep local order in sync with props, except while a drag is in progress.
   useEffect(() => {
@@ -68,6 +89,54 @@ export function Masonry({
     () => (width > 0 ? computeMasonry(items, width, columns) : null),
     [items, width, columns],
   );
+
+  // Virtualization window in container-local coordinates. Only cards whose
+  // placement intersects [top, bottom] are mounted; the container keeps its
+  // full height so the scrollbar and layout are unaffected. Seeded from the
+  // viewport so the very first paint is already windowed (never mounts all).
+  const [range, setRange] = useState(() => ({
+    top: -WINDOW_BUFFER,
+    bottom: (typeof window !== "undefined" ? window.innerHeight : 1200) + WINDOW_BUFFER,
+  }));
+  useEffect(() => {
+    let raf = 0;
+    const recompute = () => {
+      raf = 0;
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // rect.top is the container's top in viewport coords; a card at local y
+      // sits at viewport `rect.top + y`. Convert the buffered viewport back into
+      // local coords.
+      setRange({
+        top: -rect.top - WINDOW_BUFFER,
+        bottom: -rect.top + window.innerHeight + WINDOW_BUFFER,
+      });
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(recompute);
+    };
+    recompute();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // The subset of cards to actually mount. The dragged card is always kept
+  // mounted (even if it scrolls out) so dnd-kit's sortable node never detaches
+  // mid-drag.
+  const visibleItems = useMemo(() => {
+    if (!layout) return [];
+    const inRange = new Set(
+      placementsInRange(layout.placements.values(), range.top, range.bottom).map((p) => p.id),
+    );
+    if (activeId) inRange.add(activeId);
+    return items.filter((c) => inRange.has(c.id));
+  }, [layout, range, items, activeId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -89,50 +158,40 @@ export function Masonry({
   // Reorder once, on drop. Live per-move reordering is unstable on a
   // variable-height masonry (the collision target oscillates as cards reflow
   // under the cursor, dragging neighbors along), so we let the overlay track
-  // the pointer and settle everything in a single reflow when released.
+  // the pointer and settle everything in a single reflow when released. The
+  // swap itself is `swapReorder` (see src/lib/reorder.ts).
   const onDragEnd = (e: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const from = items.findIndex((c) => c.id === active.id);
-    const to = items.findIndex((c) => c.id === over.id);
-    if (from === -1 || to === -1) return;
-
-    const reordered = arrayMove(items, from, to);
-    setItems(reordered);
-    const before = to > 0 ? reordered[to - 1].position : null;
-    const after = to < reordered.length - 1 ? reordered[to + 1].position : null;
-    const newPosition = positionBetween(before, after);
-    onReorder?.({
-      movedId: String(active.id),
-      newPosition,
-      orderedIds: reordered.map((c) => c.id),
-    });
+    if (!over) return;
+    const result = swapReorder(items, String(active.id), String(over.id));
+    if (!result) return;
+    setItems(result.items);
+    onReorder?.({ updates: result.updates, orderedIds: result.orderedIds });
   };
 
+  const animateIn = stagger && !enteredRef.current;
   const grid = (
-    <div ref={ref} className="relative w-full" style={{ height: layout?.height ?? 0 }}>
-      {layout && (
-        <AnimatePresence initial={false} mode="popLayout">
-          {items.map((comic, i) => {
-            const p = layout.placements.get(comic.id);
-            if (!p) return null;
-            const delay = stagger ? Math.min(i * 0.012, 0.25) : 0;
-            return (
-              <CardShell
-                key={comic.id}
-                comic={comic}
-                placement={p}
-                delay={delay}
-                draggable={draggable}
-                dimmed={activeId === comic.id}
-                onOpen={() => onOpen?.(comic)}
-                menu={renderMenu?.(comic)}
-              />
-            );
-          })}
-        </AnimatePresence>
-      )}
+    <div ref={setContainerRef} className="relative w-full" style={{ height: layout?.height ?? 0 }}>
+      {layout &&
+        visibleItems.map((comic, idx) => {
+          const p = layout.placements.get(comic.id);
+          if (!p) return null;
+          const delay = animateIn ? Math.min(idx * 0.012, 0.25) : 0;
+          return (
+            <CardShell
+              key={comic.id}
+              comic={comic}
+              placement={p}
+              delay={delay}
+              animateIn={animateIn}
+              draggable={draggable}
+              dimmed={activeId === comic.id}
+              onOpen={() => onOpen?.(comic)}
+              menu={renderMenu?.(comic)}
+            />
+          );
+        })}
     </div>
   );
 
@@ -167,11 +226,17 @@ export function Masonry({
   );
 }
 
-/** One positioned card. When draggable, wires dnd-kit listeners onto the wrapper. */
+/**
+ * One positioned card. When draggable, wires dnd-kit listeners onto the wrapper.
+ * `animateIn` plays the entrance fade only on the initial load; cards mounting
+ * later because they scrolled into the virtualization window appear instantly
+ * (a fade on every scroll would flicker). Reorder still animates via `layout`.
+ */
 function CardShell({
   comic,
   placement,
   delay,
+  animateIn,
   draggable,
   dimmed,
   onOpen,
@@ -180,6 +245,7 @@ function CardShell({
   comic: ComicDTO;
   placement: Placement;
   delay: number;
+  animateIn: boolean;
   draggable: boolean;
   dimmed: boolean;
   onOpen: () => void;
@@ -191,9 +257,8 @@ function CardShell({
     <motion.div
       ref={draggable ? sortable.setNodeRef : undefined}
       layout
-      initial={{ opacity: 0, scale: 0.92 }}
+      initial={animateIn ? { opacity: 0, scale: 0.92 } : false}
       animate={{ opacity: dimmed ? 0.4 : 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
       transition={{
         layout: { type: "spring", stiffness: 480, damping: 42 },
         scale: { type: "spring", stiffness: 480, damping: 42, delay },

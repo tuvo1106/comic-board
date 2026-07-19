@@ -77,3 +77,22 @@ export function computeMasonry(
   const height = Math.max(0, ...colHeights) - GAP;
   return { placements, columnWidth, height: Math.max(height, 0), columns };
 }
+
+/**
+ * The placements whose vertical span intersects the buffered viewport window
+ * `[top, bottom]` (container-local coordinates). Used to virtualize the board:
+ * only cards near the viewport are mounted, but the container keeps its full
+ * height so the scrollbar and layout are unchanged. A card is kept if any part
+ * of it — including cards straddling either edge — falls in the window.
+ */
+export function placementsInRange(
+  placements: Iterable<Placement>,
+  top: number,
+  bottom: number,
+): Placement[] {
+  const out: Placement[] = [];
+  for (const p of placements) {
+    if (p.y + p.height >= top && p.y <= bottom) out.push(p);
+  }
+  return out;
+}

@@ -14,11 +14,13 @@ not yet implemented.
 
 ## 1. Status
 
-**Built (v0.x):** upload + metadata, uniform-grid masonry board, multiple boards
-as tabs (create/rename/delete, membership, save-view-as-board), drag-reorder with
-fractional indexing (per board, works while filtered), shared-element detail
-modal with edit/delete, filtering + search + facets scoped per board, sort
-control, column-density control, portal-based overlays, unit + integration tests.
+**Built (v0.x):** upload + metadata, uniform-grid **virtualized** masonry board,
+multiple boards as tabs (create/rename/delete, membership, save-view-as-board),
+drag-to-**swap** reorder with fractional indexing (per board, works while
+filtered), shared-element detail modal with edit/delete, filtering + search +
+facets scoped per board, directional sort (dropdown in grid, sortable column
+headers in list), normalized + renameable publishers, column-density control,
+portal-based overlays, unit + integration tests.
 
 **Planned toward 1.0:** user accounts (email/password), per-user ownership of
 comics & boards, 1–5 star ratings + sort-by-rating, an editable list view, and CI.
@@ -34,7 +36,7 @@ Single-user today: every comic/board is global. Auth (§9) introduces ownership.
 | Framework | **Next.js 16 (App Router) + React 19 + TypeScript** | One deployable unit: UI + API routes + image serving. |
 | Styling | **Tailwind CSS v4** | Design tokens in `src/app/globals.css` (dark, gallery-like). |
 | Animation | **Motion (Framer Motion) v12** | `layout` for reflow, `layoutId` for the card→detail shared element. |
-| Drag & drop | **@dnd-kit** (core + sortable) | Reorder on drop; pointer-precise collision. |
+| Drag & drop | **@dnd-kit** (core + sortable) | Swap on drop; pointer-precise collision; render windowed to viewport. |
 | Database | **SQLite via Drizzle ORM** (better-sqlite3) | Zero-ops; migrates cleanly to Postgres later. |
 | Image storage | **Local filesystem** behind a `StorageAdapter` | S3/R2 is a drop-in later. |
 | Image processing | **sharp** | full webp + ~500px thumb + tiny blur placeholder on upload. |
@@ -57,7 +59,7 @@ Comic
   userId        TEXT FK → User        (planned; scopes ownership)
   series        TEXT NOT NULL
   issueNumber   TEXT                  -- "300", "Annual 1"
-  publisher     TEXT                  -- filterable like series
+  publisherId   TEXT FK → Publisher   -- normalized; ON DELETE SET NULL
   coverDate     TEXT (ISO yyyy-mm-dd) -- full date; day-level
   rating        INTEGER               (planned; 1–5, nullable = unrated)
   imagePath, thumbPath, blurDataUrl TEXT NOT NULL
@@ -72,6 +74,7 @@ Author           (id PK, name, nameKey UNIQUE)   ComicAuthor    (comicId FK, aut
 Artist           (id PK, name, nameKey UNIQUE)   ComicArtist    (comicId FK, artistId FK)   -- cover artists
 Character        (id PK, name, nameKey UNIQUE)   ComicCharacter (comicId FK, characterId FK)
 Tag              (id PK, name, nameKey UNIQUE)    ComicTag       (comicId FK, tagId FK)       -- facsimile, homage, key issue, variant…
+Publisher        (id PK, name, nameKey UNIQUE)    -- Comic.publisherId FK; renameable, merges on collision
 
 User             (planned; id PK, email UNIQUE, passwordHash, createdAt)
 Session          (planned; id PK, userId FK, expiresAt)
@@ -83,7 +86,10 @@ Notes:
   their own ordering in `BoardComic.position`.
 - **Author, Cover Artist, Character, Tag are normalized** (own tables + join +
   case-insensitive `nameKey` dedupe) because they drive filter facets with counts.
-- **Publisher** is a plain column, filterable by distinct value (like series).
+- **Publisher is normalized too** (own table, `nameKey` dedupe, `Comic.publisherId`
+  FK). Unlike the multi-value catalogs it's a single FK, and it's **renameable in
+  place**: renaming updates every comic at once and **merges** onto an existing
+  publisher when the new name collides. Writes go through `upsertPublisher`.
 - **Notes** and the boolean **facsimile** field were removed; facsimile is now a
   Tag, and free-text notes were dropped in favor of structured catalog metadata.
 - Deleting a board removes only its `BoardComic` rows; deleting a comic cascades
@@ -101,9 +107,10 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 | `POST /api/comics` | Multipart upload: image + metadata JSON (+ optional `boardIds`). |
 | `PATCH /api/comics/:id` | Update metadata (series, issue, publisher, coverDate, authors, artists, characters, tags[, rating]). |
 | `DELETE /api/comics/:id` | Delete row + memberships + image files. |
-| `PATCH /api/comics/:id/position` | `{ position, boardId? }` — single-row reorder. |
+| `PATCH /api/comics/:id/position` | `{ position, boardId? }` — single-row reorder. A drag **swap** issues two of these (the two cards trade positions). |
 | `GET/POST /api/boards`, `PATCH/DELETE /api/boards/:id` | Board CRUD (POST accepts `comicIds` for save-view). |
 | `PUT/DELETE /api/boards/:id/comics/:comicId` | Add / remove membership. |
+| `PATCH /api/publishers` | `{ from, to }` — rename a publisher (applies to all its comics; merges on collision). |
 | `GET /api/meta` | Global distinct values + counts — powers **form autocomplete**. |
 | `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
 | `POST /api/auth/signup`, `/login`, `/logout` | _(planned)_ email/password + session cookie. |
@@ -125,20 +132,33 @@ the `board` param scopes the list server-side.
   reordering never reshuffles unrelated cards. Cards are a **uniform height**
   (standard comic ratio, object-cover) for aligned rows; positions animate via
   transforms. Column count is responsive with a user **density control** (Auto/3/4/5/6).
+  **Virtualized:** only cards intersecting a buffered viewport window are mounted
+  (`placementsInRange`, ~one screen of overscroll), while the container keeps its
+  full computed height so the scrollbar and layout are unaffected. The full board
+  still lives in memory, so filter/sort/facets/drag/modal-nav are unchanged — only
+  DOM node count is bounded. The entrance stagger plays once on load, not per
+  scroll-in.
 - **Cards** — blur placeholder → thumb crossfade; hover shows series + issue and a
-  "…" menu (add-to-board checklist, remove-from-board, delete).
-- **Drag reorder** — dnd-kit, 8px activation, reorder **on drop** (stable on a
-  variable board), pointer-precise collision, per-board fractional-index
-  persistence with optimistic cache update. Works **while filtered** (drops
-  relative to visible neighbors; hidden comics keep their positions).
+  "…" menu (add-to-board checklist, remove-from-board, delete). Full cover is
+  preloaded on pointer-enter so the detail modal opens on a decoded image.
+- **Drag reorder** — dnd-kit, 8px activation, **swap on drop**: the dragged card
+  and its drop target trade exact `position` values; every other card stays put
+  (no shift/insert). Pointer-precise collision; per-board fractional-index
+  persistence via two optimistic position writes. Works **while filtered** (the two
+  visible cards swap; hidden comics keep their positions). Core swap is the pure
+  `swapReorder` (`src/lib/reorder.ts`).
 - **Detail modal** — route-backed intercepting modal with shared-element cover,
   clickable facet chips (apply filter), boards membership, ←/→ nav, inline-confirm
   delete, and **edit mode** (the metadata panel becomes the shared `MetadataForm`).
 - **Filter + search + sort** — facet dropdowns (Publisher, Author, Cover Artist,
   Character, Tag), a **date-range calendar**, debounced search; URL-backed
-  (shareable). **Sort**: Manual / Cover date / Date added / Series — default is
-  **Cover date on My Comics** and **Manual on custom boards**; drag enabled only in
-  Manual. Animated reflow via Motion `layout` + `AnimatePresence`.
+  (shareable). The **Publisher** facet is renameable inline (hover-pencil → commit,
+  applies to all its comics). **Sort** is **directional** (`?sort=&dir=`): Manual /
+  Cover date / Date added / Rating / Series, each asc/desc — default is **Cover date
+  on My Comics** and **Manual on custom boards**; drag enabled only in Manual. In
+  **grid** the sort is a dropdown; in **list** the column headers sort (click to
+  sort, click again to flip direction) and the dropdown is hidden. Animated reflow
+  via Motion `layout`.
 - **Upload** — drag-drop zone, local preview, multi-file queue carrying
   series/publisher/authors/artists/boards forward, board pre-selection.
 - **Overlays** — `Dialog` and `Menu` render through React portals to `document.body`
@@ -154,13 +174,19 @@ for movement, durations for fades.
 ## 6. Testing
 
 - **Unit (`npm test`, vitest):** pure logic — `applyFilters`, `computeFacets`,
-  filter URL round-trip, `sortComics`, fractional indexing, masonry math, id/name
-  helpers.
+  filter URL round-trip, directional `sortComics`, fractional indexing, masonry math
+  **+ `placementsInRange` windowing**, **`swapReorder`** (swap-not-insert, symmetry,
+  fractional positions, no-op drops), normalized-publisher queries (dedupe/rename/
+  merge), id/name helpers.
 - **Integration (`npm run test:integration`, puppeteer):** drives the real app in
   a headless browser against an **isolated** db (`./data/test`), port 3940, and
   build dir (`.next-itest`), all torn down after — never touches dev data. Covers
-  filter-click rendering, board-scoped facet counts, drag persistence, the detail
-  modal, edit persistence, per-board sort defaults, and portal overlays.
+  filter-click rendering, board-scoped facet counts, **that the masonry virtualizes
+  (mounts a viewport subset)**, drag-swap persistence, publisher rename, the detail
+  modal (incl. scroll-lock + preserved board scroll), edit persistence, per-board
+  sort defaults, sortable list headers, and portal overlays. Assertions about "how
+  much is on a board" read the app's **"N covers" counter**, not mounted DOM nodes
+  (which are now windowed).
 - **CI** _(planned, §9):** GitHub Actions running install → `tsc` → unit tests → build.
 
 ---
@@ -177,8 +203,8 @@ src/
                   forms/ (MetadataForm), ui/ (Dialog, Menu, TagInput, Autocomplete,
                           Toast, icons)
   db/             schema, client, queries, migrations, seed
-  lib/            storage, images, fractional-index, filters, sort, use-* hooks,
-                  schemas (zod), types (DTOs)
+  lib/            storage, images, fractional-index, reorder (swap), filters, sort,
+                  use-* hooks, schemas (zod), types (DTOs)
 tests/            integration.mjs
 data/             sqlite + covers/ (gitignored)
 ```
@@ -204,11 +230,11 @@ Ordered; each is a self-contained slice.
   `middleware.ts` optimistic cookie gate redirecting unauthenticated page views to
   `/login`, and a client 401 → `/login` redirect.
 
-### 8.2 Ratings (1–5 stars)
-- `Comic.rating` INTEGER (1–5, null = unrated). `PATCH /api/comics/:id` accepts it.
+### 8.2 Ratings (1–5 stars) — _done_
+- `Comic.rating` (0.5–5 in half steps, null = unrated). `PATCH /api/comics/:id` accepts it.
 - **UI:** a star control in the detail modal + editable list view; clicking sets/clears.
-- **Sort:** add **"Rating (high→low)"** to the sort options (unrated sinks last),
-  plus a rating facet/filter is a later nicety.
+- **Sort:** **Rating** is a directional sort option (unrated sinks last in both
+  directions); a rating facet/filter is a later nicety.
 
 ### 8.3 List view with inline row editing — _done_
 - A **grid ⇄ list** view toggle in the board toolbar (`useView`, persisted in
@@ -234,7 +260,10 @@ Ordered; each is a self-contained slice.
   save-view snapshots); `Board.query` JSON column.
 - **Drag card → tab** to add to a board; **drag tabs** to reorder.
 - **ComicVine autofill** on upload (field structure already matches).
-- **Server-side filtering + virtualization** for very large collections.
+- **Server-side filtering + pagination** for very large collections — the board is
+  already **client-side virtualized** (bounded DOM), so this is only needed when the
+  full-board payload itself (all comics in memory) becomes too big; at that point
+  facet counts, global sort, and search move server-side too.
 - Sharing / public boards.
 
 ---

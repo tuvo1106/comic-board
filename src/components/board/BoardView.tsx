@@ -45,18 +45,21 @@ export function BoardView({ boardId }: { boardId?: string }) {
   const qc = useQueryClient();
   const updatePosition = useUpdatePosition();
 
-  const onReorder = ({ movedId, newPosition }: ReorderResult) => {
-    // Update just the moved comic's position and re-sort. This is correct even
-    // while filtered — the new position sits between the visible neighbours, and
-    // hidden (filtered-out) comics keep their positions instead of being dropped.
+  const onReorder = ({ updates }: ReorderResult) => {
+    // Apply the swap's two position writes and re-sort. This is correct even
+    // while filtered — the two visible cards trade exact positions, and hidden
+    // (filtered-out) comics keep theirs instead of being dropped.
     const key = keys.comics(boardId ?? null);
+    const byId = new Map(updates.map((u) => [u.id, u.position]));
     qc.setQueryData<ComicDTO[]>(key, (old) => {
       if (!old) return old;
       return old
-        .map((c) => (c.id === movedId ? { ...c, position: newPosition } : c))
+        .map((c) => (byId.has(c.id) ? { ...c, position: byId.get(c.id)! } : c))
         .sort((a, b) => a.position - b.position);
     });
-    updatePosition.mutate({ id: movedId, position: newPosition, boardId: boardId ?? null });
+    for (const u of updates) {
+      updatePosition.mutate({ id: u.id, position: u.position, boardId: boardId ?? null });
+    }
   };
 
   // Debounced search: type into local state, push to the URL after 150ms.

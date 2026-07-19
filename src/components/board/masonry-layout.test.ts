@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { makeComic } from "@/lib/test-fixtures";
-import { columnsForWidth, computeMasonry, maxColumnsForWidth } from "./masonry-layout";
+import {
+  columnsForWidth,
+  computeMasonry,
+  maxColumnsForWidth,
+  placementsInRange,
+  type Placement,
+} from "./masonry-layout";
 
 describe("columnsForWidth", () => {
   it("maps widths to the responsive breakpoints", () => {
@@ -51,5 +57,42 @@ describe("computeMasonry", () => {
 
   it("returns zero height for an empty board", () => {
     expect(computeMasonry([], 1360).height).toBe(0);
+  });
+});
+
+describe("placementsInRange (virtualization window)", () => {
+  // A single column of 10 cards, 100px tall each, stacked 0,100,200,...
+  const single: Placement[] = Array.from({ length: 10 }, (_, i) => ({
+    id: `c${i}`,
+    x: 0,
+    y: i * 100,
+    width: 200,
+    height: 100,
+  }));
+  const ids = (ps: Placement[]) => ps.map((p) => p.id);
+
+  it("keeps only the cards intersecting the window", () => {
+    // Window [250, 520] spans cards at y=200..300 (c2), 300..400 (c3),
+    // 400..500 (c4), 500..600 (c5).
+    expect(ids(placementsInRange(single, 250, 520))).toEqual(["c2", "c3", "c4", "c5"]);
+  });
+
+  it("includes cards straddling either edge", () => {
+    // c2 (200-300) straddles the top edge; c5 (500-600) straddles the bottom.
+    expect(ids(placementsInRange(single, 250, 550))).toContain("c2");
+    expect(ids(placementsInRange(single, 250, 550))).toContain("c5");
+  });
+
+  it("returns nothing when the window is entirely past the content", () => {
+    expect(placementsInRange(single, 5000, 6000)).toEqual([]);
+  });
+
+  it("returns everything for a window covering the whole board", () => {
+    expect(placementsInRange(single, -1000, 100000)).toHaveLength(10);
+  });
+
+  it("keeps a card flush against an edge (inclusive bounds)", () => {
+    // Window top exactly at c3's bottom (400) still keeps c3 (ends at 400).
+    expect(ids(placementsInRange(single, 400, 450))).toContain("c3");
   });
 });
