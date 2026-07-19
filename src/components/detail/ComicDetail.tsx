@@ -185,6 +185,14 @@ export function ComicDetail({ id, asModal }: Props) {
               src={comic.imageUrl}
               alt={comic.series}
               className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
+              // Reserve the cover's aspect box and show the color blur preview
+              // while the full-size image decodes — avoids a grey flash for
+              // covers that aren't already in the browser cache.
+              style={{
+                aspectRatio: `${comic.width} / ${comic.height}`,
+                backgroundImage: `url(${comic.blurDataUrl})`,
+                backgroundSize: "cover",
+              }}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
             />
           ) : (
