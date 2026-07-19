@@ -16,13 +16,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Match the npm that generated package-lock.json; Node 22 bundles npm 10,
-      # which misreads npm 11's cross-platform optional-dep entries under `npm ci`.
-      - name: Use npm 11
-        run: npm install -g npm@11
-
+      # `npm install` (not `npm ci`): npm 10 misreads npm 11's cross-platform
+      # optional-dep (esbuild) entries under `npm ci`, and pinning npm 11 makes it
+      # block the native modules' (better-sqlite3/sharp) install scripts. Plain
+      # install resolves the platform deps and runs the build scripts.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npx tsc --noEmit
