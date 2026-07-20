@@ -123,7 +123,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm run test:integration` (modal + card-menu flows still pass).
   - Already-done check: grep for `BoardMembershipList`.
 
-- [ ] **11. Touch access to card menu + label** — `[DR#1]`  `[dep: 10]`
+- [x] **11. Touch access to card menu + label** — `[DR#1]`  `[dep: 10]`
   - Files: `src/components/board/ComicCard.tsx`, `ComicCardMenu.tsx`
   - Change: on coarse pointers (`@media (pointer: coarse)` or a `matchMedia`
     hook) show the "…" button and the title/issue label without hover.

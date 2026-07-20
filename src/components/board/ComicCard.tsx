@@ -69,8 +69,9 @@ export function ComicCard({ comic, height, onOpen, menu, noLayoutId }: Props) {
         />
       </motion.div>
 
-      {/* Bottom gradient + label, revealed on hover. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-10 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+      {/* Bottom gradient + label, revealed on hover. Coarse pointers (touch)
+          have no hover, so show it at rest there. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-10 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 pointer-coarse:translate-y-0 pointer-coarse:opacity-100">
         <p className="truncate text-sm font-semibold text-white drop-shadow">{comic.series}</p>
         {comic.issueNumber && (
           <p className="text-xs font-medium text-white/75">#{comic.issueNumber}</p>
@@ -79,7 +80,7 @@ export function ComicCard({ comic, height, onOpen, menu, noLayoutId }: Props) {
 
       {menu && (
         <div
-          className="absolute right-2 top-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+          className="absolute right-2 top-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 pointer-coarse:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           {menu}
