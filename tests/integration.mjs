@@ -403,6 +403,18 @@ try {
     return (await fetch("/api/comics", { method: "POST", body: form })).status;
   }, PNG);
   ck(badStatus === 400, `empty series is rejected with 400 (got ${badStatus})`);
+  // A non-image file (valid meta) is a client error -> 400, not a sharp 500 (item 6).
+  const notImage = await p.evaluate(async () => {
+    const form = new FormData();
+    form.append("file", new File(["this is plain text, not an image"], "t.txt", { type: "text/plain" }));
+    form.append("meta", JSON.stringify({ series: "Not An Image" }));
+    const r = await fetch("/api/comics", { method: "POST", body: form });
+    return { status: r.status, body: await r.json() };
+  });
+  ck(
+    notImage.status === 400 && /valid image/i.test(notImage.body.error ?? ""),
+    `non-image upload rejected with 400 (got ${notImage.status})`,
+  );
   await p.evaluate((id) => fetch(`/api/comics/${id}`, { method: "DELETE" }), up.body.id);
 
   // List view: grid⇄list toggle renders rows; inline editing persists a field

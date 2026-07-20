@@ -49,7 +49,14 @@ export async function POST(req: Request) {
     const meta = comicMetaSchema.parse(parsedJson);
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const image = await processUpload(buffer);
+    let image;
+    try {
+      image = await processUpload(buffer);
+    } catch {
+      // sharp can't decode a non-image (or unreadable) upload — that's a client
+      // error, not a server fault, so return 400 rather than letting it 500.
+      return badRequest("Not a valid image");
+    }
 
     const comic = createComic({
       userId,

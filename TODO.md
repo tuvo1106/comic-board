@@ -77,7 +77,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`.
   - Already-done check: `filters.test.ts` has a `~`/hostile-value case.
 
-- [ ] **6. Non-image upload returns 400, not 500** — `[CR#5]`
+- [x] **6. Non-image upload returns 400, not 500** — `[CR#5]`
   - Files: `src/app/api/comics/route.ts` (POST)
   - Change: wrap `processUpload` (or pre-sniff magic bytes); on a sharp decode
     failure return `badRequest("Not a valid image")`.
