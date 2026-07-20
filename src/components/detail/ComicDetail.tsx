@@ -12,6 +12,7 @@ import {
   useUpdateComic,
 } from "@/lib/client-api";
 import { navOrder } from "@/lib/nav-order";
+import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import type { ComicDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Menu } from "@/components/ui/Menu";
@@ -111,10 +112,9 @@ export function ComicDetail({ id, asModal }: Props) {
   // stays put instead of scrolling behind the backdrop.
   useEffect(() => {
     if (!asModal) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockScroll();
     return () => {
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
     };
   }, [asModal]);
 

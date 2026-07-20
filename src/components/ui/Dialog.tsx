@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { X } from "./icons";
 
 interface Props {
@@ -28,10 +29,10 @@ export function Dialog({ open, onClose, title, children, widthClass = "max-w-md"
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    lockScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      unlockScroll();
     };
   }, [open, onClose]);
 

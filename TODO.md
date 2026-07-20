@@ -101,7 +101,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npx tsc --noEmit`.
   - Already-done check: a cleanup effect clears the timer.
 
-- [ ] **9. Shared scroll-lock helper** — `[CR#2]`
+- [x] **9. Shared scroll-lock helper** — `[CR#2]`
   - Files: new `src/lib/scroll-lock.ts`; `src/components/ui/Dialog.tsx`;
     `src/components/detail/ComicDetail.tsx`
   - Change: counter-based lock/unlock helper; both callers use it so nesting a
