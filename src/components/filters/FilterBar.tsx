@@ -9,7 +9,8 @@ import { computeFacets, countActive, filtersActive } from "@/lib/filters";
 import type { ComicDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
-import { Layers, X } from "@/components/ui/icons";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Filter, Layers, X } from "@/components/ui/icons";
 import { MultiSelect } from "./MultiSelect";
 
 interface Props {
@@ -23,76 +24,105 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
   const meta = useMemo(() => computeFacets(boardComics), [boardComics]);
   const { filters, update, clear, toggle } = useFilters();
   const active = filtersActive(filters);
+  const n = countActive(filters);
   const renamePublisher = useRenamePublisher();
   const { toast } = useToast();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // The facet controls, shared between the inline desktop bar and the mobile
+  // bottom sheet. Rendered twice; each instance keeps its own dropdown state.
+  const facets = (
+    <>
+      <MultiSelect
+        label="Publisher"
+        options={meta.publishers ?? []}
+        selected={filters.publishers}
+        onToggle={(v) => toggle("publishers", v)}
+        onRename={(from, to) =>
+          renamePublisher.mutate(
+            { from, to },
+            {
+              onSuccess: () => {
+                // A selected filter chip still holds the old name; move it over.
+                if (filters.publishers.includes(from)) {
+                  toggle("publishers", from);
+                  toggle("publishers", to);
+                }
+                toast(`Renamed “${from}” to “${to}”`, "success");
+              },
+              onError: (e) => toast((e as Error).message, "error"),
+            },
+          )
+        }
+      />
+      <MultiSelect
+        label="Author"
+        options={meta.authors ?? []}
+        selected={filters.authors}
+        onToggle={(v) => toggle("authors", v)}
+      />
+      <MultiSelect
+        label="Cover Artist"
+        options={meta.artists ?? []}
+        selected={filters.artists}
+        onToggle={(v) => toggle("artists", v)}
+      />
+      <MultiSelect
+        label="Character"
+        options={meta.characters ?? []}
+        selected={filters.characters}
+        onToggle={(v) => toggle("characters", v)}
+      />
+      <MultiSelect
+        label="Tag"
+        options={meta.tags ?? []}
+        selected={filters.tags}
+        onToggle={(v) => toggle("tags", v)}
+      />
+
+      <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-sm text-muted">
+        <input
+          type="date"
+          value={filters.dateFrom ?? ""}
+          onChange={(e) => update({ dateFrom: e.target.value || null })}
+          className="bg-transparent text-fg outline-none [color-scheme:dark]"
+          aria-label="Cover date from"
+        />
+        <span className="text-muted">→</span>
+        <input
+          type="date"
+          value={filters.dateTo ?? ""}
+          onChange={(e) => update({ dateTo: e.target.value || null })}
+          className="bg-transparent text-fg outline-none [color-scheme:dark]"
+          aria-label="Cover date to"
+        />
+      </div>
+    </>
+  );
 
   return (
     <div className="sticky top-[99px] z-20 border-b border-border bg-bg/70 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-2 px-5 py-2.5">
-        <MultiSelect
-          label="Publisher"
-          options={meta.publishers ?? []}
-          selected={filters.publishers}
-          onToggle={(v) => toggle("publishers", v)}
-          onRename={(from, to) =>
-            renamePublisher.mutate(
-              { from, to },
-              {
-                onSuccess: () => {
-                  // A selected filter chip still holds the old name; move it over.
-                  if (filters.publishers.includes(from)) {
-                    toggle("publishers", from);
-                    toggle("publishers", to);
-                  }
-                  toast(`Renamed “${from}” to “${to}”`, "success");
-                },
-                onError: (e) => toast((e as Error).message, "error"),
-              },
-            )
-          }
-        />
-        <MultiSelect
-          label="Author"
-          options={meta.authors ?? []}
-          selected={filters.authors}
-          onToggle={(v) => toggle("authors", v)}
-        />
-        <MultiSelect
-          label="Cover Artist"
-          options={meta.artists ?? []}
-          selected={filters.artists}
-          onToggle={(v) => toggle("artists", v)}
-        />
-        <MultiSelect
-          label="Character"
-          options={meta.characters ?? []}
-          selected={filters.characters}
-          onToggle={(v) => toggle("characters", v)}
-        />
-        <MultiSelect
-          label="Tag"
-          options={meta.tags ?? []}
-          selected={filters.tags}
-          onToggle={(v) => toggle("tags", v)}
-        />
+      <div className="mx-auto flex max-w-[1800px] items-center gap-2 px-5 py-2.5">
+        {/* Desktop: facets inline. */}
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">{facets}</div>
 
-        <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-sm text-muted">
-          <input
-            type="date"
-            value={filters.dateFrom ?? ""}
-            onChange={(e) => update({ dateFrom: e.target.value || null })}
-            className="bg-transparent text-fg outline-none [color-scheme:dark]"
-            aria-label="Cover date from"
-          />
-          <span className="text-muted">→</span>
-          <input
-            type="date"
-            value={filters.dateTo ?? ""}
-            onChange={(e) => update({ dateTo: e.target.value || null })}
-            className="bg-transparent text-fg outline-none [color-scheme:dark]"
-            aria-label="Cover date to"
-          />
-        </div>
+        {/* Mobile: one button that opens the facets in a bottom sheet. */}
+        <button
+          onClick={() => setSheetOpen(true)}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition sm:hidden ${
+            active
+              ? "border-accent/50 bg-accent/15 text-fg"
+              : "border-border bg-surface text-muted hover:text-fg"
+          }`}
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Filters
+          {n > 0 && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-bold text-accent-fg">
+              {n}
+            </span>
+          )}
+        </button>
 
         <div className="flex-1" />
 
@@ -104,13 +134,16 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
               exit={{ opacity: 0, scale: 0.9 }}
               className="flex items-center gap-2"
             >
-              <SaveAsBoardButton visibleComics={visibleComics} />
+              {/* Save-as-board is desktop-only chrome; it lives in the sheet on mobile. */}
+              <div className="hidden sm:block">
+                <SaveAsBoardButton visibleComics={visibleComics} />
+              </div>
               <button
                 onClick={clear}
                 className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-sm text-muted transition hover:text-fg"
               >
                 <X className="h-3.5 w-3.5" />
-                Clear{countActive(filters) > 0 ? ` (${countActive(filters)})` : ""}
+                Clear{n > 0 ? ` (${n})` : ""}
               </button>
             </motion.div>
           )}
@@ -119,6 +152,24 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
 
       {/* Active value chips */}
       <ActiveChips />
+
+      <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Filters">
+        <div className="flex flex-col items-start gap-4 p-5">
+          {facets}
+          <div className="mt-1 flex w-full items-center gap-2 border-t border-border pt-4">
+            <SaveAsBoardButton visibleComics={visibleComics} />
+            {active && (
+              <button
+                onClick={clear}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-sm text-muted transition hover:text-fg"
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear ({n})
+              </button>
+            )}
+          </div>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

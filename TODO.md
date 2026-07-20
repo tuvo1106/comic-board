@@ -134,7 +134,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Already-done check: grep for `pointer: coarse` / coarse-pointer handling in
     the card.
 
-- [ ] **12. Collapsible mobile filter bar** — `[DR#2]`
+- [x] **12. Collapsible mobile filter bar** — `[DR#2]`
   - Files: `src/components/filters/FilterBar.tsx`
   - Change: below a breakpoint, collapse the facet pills + date range into a
     single "Filters (n)" button opening a bottom sheet. **Decisions to surface:**
