@@ -71,6 +71,9 @@ export function BoardView({ boardId }: { boardId?: string }) {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => update({ q: value }), 150);
   };
+  // Clear a pending debounce on unmount so a late update() can't fire after the
+  // component is gone.
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const filtered = useMemo(
     () => (comics ? sortComics(applyFilters(comics, filters), sortField, sortDir) : []),

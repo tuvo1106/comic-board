@@ -94,7 +94,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
     in the network panel.
   - Already-done check: `EditDate` commits on blur/Enter, not `onChange`.
 
-- [ ] **8. Search debounce timer leak on unmount** — `[CR#6]`
+- [x] **8. Search debounce timer leak on unmount** — `[CR#6]`
   - Files: `src/components/board/BoardView.tsx` (`onSearch`, timer ref)
   - Change: add a cleanup effect clearing `timer.current` on unmount.
   - Done when: unmounting mid-debounce fires no late `update()`.
