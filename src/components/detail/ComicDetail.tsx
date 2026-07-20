@@ -3,14 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import {
-  useAddToBoard,
-  useBoards,
-  useComic,
-  useDeleteComic,
-  useRemoveFromBoard,
-  useUpdateComic,
-} from "@/lib/client-api";
+import { useBoards, useComic, useDeleteComic, useUpdateComic } from "@/lib/client-api";
 import { navOrder } from "@/lib/nav-order";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import type { ComicDTO } from "@/lib/types";
@@ -18,11 +11,11 @@ import { useToast } from "@/components/ui/toast";
 import { Menu } from "@/components/ui/Menu";
 import { StarRating } from "@/components/ui/StarRating";
 import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataForm";
+import { BoardMembershipList } from "@/components/board/BoardMembershipList";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Layers,
   Pencil,
   Plus,
   Trash,
@@ -424,15 +417,8 @@ function BoardsField({
   onOpenBoard: () => void;
 }) {
   const { data: boards } = useBoards();
-  const addToBoard = useAddToBoard();
-  const removeFromBoard = useRemoveFromBoard();
   const router = useRouter();
   const memberOf = (boards ?? []).filter((b) => boardIds.includes(b.id));
-
-  const toggle = (boardId: string, isMember: boolean) => {
-    if (isMember) removeFromBoard.mutate({ boardId, comicId });
-    else addToBoard.mutate({ boardId, comicId });
-  };
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -461,38 +447,7 @@ function BoardsField({
           </button>
         )}
       >
-        {() => (
-          <>
-            <p className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-              <Layers className="h-3.5 w-3.5" /> Boards
-            </p>
-            <div className="max-h-52 overflow-y-auto">
-              {boards && boards.length > 0 ? (
-                boards.map((b) => {
-                  const isMember = boardIds.includes(b.id);
-                  return (
-                    <button
-                      key={b.id}
-                      onClick={() => toggle(b.id, isMember)}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition hover:bg-surface-2"
-                    >
-                      <span
-                        className={`grid h-4 w-4 flex-shrink-0 place-items-center rounded border ${
-                          isMember ? "border-accent bg-accent text-accent-fg" : "border-border"
-                        }`}
-                      >
-                        {isMember && <Check className="h-3 w-3" />}
-                      </span>
-                      <span className="flex-1 truncate">{b.name}</span>
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="px-2.5 py-1.5 text-sm text-muted">No boards yet</p>
-              )}
-            </div>
-          </>
-        )}
+        {() => <BoardMembershipList comicId={comicId} boardIds={boardIds} />}
       </Menu>
     </div>
   );

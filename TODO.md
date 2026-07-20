@@ -113,7 +113,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 3 — Touch & mobile
 
-- [ ] **10. Extract `BoardMembershipList`** — `[CR#15a]`
+- [x] **10. Extract `BoardMembershipList`** — `[CR#15a]`
   - Files: new `src/components/board/BoardMembershipList.tsx`; refactor
     `BoardsField` in `src/components/detail/ComicDetail.tsx` and the board list
     in `src/components/board/ComicCardMenu.tsx` to use it.
