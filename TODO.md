@@ -151,7 +151,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, open a comic at 390px, screenshot; no overlap.
   - Already-done check: `NavArrow` has small-screen handling.
 
-- [ ] **14. Star rating touch targets** — `[DR#5d]`
+- [x] **14. Star rating touch targets** — `[DR#5d]`
   - Files: `src/components/ui/StarRating.tsx`
   - Change: on touch, use whole-star taps (or ≥44px targets); keep half-star on
     fine pointers.

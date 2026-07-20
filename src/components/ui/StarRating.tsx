@@ -1,6 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+/** True on coarse pointers (touch), where half-star precision isn't practical. */
+function useCoarsePointer() {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return coarse;
+}
 
 function StarSvg({ size }: { size: number }) {
   return (
@@ -34,9 +47,13 @@ interface Props {
  */
 export function StarRating({ value, onChange, size = 22, readOnly }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const coarse = useCoarsePointer();
   const shown = hover ?? value ?? 0;
   const pct = (Math.max(0, Math.min(5, shown)) / 5) * 100;
   const interactive = !readOnly && !!onChange;
+  // Coarse pointers (touch) can't reliably hit an ~11px half-star, so tap whole
+  // stars there (5 targets); fine pointers keep half-star precision (10 targets).
+  const steps = coarse ? 5 : 10;
 
   return (
     <div className="inline-flex items-center gap-2">
@@ -54,13 +71,13 @@ export function StarRating({ value, onChange, size = 22, readOnly }: Props) {
 
         {interactive && (
           <div className="absolute inset-0 flex">
-            {Array.from({ length: 10 }, (_, i) => {
-              const v = (i + 1) / 2; // 0.5, 1, ... 5
+            {Array.from({ length: steps }, (_, i) => {
+              const v = coarse ? i + 1 : (i + 1) / 2; // whole stars on touch, else 0.5 steps
               return (
                 <button
                   key={v}
                   type="button"
-                  aria-label={`${v} stars`}
+                  aria-label={`${v} star${v === 1 ? "" : "s"}`}
                   onMouseEnter={() => setHover(v)}
                   onClick={() => onChange!(value === v ? null : v)}
                   className="h-full flex-1 cursor-pointer"
