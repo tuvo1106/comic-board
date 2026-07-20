@@ -48,7 +48,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npx tsc --noEmit`; reason through both branches.
   - Already-done check: grep `auth.ts` for a throw referencing `BETTER_AUTH_SECRET`.
 
-- [ ] **3. Generic 500 response bodies** — `[CR#8]`
+- [x] **3. Generic 500 response bodies** — `[CR#8]`
   - Files: `src/lib/api.ts` (`handle`)
   - Change: the 500 branch returns `{ error: "Internal error" }`; keep the
     existing `console.error`.

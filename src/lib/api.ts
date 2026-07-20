@@ -26,7 +26,7 @@ export async function handle(fn: () => Promise<Response> | Response): Promise<Re
       return badRequest("Validation failed", err.flatten().fieldErrors as Record<string, string[]>);
     }
     console.error("API error:", err);
-    const message = err instanceof Error ? err.message : "Internal error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Don't leak internal error details (messages, stack hints) to clients.
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
