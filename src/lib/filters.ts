@@ -117,8 +117,10 @@ export function applyFilters(comics: ComicDTO[], f: Filters): ComicDTO[] {
 // ---------------------------------------------------------------------------
 
 export function filtersFromParams(params: URLSearchParams): Filters {
-  const getAll = (key: string) =>
-    params.getAll(key).flatMap((v) => v.split("~").filter(Boolean));
+  // Multi-valued facets use repeated params (?author=A&author=B), not a single
+  // delimited value — a raw delimiter would break on any value that contained
+  // it (e.g. a "~" or "," in an author name). URLSearchParams handles encoding.
+  const getAll = (key: string) => params.getAll(key).filter(Boolean);
   return {
     q: params.get("q") ?? "",
     series: getAll("series"),
@@ -138,13 +140,16 @@ export function filtersToParams(f: Filters, base?: URLSearchParams): URLSearchPa
   ["q", "series", "publisher", "author", "artist", "character", "tag", "from", "to"].forEach(
     (k) => p.delete(k),
   );
+  const appendAll = (key: string, values: string[]) => {
+    for (const v of values) p.append(key, v);
+  };
   if (f.q.trim()) p.set("q", f.q.trim());
-  if (f.series.length) p.set("series", f.series.join("~"));
-  if (f.publishers.length) p.set("publisher", f.publishers.join("~"));
-  if (f.authors.length) p.set("author", f.authors.join("~"));
-  if (f.artists.length) p.set("artist", f.artists.join("~"));
-  if (f.characters.length) p.set("character", f.characters.join("~"));
-  if (f.tags.length) p.set("tag", f.tags.join("~"));
+  appendAll("series", f.series);
+  appendAll("publisher", f.publishers);
+  appendAll("author", f.authors);
+  appendAll("artist", f.artists);
+  appendAll("character", f.characters);
+  appendAll("tag", f.tags);
   if (f.dateFrom) p.set("from", f.dateFrom);
   if (f.dateTo) p.set("to", f.dateTo);
   return p;

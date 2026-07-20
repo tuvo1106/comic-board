@@ -67,7 +67,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npx tsc --noEmit`. Optional: integration test stubbing a 500.
   - Already-done check: both functions have try/catch.
 
-- [ ] **5. `~` in a facet value breaks filter URLs** — `[CR#3]`
+- [x] **5. `~` in a facet value breaks filter URLs** — `[CR#3]`
   - Files: `src/lib/filters.ts` (`filtersToParams`, `filtersFromParams`),
     `src/lib/filters.test.ts`
   - Change: stop using a raw `~` join delimiter — `encodeURIComponent` each

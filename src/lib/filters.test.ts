@@ -94,6 +94,18 @@ describe("filters URL round-trip", () => {
     expect(filtersFromParams(params)).toEqual(original);
   });
 
+  it("round-trips values containing the old delimiter and other hostile chars", () => {
+    // Regression: a raw "~" join delimiter split these values apart on read.
+    const original = f({
+      series: ["Weird~Series", "A & B"],
+      authors: ["Doe, Jane", "Tilde~Author"],
+      tags: ["50% off", "a=b"],
+      q: "cross~man",
+    });
+    const params = filtersToParams(original);
+    expect(filtersFromParams(params)).toEqual(original);
+  });
+
   it("filtersActive / countActive reflect set facets", () => {
     expect(filtersActive(f())).toBe(false);
     expect(countActive(f({ publishers: ["DC"], tags: ["Variant"], dateFrom: "2020-01-01" }))).toBe(3);
