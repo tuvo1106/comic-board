@@ -85,7 +85,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test` / integration; a route test asserting 400.
   - Already-done check: the route catches the sharp failure and returns 400.
 
-- [ ] **7. List-view date cell: commit on blur, not per keystroke** — `[CR#4 = DR#3d]`
+- [x] **7. List-view date cell: commit on blur, not per keystroke** — `[CR#4 = DR#3d]`
   - Files: `src/components/board/ListView.tsx` (`EditDate`)
   - Change: hold a local draft; PATCH once on blur/Enter (like `EditText`),
     not in `onChange`.

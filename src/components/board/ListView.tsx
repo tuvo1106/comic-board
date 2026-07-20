@@ -267,11 +267,28 @@ function EditPublisher({
 }
 
 function EditDate({ value, onCommit }: { value: string | null; onCommit: (v: string) => void }) {
+  // Hold a local draft and PATCH once on blur/Enter (like EditText) rather than
+  // firing a request on every keystroke as the native date picker fills in.
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => setDraft(value ?? ""), [value]);
+
+  const commit = () => {
+    if (draft !== (value ?? "")) onCommit(draft);
+  };
+
   return (
     <input
       type="date"
-      value={value ?? ""}
-      onChange={(e) => onCommit(e.target.value)}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setDraft(value ?? "");
+          e.currentTarget.blur();
+        }
+      }}
       className="w-full rounded border border-transparent bg-transparent px-1 py-1 text-sm outline-none hover:border-border focus:border-accent [color-scheme:dark]"
     />
   );

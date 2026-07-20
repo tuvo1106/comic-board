@@ -446,6 +446,27 @@ try {
     JSON.stringify(rowAfter.artists) === JSON.stringify(row0.artists),
     "list view inline edit keeps the row's other metadata",
   );
+  // List-view date cell commits on blur, not per keystroke (item 7): editing the
+  // value fires no PATCH; blurring fires exactly one.
+  let datePatches = 0;
+  const countDatePatch = (req) => {
+    if (/\/api\/comics\/[^/]+$/.test(req.url()) && req.method() === "PATCH") datePatches++;
+  };
+  p.on("request", countDatePatch);
+  await p.evaluate(() => {
+    const el = document.querySelector("main input[type='date']");
+    el.focus();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(el, "2019-07-04");
+    el.dispatchEvent(new Event("input", { bubbles: true })); // React onChange -> setDraft only
+  });
+  await sleep(400);
+  ck(datePatches === 0, `editing a date fires no PATCH before blur (got ${datePatches})`);
+  await p.evaluate(() => document.querySelector("main input[type='date']").blur());
+  await sleep(600);
+  ck(datePatches === 1, `blurring the date commits exactly one PATCH (got ${datePatches})`);
+  p.off("request", countDatePatch);
+
   // Sortable list-view headers: clicking "Series" sorts A→Z; clicking again flips Z→A.
   const seriesInDom = async () =>
     p.evaluate(() => {
