@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBoards, useComic, useDeleteComic, useUpdateComic } from "@/lib/client-api";
 import { navOrder } from "@/lib/nav-order";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
@@ -101,6 +101,27 @@ export function ComicDetail({ id, asModal }: Props) {
     [router, searchParams],
   );
 
+  // Touch swipe → prev/next. The floating side arrows are hidden on small
+  // screens (they overlap the panel and there's no keyboard there), so a
+  // horizontal swipe on the panel is how touch users move between covers.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start || editing) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Require a clearly horizontal swipe so it doesn't hijack vertical scroll.
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      goto(dx < 0 ? next : prev);
+    }
+  };
+
   // Lock background scroll while the modal is open so the board underneath
   // stays put instead of scrolling behind the backdrop.
   useEffect(() => {
@@ -191,7 +212,11 @@ export function ComicDetail({ id, asModal }: Props) {
       )}
 
       {/* Panel */}
-      <div className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl ring-1 ring-border md:flex-row">
+      <div
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl ring-1 ring-border md:flex-row"
+      >
         {/* Cover — shared element with the board card. */}
         <div className="flex items-center justify-center bg-black/40 p-4 md:w-[55%]">
           {comic ? (
@@ -398,8 +423,9 @@ function NavArrow({
   return (
     <button
       onClick={onClick}
-      className={`absolute top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-surface/80 text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface ${
-        side === "left" ? "left-2 sm:left-4" : "right-2 sm:right-4"
+      aria-label={side === "left" ? "Previous cover" : "Next cover"}
+      className={`absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-surface/80 text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface sm:grid ${
+        side === "left" ? "left-4" : "right-4"
       }`}
     >
       {children}

@@ -143,7 +143,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot at 390px before/after; confirm ≤1 row of chrome.
   - Already-done check: `FilterBar` renders a collapsed control under a breakpoint.
 
-- [ ] **13. Modal prev/next arrows overlap panel on mobile** — `[DR#5c]`
+- [x] **13. Modal prev/next arrows overlap panel on mobile** — `[DR#5c]`
   - Files: `src/components/detail/ComicDetail.tsx` (`NavArrow`)
   - Change: reposition inside the panel, or hide arrows on small screens
     (keyboard/swipe still navigate).
