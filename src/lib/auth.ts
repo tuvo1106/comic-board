@@ -13,6 +13,12 @@ import * as authSchema from "@/db/auth-schema";
  * Set BETTER_AUTH_SECRET in production (see .env.example). The dev fallback keeps
  * `npm run dev` working with zero setup.
  */
+if (process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_SECRET) {
+  throw new Error(
+    "BETTER_AUTH_SECRET must be set in production. Refusing to boot with the insecure dev fallback secret.",
+  );
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema: authSchema }),
   emailAndPassword: {

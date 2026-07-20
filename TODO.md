@@ -39,7 +39,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm run test:integration` locally is green; `ci.yml` invokes it.
   - Already-done check: grep `ci.yml` for `test:integration`.
 
-- [ ] **2. Fail startup on missing prod auth secret** — `[CR#9]`
+- [x] **2. Fail startup on missing prod auth secret** — `[CR#9]`
   - Files: `src/lib/auth.ts`
   - Change: before `betterAuth({…})`, throw if
     `process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_SECRET`.
