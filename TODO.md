@@ -58,7 +58,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 2 — Correctness bugs
 
-- [ ] **4. Board rename/delete error handling** — `[CR#1]`
+- [x] **4. Board rename/delete error handling** — `[CR#1]`
   - Files: `src/components/board/BoardTabs.tsx` (`doRename`, `doDelete`)
   - Change: wrap each `mutateAsync` in try/catch → `toast((e as Error).message,
     "error")`, mirroring `CreateBoardDialog` in the same file. Leave the dialog

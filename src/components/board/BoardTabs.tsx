@@ -92,16 +92,25 @@ function BoardTab({ board, active }: { board: BoardDTO; active: boolean }) {
   const doRename = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    await updateBoard.mutateAsync({ id: board.id, name: trimmed });
-    setRenameOpen(false);
-    toast("Board renamed", "success");
+    try {
+      await updateBoard.mutateAsync({ id: board.id, name: trimmed });
+      setRenameOpen(false);
+      toast("Board renamed", "success");
+    } catch (e) {
+      // Leave the dialog open so the user can retry or copy their input.
+      toast((e as Error).message, "error");
+    }
   };
 
   const doDelete = async () => {
-    await deleteBoard.mutateAsync(board.id);
-    setDeleteOpen(false);
-    toast("Board deleted", "success");
-    if (active) router.push("/");
+    try {
+      await deleteBoard.mutateAsync(board.id);
+      setDeleteOpen(false);
+      toast("Board deleted", "success");
+      if (active) router.push("/");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
   };
 
   return (
