@@ -147,13 +147,6 @@ export function ComicDetail({ id, asModal }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close, goto, prev, next, editing]);
 
-  const applyFilter = (
-    kind: "author" | "artist" | "character" | "series" | "publisher" | "tag",
-    value: string,
-  ) => {
-    router.push(`/?${kind}=${encodeURIComponent(value)}`);
-  };
-
   const onDelete = async () => {
     try {
       await deleteComic.mutateAsync(id);
@@ -282,12 +275,7 @@ export function ComicDetail({ id, asModal }: Props) {
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
                         Publisher
                       </p>
-                      <button
-                        onClick={() => applyFilter("publisher", comic.publisher!)}
-                        className="text-sm text-fg underline-offset-2 hover:underline"
-                      >
-                        {comic.publisher}
-                      </button>
+                      <span className="text-sm text-fg">{comic.publisher}</span>
                     </div>
                   )}
                   {comic.coverDate && (
@@ -303,25 +291,22 @@ export function ComicDetail({ id, asModal }: Props) {
 
               {comic.authors.length > 0 && (
                 <Field label="Author">
-                  <ChipRow values={comic.authors} onClick={(v) => applyFilter("author", v)} />
+                  <ChipRow values={comic.authors} />
                 </Field>
               )}
               {comic.artists.length > 0 && (
                 <Field label="Cover Artists">
-                  <ChipRow values={comic.artists} onClick={(v) => applyFilter("artist", v)} />
+                  <ChipRow values={comic.artists} />
                 </Field>
               )}
               {comic.characters.length > 0 && (
                 <Field label="Characters on cover">
-                  <ChipRow
-                    values={comic.characters}
-                    onClick={(v) => applyFilter("character", v)}
-                  />
+                  <ChipRow values={comic.characters} />
                 </Field>
               )}
               {comic.tags.length > 0 && (
                 <Field label="Tags">
-                  <ChipRow values={comic.tags} onClick={(v) => applyFilter("tag", v)} />
+                  <ChipRow values={comic.tags} />
                 </Field>
               )}
               <Field label="Boards">
@@ -488,17 +473,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function ChipRow({ values, onClick }: { values: string[]; onClick: (v: string) => void }) {
+// Plain display chips. These deliberately don't filter on click — filtering
+// lives in the board's FilterBar facets, and the list view uses identical-
+// looking chips to *edit*. Keeping the modal chips non-interactive avoids two
+// look-alike chips doing two different things (see TODO item 15 / DR#3a).
+function ChipRow({ values }: { values: string[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {values.map((v) => (
-        <button
+        <span
           key={v}
-          onClick={() => onClick(v)}
-          className="rounded-full bg-surface-2 px-2.5 py-1 text-sm text-fg ring-1 ring-border transition hover:bg-accent/20 hover:ring-accent/40"
+          className="rounded-full bg-surface-2 px-2.5 py-1 text-sm text-fg ring-1 ring-border"
         >
           {v}
-        </button>
+        </span>
       ))}
     </div>
   );

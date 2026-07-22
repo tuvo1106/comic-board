@@ -161,7 +161,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 4 — List & filter refinement
 
-- [ ] **15. List-view chip: distinguish edit from filter** — `[DR#3a]`
+- [x] **15. List-view chip: distinguish edit from filter** — `[DR#3a]`
   - Files: `src/components/board/ListView.tsx`
   - Change: list-view author/artist/tag chips currently *edit* while
     identical-looking modal chips *filter*. Make list editing a distinct
