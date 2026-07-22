@@ -6,7 +6,7 @@ import type { ComicDTO } from "@/lib/types";
 import type { SortDir, SortField } from "@/lib/sort";
 import { StarRating } from "@/components/ui/StarRating";
 import { TagInput } from "@/components/ui/TagInput";
-import { ArrowDown, ArrowUp } from "@/components/ui/icons";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "@/components/ui/icons";
 import { ComicCardMenu } from "./ComicCardMenu";
 
 const COLS =
@@ -82,13 +82,20 @@ function SortHeader({
   return (
     <button
       onClick={() => onSort(field)}
-      className={`inline-flex items-center gap-1 truncate text-left uppercase tracking-wide transition hover:text-fg ${
+      className={`group inline-flex items-center gap-1 truncate text-left uppercase tracking-wide transition hover:text-fg ${
         isActive ? "text-fg" : ""
       }`}
       title={`Sort by ${label}`}
     >
       <span className="truncate">{label}</span>
-      {isActive && <Arrow className="h-3 w-3 shrink-0" />}
+      {isActive ? (
+        <Arrow className="h-3 w-3 shrink-0" />
+      ) : (
+        // Faint neutral glyph on hover marks this header as sortable (the plain
+        // Author/Cover Artist/Tags headers stay bare). Once a column is active it
+        // shows the real asc/desc arrow instead.
+        <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-0 transition group-hover:opacity-40" />
+      )}
     </button>
   );
 }

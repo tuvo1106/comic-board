@@ -171,7 +171,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot a list row; confirm the affordance.
   - Already-done check: list chips no longer look identical to filtering chips.
 
-- [ ] **16. Sortable header affordance** — `[DR#3b]`
+- [x] **16. Sortable header affordance** — `[DR#3b]`
   - Files: `src/components/board/ListView.tsx` (`SortHeader`)
   - Change: sortable headers (Series/#/Publisher/Cover date/Rating) show a
     faint sort glyph on hover; non-sortable ones don't.
