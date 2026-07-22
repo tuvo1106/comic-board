@@ -283,8 +283,10 @@ try {
 
   // Regression: rating a comic (a partial { rating } patch) must NOT wipe its
   // other metadata (authors/artists/characters/tags).
-  const starBtns = await p.$$("button[aria-label$='stars']");
-  await starBtns[7].click(); // 8th half-target = 4.0 stars
+  // Target the 4-star button by its exact label — indexing into a filtered
+  // list is brittle (the singular "1 star" label drops out of a $='stars'
+  // match, and coarse pointers render 5 targets instead of 10).
+  await (await p.$("button[aria-label='4 stars']")).click();
   await sleep(500);
   const afterRate = await apiJson(`/api/comics/${cid}`);
   ck(

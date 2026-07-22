@@ -13,7 +13,16 @@ import * as authSchema from "@/db/auth-schema";
  * Set BETTER_AUTH_SECRET in production (see .env.example). The dev fallback keeps
  * `npm run dev` working with zero setup.
  */
-if (process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_SECRET) {
+// `next build` imports this module (to collect page data) with NODE_ENV
+// "production" but without a runtime secret in the environment. That's a build,
+// not a server boot, so don't fail it here — only refuse to *boot* a prod
+// server without a real secret. NEXT_PHASE is "phase-production-build" during
+// the build and unset when serving.
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build" &&
+  !process.env.BETTER_AUTH_SECRET
+) {
   throw new Error(
     "BETTER_AUTH_SECRET must be set in production. Refusing to boot with the insecure dev fallback secret.",
   );
