@@ -117,7 +117,7 @@ function Row({
 
   return (
     <div
-      className={`grid ${COLS} items-center gap-2 border-b border-border px-3 py-1.5 text-sm transition hover:bg-surface/50`}
+      className={`group/row grid ${COLS} items-center gap-2 border-b border-border px-3 py-1.5 text-sm transition hover:bg-surface/50`}
     >
       <button onClick={onOpen} className="group relative h-12 w-9 overflow-hidden rounded ring-1 ring-white/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -143,9 +143,32 @@ function Row({
       <EditTags values={comic.artists} suggestions={suggestions.artists} placeholder="—" onCommit={(v) => save({ artists: v })} />
       <EditTags values={comic.tags} suggestions={suggestions.tags} placeholder="—" onCommit={(v) => save({ tags: v })} />
 
-      <StarRating value={comic.rating} size={16} onChange={(rating) => save({ rating })} />
+      <RatingCell value={comic.rating} onChange={(rating) => save({ rating })} />
 
       <ComicCardMenu comic={comic} currentBoardId={currentBoardId} />
+    </div>
+  );
+}
+
+/** Rating cell for a list row. Rated comics always show their stars. Unrated
+ *  rows stay quiet at rest — a single muted dot instead of five empty outlines —
+ *  and reveal the settable stars only when the row is hovered or focused (TODO
+ *  item 17 / DR#3c). */
+function RatingCell({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  if (value != null) {
+    return <StarRating value={value} size={16} onChange={onChange} />;
+  }
+  return (
+    <div>
+      <span
+        className="text-muted group-hover/row:hidden group-focus-within/row:hidden"
+        aria-hidden
+      >
+        ·
+      </span>
+      <div className="hidden group-hover/row:block group-focus-within/row:block">
+        <StarRating value={null} size={16} onChange={onChange} />
+      </div>
     </div>
   );
 }

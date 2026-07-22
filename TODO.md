@@ -179,7 +179,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, hover a header, screenshot.
   - Already-done check: `SortHeader` renders a hover glyph.
 
-- [ ] **17. Don't render 5 empty stars per unrated row** — `[DR#3c]`
+- [x] **17. Don't render 5 empty stars per unrated row** — `[DR#3c]`
   - Files: `src/components/board/ListView.tsx`, `src/components/ui/StarRating.tsx`
   - Change: for unrated rows render nothing (or a small dot) at rest; reveal
     settable stars on row hover.
