@@ -20,6 +20,12 @@ anything in the **Epics** section; each needs its own planning pass.
 - `npm run test:integration` — browser E2E (puppeteer). Spins up its own
   isolated app on port 3940 with a throwaway sqlite db; safe to run anytime.
 
+**There is no working linter — don't try to run one.** `npm run lint` (and
+`next lint`) is dead: Next.js 16 removed the `lint` command, so it parses
+`lint` as a directory and errors with `no such directory: …/lint`. There's
+also no flat `eslint.config.js`, so bare `npx eslint` fails too. Rely on
+`npx tsc --noEmit` for static checking; don't burn time re-diagnosing lint.
+
 ## Database safety — read this
 
 **Never run `npm run db:seed` or otherwise reset/reseed the dev database without
