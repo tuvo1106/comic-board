@@ -377,7 +377,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`.
   - Already-done check: the doc comment reflects uniform heights.
 
-- [ ] **37. Fix stale storage-key comments** — `[CR#14]`
+- [x] **37. Fix stale storage-key comments** — `[CR#14]`
   - Files: `src/lib/storage.ts`
   - Change: `orig.webp` → `full.webp` in the comments (matches `images.ts`).
   - Done when: comments name `full.webp`.

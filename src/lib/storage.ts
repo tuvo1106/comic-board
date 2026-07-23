@@ -7,7 +7,7 @@ import { DATA_DIR } from "@/db/client";
  * Swap this implementation for S3/R2 later without touching callers: keep the
  * same `put` / `delete` / `getUrl` shape.
  *
- * `key` is a repo-relative-ish path like "covers/<id>/orig.webp". `getUrl`
+ * `key` is a repo-relative-ish path like "covers/<id>/full.webp". `getUrl`
  * returns the client-facing URL served by /images/[...path].
  */
 export interface StorageAdapter {
@@ -33,7 +33,7 @@ class LocalStorage implements StorageAdapter {
   }
 
   getUrl(key: string): string {
-    // key is "covers/<id>/orig.webp" -> served under /images/<id>/orig.webp
+    // key is "covers/<id>/full.webp" -> served under /images/<id>/full.webp
     const rel = key.startsWith("covers/") ? key.slice("covers/".length) : key;
     return `/images/${rel}`;
   }
