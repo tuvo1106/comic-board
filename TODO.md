@@ -212,14 +212,41 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, apply two facets, screenshot the chip row.
   - Already-done check: chips render a facet prefix/icon.
 
-- [ ] **21. Label the column-count control** — `[DR#4d]`
+- [ ] **21. Stale/invalid session cookie causes a login redirect loop** — `[CR#22]`
+  - Files: `src/middleware.ts`, `src/lib/client-api.ts` (`jsonFetch`, the upload
+    401 branch), possibly `src/app/login`.
+  - Problem: the page gate (`middleware.ts`) only checks cookie **presence**
+    (`getSessionCookie`), while the API validates the **signature/session**. A
+    cookie that is present but invalid — after a `BETTER_AUTH_SECRET` rotation,
+    a server-side session revocation, or a sessions-table reset — passes the
+    gate, then `/api/comics` returns 401, `jsonFetch` does
+    `window.location.href = "/login"`, and the gate bounces `/login → /` because
+    the (bad) cookie is still present. Result: an infinite `/` ⇄ `/login`
+    redirect loop the user can't escape (the cookie is `httpOnly`, so JS can't
+    clear it). Steady state (stable secret, matching TTLs) is unaffected; a prod
+    secret rotation would loop **every** signed-in user.
+  - Change: break the loop by clearing the bad cookie on the 401 path — e.g.
+    route the redirect through a sign-out endpoint that expires the session
+    cookie before showing `/login`, or have the API's 401 response send an
+    expiring `Set-Cookie`. Confirm the gate no longer bounces `/login → /` once
+    the cookie is gone.
+  - Done when: with a present-but-invalid session cookie, the app lands on a
+    usable `/login` instead of looping.
+  - Verify: reproduce via the throwaway instance in `AGENTS.md` — sign in, then
+    restart it with a **different** `BETTER_AUTH_SECRET` on the same port (old
+    cookie now fails validation) and load `/`; before the fix it loops, after it
+    should settle on `/login`.
+  - Already-done check: the 401 path clears/expires the session cookie (grep
+    `jsonFetch` / `middleware.ts` for cookie-clearing on invalid session).
+
+- [ ] **22. Label the column-count control** — `[DR#4d]`
   - Files: `src/components/board/ColumnSelector.tsx`
   - Change: add a columns glyph before the `Auto 3 4 5 6` group or a tooltip.
   - Done when: the control's purpose is clear without clicking.
   - Verify: `run`, screenshot the toolbar.
   - Already-done check: `ColumnSelector` has an icon/tooltip.
 
-- [ ] **22. Consistent "My Comics" tab count** — `[DR#4e]`
+- [ ] **23. Consistent "My Comics" tab count** — `[DR#4e]`
   - Files: `src/components/board/BoardTabs.tsx`
   - Change: either show a count on "My Comics" like custom boards, or drop
     counts from custom tabs — pick one.
@@ -227,7 +254,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot the tab strip.
   - Already-done check: tabs are consistent.
 
-- [ ] **23. Search covers tags + issue #** — `[CR#21]`
+- [ ] **24. Search covers tags + issue #** — `[CR#21]`
   - Files: `src/lib/filters.ts` (`applyFilters`), `src/lib/filters.test.ts`
   - Change: add `tags` and `issueNumber` to the search haystack (or add a
     comment documenting the exclusion). Add a test.
@@ -237,7 +264,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 5 — Polish & accessibility
 
-- [ ] **24. Global focus-visible ring** — `[DR#8]`
+- [ ] **25. Global focus-visible ring** — `[DR#8]`
   - Files: `src/app/globals.css`
   - Change: a `:focus-visible` outline rule so buttons, cards, menu items, and
     chips show keyboard focus.
@@ -245,7 +272,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, keyboard-tab, screenshot a focused control.
   - Already-done check: `globals.css` has a `:focus-visible` rule.
 
-- [ ] **25. Overlay a11y (roles + focus trap)** — `[CR#20]`  *(larger; read CR#20)*
+- [ ] **26. Overlay a11y (roles + focus trap)** — `[CR#20]`  *(larger; read CR#20)*
   - Files: `src/components/ui/Menu.tsx`, `src/components/ui/Dialog.tsx`
   - Change: `role="dialog"`/`aria-modal` + focus trap + focus restore on Dialog;
     `role="menu"`/`menuitem` + arrow-key nav on Menu.
@@ -253,7 +280,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: manual keyboard-only pass through a dialog and a menu.
   - Already-done check: both have roles + focus handling.
 
-- [ ] **26. Skeleton matches the real masonry** — `[DR#7]`
+- [ ] **27. Skeleton matches the real masonry** — `[DR#7]`
   - Files: `src/components/board/BoardView.tsx` (`BoardSkeleton`),
     `src/components/board/masonry-layout.ts`
   - Change: generate the skeleton from `computeMasonry` placeholders (same
@@ -262,7 +289,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, throttle, screenshot load then content.
   - Already-done check: `BoardSkeleton` uses `computeMasonry`.
 
-- [ ] **27. Clickable series title in the modal** — `[DR#5a]`
+- [ ] **28. Clickable series title in the modal** — `[DR#5a]`
   - Files: `src/components/detail/ComicDetail.tsx`
   - Change: make the header series title filter the board by series (like the
     other facet chips).
@@ -270,7 +297,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, click the title, confirm the board filters.
   - Already-done check: the title is a filter link.
 
-- [ ] **28. Show "date added" in the modal** — `[DR#5b]`
+- [ ] **29. Show "date added" in the modal** — `[DR#5b]`
   - Files: `src/components/detail/ComicDetail.tsx`
   - Change: surface `createdAt` in the detail metadata (it's a sort option but
     invisible in the UI).
@@ -278,7 +305,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, open a comic, confirm the field.
   - Already-done check: modal renders `createdAt`.
 
-- [ ] **29. Rating in the grid hover label** — `[DR#9]`
+- [ ] **30. Rating in the grid hover label** — `[DR#9]`
   - Files: `src/components/board/ComicCard.tsx`
   - Change: add the rating to the hover-revealed label (otherwise invisible in
     grid view).
@@ -286,14 +313,14 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, hover a rated card, screenshot.
   - Already-done check: the hover label includes rating.
 
-- [ ] **30. Password visibility toggle** — `[DR#9]`
+- [ ] **31. Password visibility toggle** — `[DR#9]`
   - Files: `src/components/auth/AuthForm.tsx`
   - Change: a show/hide toggle on the password field.
   - Done when: the password field can be revealed.
   - Verify: `run`, toggle on the login page.
   - Already-done check: the password field has a toggle.
 
-- [ ] **31. Cap / dedupe toasts** — `[DR#9]`
+- [ ] **32. Cap / dedupe toasts** — `[DR#9]`
   - Files: `src/components/ui/toast.tsx`
   - Change: cap concurrent toasts (e.g. last N) and/or dedupe identical
     messages so a batch upload can't build a tower.
@@ -301,7 +328,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npx tsc --noEmit`; trigger several toasts quickly.
   - Already-done check: `ToastProvider` caps/dedupes.
 
-- [ ] **32. Declare dark-only deliberate** — `[DR#9]`
+- [ ] **33. Declare dark-only deliberate** — `[DR#9]`
   - Files: `src/app/globals.css`
   - Change: a comment stating dark-only is intentional (so nobody half-adds a
     light mode against the `[color-scheme:dark]` sprinkles).
@@ -311,7 +338,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 6 — Internal cleanup (low urgency; pair with nearby work)
 
-- [ ] **33. Thread `tx` through query helpers** — `[CR#11]`
+- [ ] **34. Thread `tx` through query helpers** — `[CR#11]`
   - Files: `src/db/queries.ts` (`upsertNames`, `upsertPublisher`, `getComicTx`→`loadRelations`)
   - Change: accept a `DBOrTx` param and pass `tx` from `createComic`/
     `updateComic`/`renamePublisher`, so atomicity doesn't rely on the
@@ -320,7 +347,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test` (`queries.test.ts`).
   - Already-done check: helper signatures take a handle.
 
-- [ ] **34. Delete dead fractional-index API** — `[CR#12]`
+- [ ] **35. Delete dead fractional-index API** — `[CR#12]`
   - Files: `src/lib/fractional-index.ts`, `src/lib/fractional-index.test.ts`
   - Change: remove `positionBetween`, `positionBeforeMin`, `needsRenumber`
     (no callers since swap-reorder); keep `positionAfterMax`; rewrite the
@@ -329,7 +356,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`; grep confirms no other references.
   - Already-done check: the three functions are gone.
 
-- [ ] **35. Fix masonry doc + vestigial column math** — `[CR#13]`
+- [ ] **36. Fix masonry doc + vestigial column math** — `[CR#13]`
   - Files: `src/components/board/masonry-layout.ts`
   - Change: correct `computeMasonry`'s "keeps aspect ratio" comment (heights are
     uniform); optionally simplify `colHeights` to
@@ -338,14 +365,14 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`.
   - Already-done check: the doc comment reflects uniform heights.
 
-- [ ] **36. Fix stale storage-key comments** — `[CR#14]`
+- [ ] **37. Fix stale storage-key comments** — `[CR#14]`
   - Files: `src/lib/storage.ts`
   - Change: `orig.webp` → `full.webp` in the comments (matches `images.ts`).
   - Done when: comments name `full.webp`.
   - Verify: grep `storage.ts` for `orig.webp` (none).
   - Already-done check: no `orig.webp` in the file.
 
-- [ ] **37. Dedupe `EditPublisher` + `loadRelations`** — `[CR#15b,c]`
+- [ ] **38. Dedupe `EditPublisher` + `loadRelations`** — `[CR#15b,c]`
   - Files: `src/components/board/ListView.tsx` (`EditPublisher`),
     `src/components/ui/Autocomplete.tsx`, `src/db/queries.ts` (`loadRelations`)
   - Change: `EditPublisher` composes `Autocomplete` instead of reimplementing
@@ -356,7 +383,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Already-done check: `EditPublisher` renders `Autocomplete`; `loadRelations`
     is table-driven.
 
-- [ ] **38. Remove minor dead code** — `[CR#16]`
+- [ ] **39. Remove minor dead code** — `[CR#16]`
   - Files: `src/db/queries.ts` (`series.filter((s) => s.count > 0)`),
     `src/components/board/BoardTabs.tsx` (`{pinned && null}`)
   - Change: delete both (a GROUP BY row can't have count 0; the JSX renders
@@ -365,7 +392,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`; `npx tsc --noEmit`.
   - Already-done check: neither expression present.
 
-- [ ] **39. Scope the `listBoards` count query** — `[CR#17]`
+- [ ] **40. Scope the `listBoards` count query** — `[CR#17]`
   - Files: `src/db/queries.ts` (`listBoards`)
   - Change: join the count through `boards.userId` instead of grouping all of
     `boardComics`.
@@ -373,7 +400,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`.
   - Already-done check: the count query filters by user.
 
-- [ ] **40. `clone()` the sharp pipeline** — `[CR#18]`
+- [ ] **41. `clone()` the sharp pipeline** — `[CR#18]`
   - Files: `src/lib/images.ts` (`processUpload`)
   - Change: `sharp(input).rotate()` once, then `.clone()` per output instead of
     constructing four pipelines.
@@ -381,7 +408,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm run test:integration` (upload path) or a manual upload.
   - Already-done check: `processUpload` uses `.clone()`.
 
-- [ ] **41. Targeted cache invalidation for rating** — `[CR#19]`
+- [ ] **42. Targeted cache invalidation for rating** — `[CR#19]`
   - Files: `src/lib/client-api.ts`
   - Change: for a rating-only mutation, patch the list entry with `setQueryData`
     and only invalidate `meta` when names actually changed, instead of the blunt

@@ -174,6 +174,19 @@ artists/characters. Tags and issue number are excluded, which surprises when a
 tag is visible on the card you're searching for. Either add them or it's a
 deliberate scope choice worth a comment.
 
+### 22. Stale/invalid session cookie causes a login redirect loop
+`src/middleware.ts` gates page routes on cookie **presence** only
+(`getSessionCookie`, "edge-safe"), while the API validates the **signature/
+session**. When a cookie is present but invalid — after a `BETTER_AUTH_SECRET`
+rotation, a server-side session revocation, or a sessions-table reset — it
+passes the gate, then `/api/comics` 401s, `jsonFetch` (`src/lib/client-api.ts`)
+does `window.location.href = "/login"`, and the gate bounces `/login → /`
+because the bad cookie is still there. Result: an infinite `/` ⇄ `/login` loop
+the user can't escape (the cookie is `httpOnly`, so JS can't clear it). Steady
+state is fine; a prod secret rotation would loop every signed-in user at once.
+Fix by clearing/expiring the cookie on the 401 path (sign-out redirect, or an
+expiring `Set-Cookie` on the 401). Surfaced 2026-07-22 while verifying TODO #20.
+
 ---
 
 ## Test gaps
