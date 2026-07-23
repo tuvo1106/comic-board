@@ -254,7 +254,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot the tab strip.
   - Already-done check: tabs are consistent.
 
-- [ ] **24. Search covers tags + issue #** — `[CR#21]`
+- [x] **24. Search covers tags + issue #** — `[CR#21]`
   - Files: `src/lib/filters.ts` (`applyFilters`), `src/lib/filters.test.ts`
   - Change: add `tags` and `issueNumber` to the search haystack (or add a
     comment documenting the exclusion). Add a test.

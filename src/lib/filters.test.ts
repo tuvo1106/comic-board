@@ -50,10 +50,16 @@ describe("applyFilters", () => {
     expect(applyFilters(withUndated, f({ dateTo: "2030-01-01" }))).toHaveLength(3);
   });
 
-  it("free-text search spans series, publisher, authors, artists, characters", () => {
+  it("free-text search spans series, publisher, authors, artists, characters, tags", () => {
     expect(applyFilters(comics, f({ q: "miller" }))).toHaveLength(1);
     expect(applyFilters(comics, f({ q: "joker" }))).toHaveLength(1);
     expect(applyFilters(comics, f({ q: "marvel" }))).toHaveLength(1);
+    expect(applyFilters(comics, f({ q: "facsimile" }))).toHaveLength(1);
+  });
+
+  it("excludes issue number from free-text search (avoids noisy numeric substring hits)", () => {
+    const withIssue = [makeComic({ series: "X-Men", issueNumber: "266" })];
+    expect(applyFilters(withIssue, f({ q: "266" }))).toHaveLength(0);
   });
 });
 

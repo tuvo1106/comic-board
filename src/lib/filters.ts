@@ -149,12 +149,16 @@ export function applyFilters(comics: ComicDTO[], f: Filters): ComicDTO[] {
   const q = f.q.trim().toLowerCase();
   return comics.filter((c) => {
     if (q) {
+      // issueNumber is intentionally excluded: it's a short numeric token, so a
+      // substring match ("3") would spuriously hit "23", "13", "30", etc. Use
+      // the exact issue-number field/facet if you need to find a specific issue.
       const haystack = [
         c.series,
         c.publisher ?? "",
         ...c.authors,
         ...c.artists,
         ...c.characters,
+        ...c.tags,
       ]
         .join(" ")
         .toLowerCase();
