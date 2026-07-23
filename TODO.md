@@ -204,7 +204,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot the filter bar.
   - Already-done check: date inputs live in a pill/popover, not inline.
 
-- [ ] **20. Active-filter chip provenance** — `[DR#4c]`
+- [x] **20. Active-filter chip provenance** — `[DR#4c]`
   - Files: `src/components/filters/FilterBar.tsx` (`ActiveChips`)
   - Change: prefix each chip with its facet ("Publisher: DC") or add a facet
     icon, so a value shared across facets isn't ambiguous.

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useCreateBoard, useRenamePublisher } from "@/lib/client-api";
 import { useFilters } from "@/lib/use-filters";
-import { computeFacets, countActive, filtersActive } from "@/lib/filters";
+import { activeChips, computeFacets, countActive, filtersActive } from "@/lib/filters";
 import type { ComicDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
@@ -161,34 +161,7 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
 
 function ActiveChips() {
   const { filters, toggle, update } = useFilters();
-  const chips: { key: string; label: string; onRemove: () => void }[] = [];
-  filters.publishers.forEach((v) =>
-    chips.push({ key: `p-${v}`, label: v, onRemove: () => toggle("publishers", v) }),
-  );
-  filters.authors.forEach((v) =>
-    chips.push({ key: `au-${v}`, label: v, onRemove: () => toggle("authors", v) }),
-  );
-  filters.artists.forEach((v) =>
-    chips.push({ key: `a-${v}`, label: v, onRemove: () => toggle("artists", v) }),
-  );
-  filters.characters.forEach((v) =>
-    chips.push({ key: `c-${v}`, label: v, onRemove: () => toggle("characters", v) }),
-  );
-  filters.tags.forEach((v) =>
-    chips.push({ key: `t-${v}`, label: v, onRemove: () => toggle("tags", v) }),
-  );
-  if (filters.dateFrom)
-    chips.push({
-      key: "from",
-      label: `from ${filters.dateFrom}`,
-      onRemove: () => update({ dateFrom: null }),
-    });
-  if (filters.dateTo)
-    chips.push({
-      key: "to",
-      label: `to ${filters.dateTo}`,
-      onRemove: () => update({ dateTo: null }),
-    });
+  const chips = activeChips(filters);
 
   if (chips.length === 0) return null;
 
@@ -203,9 +176,14 @@ function ActiveChips() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ type: "spring", stiffness: 500, damping: 40 }}
-            onClick={c.onRemove}
+            onClick={() =>
+              c.remove.type === "toggle"
+                ? toggle(c.remove.key, c.remove.value)
+                : update({ [c.remove.field]: null })
+            }
             className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-1 text-xs font-medium text-fg ring-1 ring-accent/30 transition hover:bg-accent/25"
           >
+            <span className="font-normal text-muted">{c.facet}:</span>
             {c.label}
             <X className="h-3 w-3 text-muted" />
           </motion.button>

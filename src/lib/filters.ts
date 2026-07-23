@@ -38,6 +38,57 @@ export function filtersActive(f: Filters): boolean {
   );
 }
 
+/** How to clear a single active chip — a discriminated action the UI dispatches. */
+export type ChipRemoval =
+  | { type: "toggle"; key: "publishers" | "authors" | "artists" | "characters" | "tags"; value: string }
+  | { type: "date"; field: "dateFrom" | "dateTo" };
+
+/** A single active-filter chip, carrying its facet so shared values read unambiguously. */
+export interface ActiveChip {
+  key: string;
+  facet: string;
+  label: string;
+  remove: ChipRemoval;
+}
+
+// Facet → its display prefix and the array key `toggle` acts on, in chip order.
+const FACET_CHIPS: {
+  key: "publishers" | "authors" | "artists" | "characters" | "tags";
+  facet: string;
+  prefix: string;
+}[] = [
+  { key: "publishers", facet: "Publisher", prefix: "p" },
+  { key: "authors", facet: "Author", prefix: "au" },
+  { key: "artists", facet: "Cover Artist", prefix: "a" },
+  { key: "characters", facet: "Character", prefix: "c" },
+  { key: "tags", facet: "Tag", prefix: "t" },
+];
+
+/**
+ * Derive the active-filter chips (facet + value + removal action) from filters.
+ * Each chip names its facet so a value shared across facets — e.g. "Jim Lee" as
+ * both Author and Cover Artist — is unambiguous. Note: `q` has its own search UI
+ * and is intentionally excluded here.
+ */
+export function activeChips(f: Filters): ActiveChip[] {
+  const chips: ActiveChip[] = [];
+  for (const { key, facet, prefix } of FACET_CHIPS) {
+    for (const value of f[key]) {
+      chips.push({
+        key: `${prefix}-${value}`,
+        facet,
+        label: value,
+        remove: { type: "toggle", key, value },
+      });
+    }
+  }
+  if (f.dateFrom)
+    chips.push({ key: "from", facet: "From", label: f.dateFrom, remove: { type: "date", field: "dateFrom" } });
+  if (f.dateTo)
+    chips.push({ key: "to", facet: "To", label: f.dateTo, remove: { type: "date", field: "dateTo" } });
+  return chips;
+}
+
 export function countActive(f: Filters): number {
   return (
     f.series.length +

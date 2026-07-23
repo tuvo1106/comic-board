@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_FILTERS,
+  activeChips,
   applyFilters,
   computeFacets,
   countActive,
@@ -137,5 +138,36 @@ describe("filters URL round-trip", () => {
   it("filtersActive / countActive reflect set facets", () => {
     expect(filtersActive(f())).toBe(false);
     expect(countActive(f({ publishers: ["DC"], tags: ["Variant"], dateFrom: "2020-01-01" }))).toBe(3);
+  });
+});
+
+describe("activeChips", () => {
+  it("returns no chips for empty filters", () => {
+    expect(activeChips(f())).toEqual([]);
+  });
+
+  it("tags each chip with its facet so a shared value is unambiguous", () => {
+    // "Jim Lee" is both an author and a cover artist — the chips must not collide.
+    const chips = activeChips(f({ authors: ["Jim Lee"], artists: ["Jim Lee"] }));
+    expect(chips.map((c) => [c.facet, c.label])).toEqual([
+      ["Author", "Jim Lee"],
+      ["Cover Artist", "Jim Lee"],
+    ]);
+    // Distinct keys keep the two chips from clobbering each other in the list.
+    expect(new Set(chips.map((c) => c.key)).size).toBe(2);
+  });
+
+  it("orders facet chips then date chips, and carries the right removal action", () => {
+    const chips = activeChips(
+      f({ publishers: ["DC"], tags: ["Key Issue"], dateFrom: "2020-01-01", dateTo: "2020-12-31" }),
+    );
+    expect(chips.map((c) => c.facet)).toEqual(["Publisher", "Tag", "From", "To"]);
+    expect(chips[0].remove).toEqual({ type: "toggle", key: "publishers", value: "DC" });
+    expect(chips[2].remove).toEqual({ type: "date", field: "dateFrom" });
+    expect(chips[3].remove).toEqual({ type: "date", field: "dateTo" });
+  });
+
+  it("excludes the free-text query (it has its own search UI)", () => {
+    expect(activeChips(f({ q: "spider" }))).toEqual([]);
   });
 });
