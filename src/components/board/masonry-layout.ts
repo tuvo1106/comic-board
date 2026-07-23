@@ -39,15 +39,17 @@ export function maxColumnsForWidth(width: number): number {
 }
 
 /**
- * Fixed-column masonry. The card at flow position `i` always lives in column
- * `i % columns`, stacked vertically within it. Each card keeps its cover's
- * aspect ratio, so columns stagger like a Pinterest board.
+ * Fixed-column uniform grid. The card at flow position `i` always lives in
+ * column `i % columns`, on row `floor(i / columns)`. Every card is the same
+ * height (`columnWidth * CARD_ASPECT`), so this is a plain grid — rows stay
+ * aligned and columns don't stagger. Covers fill their fixed footprint via
+ * object-cover (see CARD_ASPECT above).
  *
- * We deliberately do NOT pack into the shortest column: that makes a card's
- * column depend on the heights of every card before it, so reordering two early
- * cards would reshuffle unrelated cards downstream. With fixed columns a
- * reorder keeps cards in their column, and because comic covers are all roughly
- * portrait the columns stay well balanced.
+ * The name "masonry" is historical: we deliberately do NOT pack into the
+ * shortest column. Shortest-column packing would make a card's position depend
+ * on the heights of every card before it, so reordering two early cards would
+ * reshuffle unrelated cards downstream. Fixed columns + uniform heights keep a
+ * reorder local: cards stay in their column and nothing below moves.
  */
 export function computeMasonry(
   items: ComicDTO[],
@@ -61,21 +63,23 @@ export function computeMasonry(
   const columnWidth =
     columns > 0 ? (containerWidth - GAP * (columns - 1)) / columns : containerWidth;
 
-  const colHeights = new Array(columns).fill(0);
-  const placements = new Map<string, Placement>();
-
   const cardHeight = Math.round(columnWidth * CARD_ASPECT);
+  const rowStride = cardHeight + GAP;
+  const placements = new Map<string, Placement>();
 
   items.forEach((item, i) => {
     const col = i % columns;
+    const row = Math.floor(i / columns);
     const x = col * (columnWidth + GAP);
-    const y = colHeights[col];
+    const y = row * rowStride;
     placements.set(item.id, { id: item.id, x, y, width: columnWidth, height: cardHeight });
-    colHeights[col] = y + cardHeight + GAP;
   });
 
-  const height = Math.max(0, ...colHeights) - GAP;
-  return { placements, columnWidth, height: Math.max(height, 0), columns };
+  // Total height is the number of rows (tallest column) times the row stride,
+  // minus the trailing gap. Empty board -> 0.
+  const rows = Math.ceil(items.length / columns);
+  const height = rows > 0 ? rows * rowStride - GAP : 0;
+  return { placements, columnWidth, height, columns };
 }
 
 /**

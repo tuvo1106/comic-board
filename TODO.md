@@ -368,7 +368,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`; grep confirms no other references.
   - Already-done check: the three functions are gone.
 
-- [ ] **36. Fix masonry doc + vestigial column math** — `[CR#13]`
+- [x] **36. Fix masonry doc + vestigial column math** — `[CR#13]`
   - Files: `src/components/board/masonry-layout.ts`
   - Change: correct `computeMasonry`'s "keeps aspect ratio" comment (heights are
     uniform); optionally simplify `colHeights` to
