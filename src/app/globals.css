@@ -40,6 +40,18 @@ body {
   scrollbar-color: var(--color-border) transparent;
 }
 
+/*
+  Global keyboard focus ring. `:focus-visible` fires for keyboard/programmatic
+  focus but stays quiet on mouse/touch, so buttons, cards, menu items, and chips
+  get a visible ring when tabbed to without flashing one on click. Text inputs
+  keep their own `focus:border-accent` treatment; the ring layers on top for
+  keyboard users. The outline follows each element's own border-radius.
+*/
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* Respect reduced-motion: Motion reads this too, but kill CSS transitions as well. */
 @media (prefers-reduced-motion: reduce) {
   *,

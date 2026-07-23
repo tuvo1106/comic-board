@@ -264,7 +264,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 5 — Polish & accessibility
 
-- [ ] **25. Global focus-visible ring** — `[DR#8]`
+- [x] **25. Global focus-visible ring** — `[DR#8]`
   - Files: `src/app/globals.css`
   - Change: a `:focus-visible` outline rule so buttons, cards, menu items, and
     chips show keyboard focus.
