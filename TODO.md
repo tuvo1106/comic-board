@@ -320,7 +320,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, toggle on the login page.
   - Already-done check: the password field has a toggle.
 
-- [ ] **32. Cap / dedupe toasts** — `[DR#9]`
+- [x] **32. Cap / dedupe toasts** — `[DR#9]`
   - Files: `src/components/ui/toast.tsx`
   - Change: cap concurrent toasts (e.g. last N) and/or dedupe identical
     messages so a batch upload can't build a tower.

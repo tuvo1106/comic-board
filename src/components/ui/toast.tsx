@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type ToastKind = "info" | "error" | "success";
 interface Toast {
@@ -16,6 +16,10 @@ interface ToastCtx {
 
 const Ctx = createContext<ToastCtx | null>(null);
 
+/** Max toasts on screen at once; extras drop the oldest so a batch can't tower. */
+const MAX_TOASTS = 4;
+const TOAST_MS = 4000;
+
 export function useToast(): ToastCtx {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useToast must be used within ToastProvider");
@@ -25,13 +29,49 @@ export function useToast(): ToastCtx {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const idRef = useRef(0);
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+
+  const remove = useCallback((id: number) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }, []);
 
   const toast = useCallback((message: string, kind: ToastKind = "info") => {
-    const id = ++idRef.current;
-    setToasts((t) => [...t, { id, message, kind }]);
-    setTimeout(() => {
-      setToasts((t) => t.filter((x) => x.id !== id));
-    }, 4000);
+    setToasts((t) => {
+      // Dedupe: an identical message already on screen doesn't stack again.
+      if (t.some((x) => x.message === message && x.kind === kind)) return t;
+      const next = [...t, { id: ++idRef.current, message, kind }];
+      // Cap: keep only the most recent MAX_TOASTS.
+      return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
+    });
+  }, []);
+
+  // One auto-dismiss timer per toast id, created once and cleared when the
+  // toast leaves — so adding a toast never resets another's remaining life.
+  useEffect(() => {
+    const live = new Set(toasts.map((t) => t.id));
+    for (const t of toasts) {
+      if (!timers.current.has(t.id)) {
+        timers.current.set(
+          t.id,
+          setTimeout(() => remove(t.id), TOAST_MS),
+        );
+      }
+    }
+    for (const [id, handle] of timers.current) {
+      if (!live.has(id)) {
+        clearTimeout(handle);
+        timers.current.delete(id);
+      }
+    }
+  }, [toasts, remove]);
+
+  // Clear any pending timers on unmount.
+  useEffect(() => {
+    const map = timers.current;
+    return () => {
+      for (const handle of map.values()) clearTimeout(handle);
+      map.clear();
+    };
   }, []);
 
   return (
