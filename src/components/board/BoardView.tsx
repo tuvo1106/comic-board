@@ -7,7 +7,9 @@ import { keys, useComics, useUpdatePosition } from "@/lib/client-api";
 import { useFilters } from "@/lib/use-filters";
 import { applyFilters, filtersActive } from "@/lib/filters";
 import { navOrder } from "@/lib/nav-order";
-import { useColumns } from "@/lib/use-columns";
+import { useColumns, type ColumnPref } from "@/lib/use-columns";
+import { useMeasureWidth } from "@/lib/use-measure";
+import { computeMasonry } from "./masonry-layout";
 import { useSort } from "@/lib/use-sort";
 import { useView } from "@/lib/use-view";
 import { sortComics } from "@/lib/sort";
@@ -122,7 +124,7 @@ export function BoardView({ boardId }: { boardId?: string }) {
             </div>
           </div>
         )}
-        {isLoading && <BoardSkeleton />}
+        {isLoading && <BoardSkeleton columns={columns} />}
         {isError && (
           <p className="py-20 text-center text-danger">
             {(error as Error)?.message ?? "Failed to load comics"}
@@ -160,17 +162,43 @@ export function BoardView({ boardId }: { boardId?: string }) {
   );
 }
 
-function BoardSkeleton() {
-  const heights = [280, 340, 300, 360, 290, 330, 310, 350, 300, 320, 280, 340];
+// A single placeholder item — `computeMasonry` only reads `id`, so we probe the
+// real geometry (column count + card height) with one before generating enough
+// to fill the viewport.
+const SKELETON_PROBE = [{ id: "0" }] as unknown as ComicDTO[];
+
+/**
+ * Loading placeholder that mirrors the real masonry: same `computeMasonry`
+ * column geometry and uniform card height at the measured width, so when the
+ * content arrives it drops into the identical grid with no reflow.
+ */
+function BoardSkeleton({ columns }: { columns: ColumnPref }) {
+  const { ref, width } = useMeasureWidth<HTMLDivElement>();
+
+  const layout = useMemo(() => {
+    if (width <= 0) return null;
+    // Probe once to learn the real column count and card height for this width.
+    const probe = computeMasonry(SKELETON_PROBE, width, columns);
+    const cardHeight = probe.placements.get("0")?.height ?? 300;
+    const viewport = typeof window !== "undefined" ? window.innerHeight : 900;
+    const rows = Math.ceil(viewport / cardHeight) + 1;
+    const count = Math.max(1, rows * probe.columns);
+    const items = Array.from({ length: count }, (_, i) => ({
+      id: String(i),
+    })) as unknown as ComicDTO[];
+    return computeMasonry(items, width, columns);
+  }, [width, columns]);
+
   return (
-    <div className="columns-2 gap-4 sm:columns-3 lg:columns-4 xl:columns-5">
-      {heights.map((h, i) => (
-        <div
-          key={i}
-          className="mb-4 w-full animate-pulse rounded-[var(--radius-card)] bg-surface-2"
-          style={{ height: h }}
-        />
-      ))}
+    <div ref={ref} className="relative w-full" style={{ height: layout?.height ?? 0 }}>
+      {layout &&
+        [...layout.placements.values()].map((p) => (
+          <div
+            key={p.id}
+            className="absolute animate-pulse rounded-[var(--radius-card)] bg-surface-2"
+            style={{ left: p.x, top: p.y, width: p.width, height: p.height }}
+          />
+        ))}
     </div>
   );
 }

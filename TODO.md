@@ -280,7 +280,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: manual keyboard-only pass through a dialog and a menu.
   - Already-done check: both have roles + focus handling.
 
-- [ ] **27. Skeleton matches the real masonry** — `[DR#7]`
+- [x] **27. Skeleton matches the real masonry** — `[DR#7]`
   - Files: `src/components/board/BoardView.tsx` (`BoardSkeleton`),
     `src/components/board/masonry-layout.ts`
   - Change: generate the skeleton from `computeMasonry` placeholders (same
