@@ -409,6 +409,7 @@ export function listBoards(userId: string): BoardDTO[] {
   const counts = db
     .select({ boardId: boardComics.boardId, c: sql<number>`count(*)` })
     .from(boardComics)
+    .innerJoin(boards, and(eq(boards.id, boardComics.boardId), eq(boards.userId, userId)))
     .groupBy(boardComics.boardId)
     .all();
   const countMap = new Map(counts.map((c) => [c.boardId, c.c]));

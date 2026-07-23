@@ -404,7 +404,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`; `npx tsc --noEmit`.
   - Already-done check: neither expression present.
 
-- [ ] **40. Scope the `listBoards` count query** — `[CR#17]`
+- [x] **40. Scope the `listBoards` count query** — `[CR#17]`
   - Files: `src/db/queries.ts` (`listBoards`)
   - Change: join the count through `boards.userId` instead of grouping all of
     `boardComics`.
