@@ -16,16 +16,18 @@ not yet implemented.
 
 **Built (v0.x):** upload + metadata, uniform-grid **virtualized** masonry board,
 multiple boards as tabs (create/rename/delete, membership, save-view-as-board),
-drag-to-**swap** reorder with fractional indexing (per board, works while
-filtered), shared-element detail modal with edit/delete, filtering + search +
+drag-to-**swap** reorder (per board, works while filtered), shared-element detail
+modal with edit/delete, filtering + search +
 facets scoped per board, directional sort (dropdown in grid, sortable column
 headers in list), normalized + renameable publishers, column-density control,
 portal-based overlays, unit + integration tests.
 
-**Planned toward 1.0:** user accounts (email/password), per-user ownership of
-comics & boards, 1–5 star ratings + sort-by-rating, an editable list view, and CI.
+**1.0 landed:** user accounts (email/password) with per-user ownership of comics
+& boards, half-star (0.5–5) ratings + sort-by-rating, an editable list view, and
+CI (unit + integration). See §8 for the shipped slices; §9 for release status.
 
-Single-user today: every comic/board is global. Auth (§9) introduces ownership.
+**Next (not built):** smart boards, cloud storage, drag card→tab / drag-tabs,
+and ComicVine autofill — see §8.5.
 
 ---
 
@@ -51,23 +53,23 @@ since Next 16's in-build TS checker crashes there; `tsc` runs separately).
 
 ## 3. Data model
 
-Current tables plus planned additions (marked _(planned)_).
+Current tables.
 
 ```
 Comic
   id            TEXT (nanoid) PK
-  userId        TEXT FK → User        (planned; scopes ownership)
+  userId        TEXT FK → User        -- owner; ON DELETE CASCADE (null = unowned/seed pool)
   series        TEXT NOT NULL
   issueNumber   TEXT                  -- "300", "Annual 1"
   publisherId   TEXT FK → Publisher   -- normalized; ON DELETE SET NULL
   coverDate     TEXT (ISO yyyy-mm-dd) -- full date; day-level
-  rating        INTEGER               (planned; 1–5, nullable = unrated)
+  rating        REAL                  -- 0.5–5 in 0.5 steps; null = unrated
   imagePath, thumbPath, blurDataUrl TEXT NOT NULL
   width, height INTEGER NOT NULL      -- aspect-ratio reservation
   position      REAL NOT NULL         -- My Comics drag order
   createdAt     INTEGER NOT NULL
 
-Board            (id PK, userId FK→User [planned], name, tabPosition REAL, createdAt)
+Board            (id PK, userId FK→User, name, tabPosition REAL, createdAt)
 BoardComic       (boardId FK, comicId FK, position REAL, addedAt) PK(boardId,comicId)
 
 Author           (id PK, name, nameKey UNIQUE)   ComicAuthor    (comicId FK, authorId FK)
@@ -76,8 +78,11 @@ Character        (id PK, name, nameKey UNIQUE)   ComicCharacter (comicId FK, cha
 Tag              (id PK, name, nameKey UNIQUE)    ComicTag       (comicId FK, tagId FK)       -- facsimile, homage, key issue, variant…
 Publisher        (id PK, name, nameKey UNIQUE)    -- Comic.publisherId FK; renameable, merges on collision
 
-User             (planned; id PK, email UNIQUE, passwordHash, createdAt)
-Session          (planned; id PK, userId FK, expiresAt)
+-- Auth tables (better-auth, in db/auth-schema.ts):
+User             (id PK, email UNIQUE, name, emailVerified, createdAt)
+Session          (id PK, userId FK, token, expiresAt, …)
+Account          (id PK, userId FK, providerId, password hash for email/password)
+Verification     (id PK, identifier, value, expiresAt)
 ```
 
 Notes:
@@ -113,7 +118,10 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 | `PATCH /api/publishers` | `{ from, to }` — rename a publisher (applies to all its comics; merges on collision). |
 | `GET /api/meta` | Global distinct values + counts — powers **form autocomplete**. |
 | `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
-| `POST /api/auth/signup`, `/login`, `/logout` | _(planned)_ email/password + session cookie. |
+| `ALL /api/auth/[...all]` | better-auth handler (sign-up / sign-in / sign-out); HTTP-only session cookie. |
+
+All non-auth routes resolve the session (`getUserId`) and **401 when absent**;
+every query is scoped to that user id.
 
 **Facet counts vs. autocomplete:** filter dropdown facets are computed
 **client-side from the current board's comics** (`computeFacets`) so counts match
@@ -143,8 +151,8 @@ the `board` param scopes the list server-side.
   preloaded on pointer-enter so the detail modal opens on a decoded image.
 - **Drag reorder** — dnd-kit, 8px activation, **swap on drop**: the dragged card
   and its drop target trade exact `position` values; every other card stays put
-  (no shift/insert). Pointer-precise collision; per-board fractional-index
-  persistence via two optimistic position writes. Works **while filtered** (the two
+  (no shift/insert). Pointer-precise collision; per-board persistence via two
+  optimistic position writes. Works **while filtered** (the two
   visible cards swap; hidden comics keep their positions). Core swap is the pure
   `swapReorder` (`src/lib/reorder.ts`).
 - **Detail modal** — route-backed intercepting modal with shared-element cover,
@@ -174,7 +182,7 @@ for movement, durations for fades.
 ## 6. Testing
 
 - **Unit (`npm test`, vitest):** pure logic — `applyFilters`, `computeFacets`,
-  filter URL round-trip, directional `sortComics`, fractional indexing, masonry math
+  filter URL round-trip, directional `sortComics`, position append (`positionAfterMax`), masonry math
   **+ `placementsInRange` windowing**, **`swapReorder`** (swap-not-insert, symmetry,
   fractional positions, no-op drops), normalized-publisher queries (dedupe/rename/
   merge), id/name helpers.
@@ -187,7 +195,8 @@ for movement, durations for fades.
   sort defaults, sortable list headers, and portal overlays. Assertions about "how
   much is on a board" read the app's **"N covers" counter**, not mounted DOM nodes
   (which are now windowed).
-- **CI** _(planned, §9):** GitHub Actions running install → `tsc` → unit tests → build.
+- **CI (§8.4):** GitHub Actions on push/PR — one job runs install → `tsc --noEmit`
+  → unit tests → build; a second job runs the integration suite in headless Chrome.
 
 ---
 
@@ -196,15 +205,18 @@ for movement, durations for fades.
 ```
 src/
   app/            page.tsx (My Comics), board/[id], comic/[id],
-                  @modal/(.)comic/[id] (intercepted), api/*, images/[...path]
+                  @modal/(.)comic/[id] (intercepted), login/, signup/,
+                  api/* (incl. auth/[...all]), images/[...path]
+  middleware.ts   optimistic cookie gate for page routes
   components/     board/ (Masonry+layout, ComicCard(+Menu), BoardTabs, BoardView,
-                          Sort/Column selectors), detail/ (ComicDetail),
+                          ListView, Sort/Column selectors), detail/ (ComicDetail),
                   filters/ (FilterBar, MultiSelect), upload/ (UploadModal),
-                  forms/ (MetadataForm), ui/ (Dialog, Menu, TagInput, Autocomplete,
-                          Toast, icons)
-  db/             schema, client, queries, migrations, seed
-  lib/            storage, images, fractional-index, reorder (swap), filters, sort,
-                  use-* hooks, schemas (zod), types (DTOs)
+                  forms/ (MetadataForm), auth/ (AuthForm), ui/ (Dialog, Menu,
+                          TagInput, Autocomplete, StarRating, Toast, icons)
+  db/             schema, auth-schema, client, queries, migrations, seed
+  lib/            storage, images, fractional-index (append-only positions),
+                  reorder (swap), filters, sort, auth, use-* hooks,
+                  schemas (zod), types (DTOs)
 tests/            integration.mjs
 data/             sqlite + covers/ (gitignored)
 ```
@@ -230,7 +242,7 @@ Ordered; each is a self-contained slice.
   `middleware.ts` optimistic cookie gate redirecting unauthenticated page views to
   `/login`, and a client 401 → `/login` redirect.
 
-### 8.2 Ratings (1–5 stars) — _done_
+### 8.2 Ratings (half-star, 0.5–5) — _done_
 - `Comic.rating` (0.5–5 in half steps, null = unrated). `PATCH /api/comics/:id` accepts it.
 - **UI:** a star control in the detail modal + editable list view; clicking sets/clears.
 - **Sort:** **Rating** is a directional sort option (unrated sinks last in both
@@ -246,10 +258,11 @@ Ordered; each is a self-contained slice.
   `PATCH /api/comics/:id` with the modal edit's optimistic-cache flow. No modal.
 - Sorting/filtering/search apply identically to both views (both render `filtered`).
 
-### 8.4 CI
-- GitHub Actions on push/PR: Node 22, `npm ci`, `tsc --noEmit`, `npm test`, `npm run build`.
-- Integration tests optional in CI (needs a headless Chrome); gate behind a job
-  that installs Chrome, or keep local-only initially.
+### 8.4 CI — _done_
+- GitHub Actions on push/PR: a `build` job runs install, `tsc --noEmit`,
+  `npm test`, `npm run build`.
+- A second job runs `npm run test:integration` in headless Chrome (provisioned
+  via a setup-chrome step) against the isolated test DB/port.
 
 ### 8.5 Later (design-for, don't build yet)
 - **Spec-driven behaviors** — convert the current feature set + ad-hoc test flows
