@@ -71,10 +71,20 @@ export function ComicCard({ comic, height, onOpen, menu, noLayoutId }: Props) {
 
       {/* Bottom gradient + label, revealed on hover. Coarse pointers (touch)
           have no hover, so show it at rest there. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-10 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 pointer-coarse:translate-y-0 pointer-coarse:opacity-100">
-        <p className="truncate text-sm font-semibold text-white drop-shadow">{comic.series}</p>
-        {comic.issueNumber && (
-          <p className="text-xs font-medium text-white/75">#{comic.issueNumber}</p>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-end gap-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-10 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 pointer-coarse:translate-y-0 pointer-coarse:opacity-100">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-white drop-shadow">{comic.series}</p>
+          {comic.issueNumber && (
+            <p className="text-xs font-medium text-white/75">#{comic.issueNumber}</p>
+          )}
+        </div>
+        {comic.rating != null && (
+          <span className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-amber-400 drop-shadow">
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor" className="block">
+              <path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" />
+            </svg>
+            {comic.rating.toFixed(1)}
+          </span>
         )}
       </div>
 

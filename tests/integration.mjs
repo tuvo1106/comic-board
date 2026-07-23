@@ -343,6 +343,20 @@ try {
   // Warm open: hover first (preloads + decodes the full image), then click.
   await p.goto(BASE, { waitUntil: "networkidle0" });
   await sleep(700);
+
+  // The grid hover label surfaces the rating (invisible in grid view otherwise).
+  // The comic just rated 4 stars is the only rated one, so its card's label
+  // (rendered in the DOM even at rest, just visually hidden) must read "4.0".
+  const rated = await apiJson(`/api/comics/${cid}`);
+  const gridRating = await p.evaluate((alt) => {
+    const img = [...document.querySelectorAll("main img")].find(
+      (i) => i.alt.trim() === alt,
+    );
+    const card = img && img.closest(".group");
+    return card ? card.querySelector(".text-amber-400")?.textContent.trim() : null;
+  }, `${rated.series} ${rated.issueNumber ? `#${rated.issueNumber}` : ""}`.trim());
+  ck(gridRating === "4.0", `grid hover label shows the rating (got ${gridRating})`);
+
   const warmBox = await p.evaluate(() => {
     const img = document.querySelector("main img[src*='thumb.webp']");
     const r = img.getBoundingClientRect();

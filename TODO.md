@@ -305,7 +305,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, open a comic, confirm the field.
   - Already-done check: modal renders `createdAt`.
 
-- [ ] **30. Rating in the grid hover label** — `[DR#9]`
+- [x] **30. Rating in the grid hover label** — `[DR#9]`
   - Files: `src/components/board/ComicCard.tsx`
   - Change: add the rating to the hover-revealed label (otherwise invisible in
     grid view).
