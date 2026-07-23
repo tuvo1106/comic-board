@@ -1,9 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
+import { useMounted } from "@/lib/use-mounted";
 import { X } from "./icons";
 
 interface Props {
@@ -21,8 +22,7 @@ interface Props {
  * the containing block and misposition it).
  */
 export function BottomSheet({ open, onClose, title, children }: Props) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   useEffect(() => {
     if (!open) return;

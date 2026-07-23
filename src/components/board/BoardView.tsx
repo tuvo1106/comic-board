@@ -67,7 +67,14 @@ export function BoardView({ boardId }: { boardId?: string }) {
   // Debounced search: type into local state, push to the URL after 150ms.
   const [searchInput, setSearchInput] = useState(filters.q);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => setSearchInput(filters.q), [filters.q]);
+  // Re-sync when the URL's `q` changes from elsewhere (back/forward, cleared
+  // filters). Adjusting state during render — rather than in an effect — avoids
+  // a wasted render pass. See "You Might Not Need an Effect" (React docs).
+  const [prevQ, setPrevQ] = useState(filters.q);
+  if (filters.q !== prevQ) {
+    setPrevQ(filters.q);
+    setSearchInput(filters.q);
+  }
   const onSearch = (value: string) => {
     setSearchInput(value);
     if (timer.current) clearTimeout(timer.current);

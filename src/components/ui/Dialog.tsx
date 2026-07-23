@@ -1,9 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
+import { useMounted } from "@/lib/use-mounted";
 import { X } from "./icons";
 
 const FOCUSABLE =
@@ -25,18 +26,24 @@ interface Props {
  * becomes the containing block and the dialog gets mispositioned/clipped.
  */
 export function Dialog({ open, onClose, title, children, widthClass = "max-w-md" }: Props) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
   const titleId = useId();
-  useEffect(() => setMounted(true), []);
 
   // Capture the element to restore focus to at the moment the dialog opens —
   // during render, before a child's `autoFocus` moves focus into the panel.
+  // This must run in render (not an effect): the parent's effect fires after
+  // the child's `autoFocus` effect has already moved focus into the panel, so
+  // by then `document.activeElement` is no longer the trigger. Reading/writing
+  // these refs here is the intended escape hatch for that timing.
+  // eslint-disable-next-line react-hooks/refs -- see comment above
   if (open && !wasOpen.current) {
+    // eslint-disable-next-line react-hooks/refs -- see comment above
     restoreRef.current = document.activeElement as HTMLElement | null;
   }
+  // eslint-disable-next-line react-hooks/refs -- see comment above
   wasOpen.current = open;
 
   useEffect(() => {

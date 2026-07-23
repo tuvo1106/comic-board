@@ -81,9 +81,13 @@ export function Masonry({
   }, []);
 
   // Keep local order in sync with props, except while a drag is in progress.
-  useEffect(() => {
-    if (!activeId) setItems(comics);
-  }, [comics, activeId]);
+  // Adjusting during render (rather than in an effect) avoids a wasted render
+  // pass; `prevComics` gates the sync to actual prop changes.
+  const [prevComics, setPrevComics] = useState(comics);
+  if (comics !== prevComics && !activeId) {
+    setPrevComics(comics);
+    setItems(comics);
+  }
 
   const layout = useMemo(
     () => (width > 0 ? computeMasonry(items, width, columns) : null),
@@ -170,6 +174,12 @@ export function Masonry({
     onReorder?.({ updates: result.updates, orderedIds: result.orderedIds });
   };
 
+  // Reading `enteredRef` during render is deliberate (see the ref's declaration
+  // above): it gates the entrance stagger to the initial load only. It must be a
+  // render-time ref read rather than state/effect — flipping it must NOT trigger
+  // a re-render, or the extra render would cancel the in-flight fade-in for the
+  // first batch of cards. The taint flows into the `grid` JSX below.
+  /* eslint-disable react-hooks/refs -- intentional entrance-animation gate */
   const animateIn = stagger && !enteredRef.current;
   const grid = (
     <div ref={setContainerRef} className="relative w-full" style={{ height: layout?.height ?? 0 }}>
@@ -194,6 +204,7 @@ export function Masonry({
         })}
     </div>
   );
+  /* eslint-enable react-hooks/refs */
 
   // DndContext stays mounted whether or not dragging is enabled, so toggling
   // filters never remounts the grid (which would restart enter animations and

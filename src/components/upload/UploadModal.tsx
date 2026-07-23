@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBoards, useUploadComic } from "@/lib/client-api";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
@@ -28,8 +28,6 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   const [form, setForm] = useState<ComicFormValue>(EMPTY_FORM);
   const [selectedBoards, setSelectedBoards] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  const previewUrl = useRef<string | null>(null);
-  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setFiles([]);
@@ -38,32 +36,26 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     setSelectedBoards(defaultBoardId ? [defaultBoardId] : []);
   }, [defaultBoardId]);
 
-  // Initialize board selection when opening.
-  useEffect(() => {
+  // Initialize board selection when the modal transitions to open. Adjusting
+  // state during render (keyed on the open transition) avoids a wasted render
+  // pass compared with doing it in an effect.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) setSelectedBoards(defaultBoardId ? [defaultBoardId] : []);
-  }, [open, defaultBoardId]);
+  }
 
-  // Manage the object-URL preview for the current file.
+  // Derive the object-URL preview for the current file during render, and
+  // revoke it when it changes or the component unmounts. `previewSrc` is a pure
+  // function of the selected file, so it needs no separate state.
+  const previewSrc = useMemo(
+    () => (files[index] ? URL.createObjectURL(files[index]) : null),
+    [files, index],
+  );
   useEffect(() => {
-    if (previewUrl.current) {
-      URL.revokeObjectURL(previewUrl.current);
-      previewUrl.current = null;
-    }
-    const file = files[index];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      previewUrl.current = url;
-      setPreviewSrc(url);
-    } else {
-      setPreviewSrc(null);
-    }
-    return () => {
-      if (previewUrl.current) {
-        URL.revokeObjectURL(previewUrl.current);
-        previewUrl.current = null;
-      }
-    };
-  }, [files, index]);
+    if (!previewSrc) return;
+    return () => URL.revokeObjectURL(previewSrc);
+  }, [previewSrc]);
 
   const addFiles = (list: FileList | File[]) => {
     const incoming = Array.from(list).filter((f) => {

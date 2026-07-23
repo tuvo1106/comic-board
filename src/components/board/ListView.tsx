@@ -189,12 +189,14 @@ function EditText({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
 
   if (!editing) {
     return (
       <button
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
         className="truncate rounded px-1 py-1 text-left hover:bg-surface-2"
         title="Click to edit"
       >
@@ -238,7 +240,6 @@ function EditPublisher({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
 
   const commit = (v: string) => {
     setEditing(false);
@@ -248,7 +249,10 @@ function EditPublisher({
   if (!editing) {
     return (
       <button
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
         className="truncate rounded px-1 py-1 text-left hover:bg-surface-2"
         title="Click to edit"
       >
@@ -277,7 +281,13 @@ function EditDate({ value, onCommit }: { value: string | null; onCommit: (v: str
   // Hold a local draft and PATCH once on blur/Enter (like EditText) rather than
   // firing a request on every keystroke as the native date picker fills in.
   const [draft, setDraft] = useState(value ?? "");
-  useEffect(() => setDraft(value ?? ""), [value]);
+  // Re-seed the draft when the committed value changes underneath us. Adjusting
+  // during render (not in an effect) avoids a wasted render pass.
+  const [prev, setPrev] = useState(value);
+  if (value !== prev) {
+    setPrev(value);
+    setDraft(value ?? "");
+  }
 
   const commit = () => {
     if (draft !== (value ?? "")) onCommit(draft);

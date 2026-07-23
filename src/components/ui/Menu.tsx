@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useMounted } from "@/lib/use-mounted";
 
 interface Props {
   /** Trigger element; receives an onClick to toggle. */
@@ -19,12 +20,10 @@ interface Props {
  */
 export function Menu({ trigger, children, align = "right", widthClass = "w-52" }: Props) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
-
-  useEffect(() => setMounted(true), []);
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
