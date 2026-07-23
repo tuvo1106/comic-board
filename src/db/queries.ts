@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
-import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
+import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
 import { positionAfterMax } from "@/lib/fractional-index";
 import { storage } from "@/lib/storage";
@@ -140,37 +140,32 @@ function loadRelations(handle: DBOrTx, comicIds: string[]) {
     m.set(k, list);
   };
 
-  for (const r of handle
-    .select({ comicId: comicAuthors.comicId, name: authors.name })
-    .from(comicAuthors)
-    .innerJoin(authors, eq(authors.id, comicAuthors.authorId))
-    .where(inArray(comicAuthors.comicId, comicIds))
-    .all())
-    push(authorsByComic, r.comicId, r.name);
+  // The four name-association tables share the same shape: a join row with a
+  // comicId + a foreign key into a name table. Drive them from one config
+  // instead of copy-pasting the join loop.
+  const nameJoins: {
+    joinTable: SQLiteTable;
+    comicIdCol: SQLiteColumn;
+    fkCol: SQLiteColumn;
+    nameIdCol: SQLiteColumn;
+    nameCol: SQLiteColumn;
+    target: Map<string, string[]>;
+  }[] = [
+    { joinTable: comicAuthors, comicIdCol: comicAuthors.comicId, fkCol: comicAuthors.authorId, nameIdCol: authors.id, nameCol: authors.name, target: authorsByComic },
+    { joinTable: comicArtists, comicIdCol: comicArtists.comicId, fkCol: comicArtists.artistId, nameIdCol: artists.id, nameCol: artists.name, target: artistsByComic },
+    { joinTable: comicCharacters, comicIdCol: comicCharacters.comicId, fkCol: comicCharacters.characterId, nameIdCol: characters.id, nameCol: characters.name, target: charsByComic },
+    { joinTable: comicTags, comicIdCol: comicTags.comicId, fkCol: comicTags.tagId, nameIdCol: tags.id, nameCol: tags.name, target: tagsByComic },
+  ];
 
-  for (const r of handle
-    .select({ comicId: comicArtists.comicId, name: artists.name })
-    .from(comicArtists)
-    .innerJoin(artists, eq(artists.id, comicArtists.artistId))
-    .where(inArray(comicArtists.comicId, comicIds))
-    .all())
-    push(artistsByComic, r.comicId, r.name);
-
-  for (const r of handle
-    .select({ comicId: comicCharacters.comicId, name: characters.name })
-    .from(comicCharacters)
-    .innerJoin(characters, eq(characters.id, comicCharacters.characterId))
-    .where(inArray(comicCharacters.comicId, comicIds))
-    .all())
-    push(charsByComic, r.comicId, r.name);
-
-  for (const r of handle
-    .select({ comicId: comicTags.comicId, name: tags.name })
-    .from(comicTags)
-    .innerJoin(tags, eq(tags.id, comicTags.tagId))
-    .where(inArray(comicTags.comicId, comicIds))
-    .all())
-    push(tagsByComic, r.comicId, r.name);
+  for (const { joinTable, comicIdCol, fkCol, nameIdCol, nameCol, target } of nameJoins) {
+    for (const r of handle
+      .select({ comicId: comicIdCol, name: nameCol })
+      .from(joinTable)
+      .innerJoin(nameIdCol.table, eq(nameIdCol, fkCol))
+      .where(inArray(comicIdCol, comicIds))
+      .all())
+      push(target, r.comicId as string, r.name as string);
+  }
 
   for (const r of handle
     .select({ comicId: boardComics.comicId, boardId: boardComics.boardId })

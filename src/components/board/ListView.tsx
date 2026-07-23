@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMeta, useUpdateComic } from "@/lib/client-api";
 import type { ComicDTO } from "@/lib/types";
 import type { SortDir, SortField } from "@/lib/sort";
+import { Autocomplete } from "@/components/ui/Autocomplete";
 import { StarRating } from "@/components/ui/StarRating";
 import { TagInput } from "@/components/ui/TagInput";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "@/components/ui/icons";
@@ -223,7 +224,9 @@ function EditText({
 }
 
 /** Inline publisher cell: click-to-edit text with an autocomplete dropdown of
- *  known publishers. Free text is still allowed for new ones. */
+ *  known publishers. Free text is still allowed for new ones. Delegates the
+ *  input + dropdown to the shared Autocomplete, adding the click-to-edit shell
+ *  and commit-on-blur/Enter semantics. */
 function EditPublisher({
   value,
   suggestions,
@@ -235,20 +238,12 @@ function EditPublisher({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => setDraft(value), [value]);
 
   const commit = (v: string) => {
     setEditing(false);
     if (v !== value) onCommit(v);
   };
-
-  const matches = suggestions
-    .filter((s) => {
-      const q = draft.trim().toLowerCase();
-      return q ? s.toLowerCase().includes(q) && s.toLowerCase() !== q : true;
-    })
-    .slice(0, 8);
 
   if (!editing) {
     return (
@@ -262,37 +257,19 @@ function EditPublisher({
     );
   }
   return (
-    <div ref={ref} className="relative">
-      <input
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => commit(draft)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit(draft);
-          if (e.key === "Escape") {
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        className="w-full rounded border border-accent bg-surface-2 px-1 py-1 outline-none"
-      />
-      {matches.length > 0 && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-52 w-max min-w-full overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-2xl">
-          {matches.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => commit(s)}
-              className="block w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-surface-2"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Autocomplete
+      value={draft}
+      onChange={setDraft}
+      suggestions={suggestions}
+      autoFocus
+      fitContent
+      className="w-full rounded border border-accent bg-surface-2 px-1 py-1 outline-none"
+      onCommit={commit}
+      onCancel={() => {
+        setDraft(value);
+        setEditing(false);
+      }}
+    />
   );
 }
 

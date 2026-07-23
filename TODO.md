@@ -384,7 +384,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: grep `storage.ts` for `orig.webp` (none).
   - Already-done check: no `orig.webp` in the file.
 
-- [ ] **38. Dedupe `EditPublisher` + `loadRelations`** — `[CR#15b,c]`
+- [x] **38. Dedupe `EditPublisher` + `loadRelations`** — `[CR#15b,c]`
   - Files: `src/components/board/ListView.tsx` (`EditPublisher`),
     `src/components/ui/Autocomplete.tsx`, `src/db/queries.ts` (`loadRelations`)
   - Change: `EditPublisher` composes `Autocomplete` instead of reimplementing
