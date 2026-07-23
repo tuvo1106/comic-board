@@ -21,8 +21,8 @@ interface Props {
 }
 
 export function FilterBar({ boardComics, visibleComics }: Props) {
-  const meta = useMemo(() => computeFacets(boardComics), [boardComics]);
   const { filters, update, clear, toggle } = useFilters();
+  const meta = useMemo(() => computeFacets(boardComics, filters), [boardComics, filters]);
   const active = filtersActive(filters);
   const n = countActive(filters);
   const renamePublisher = useRenamePublisher();

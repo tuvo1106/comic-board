@@ -187,7 +187,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot the list; unrated rows are quiet.
   - Already-done check: unrated list rows render no star row at rest.
 
-- [ ] **18. Facet counts respect other active filters** — `[DR#4b]`
+- [x] **18. Facet counts respect other active filters** — `[DR#4b]`
   - Files: `src/lib/filters.ts` (`computeFacets`), `src/components/filters/FilterBar.tsx`,
     `src/lib/filters.test.ts`
   - Change: compute each facet's counts against the currently-filtered set,

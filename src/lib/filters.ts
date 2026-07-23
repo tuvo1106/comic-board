@@ -61,11 +61,16 @@ function overlaps(a: string[], b: string[]): boolean {
  * Facet options + counts derived from a set of comics — used for the filter
  * dropdowns so counts reflect the board you're viewing, not the whole library.
  * (Form autocomplete still uses the global /api/meta.)
+ *
+ * When `filters` is supplied, each facet's counts respect every *other* active
+ * filter but ignore that facet's own selections (standard faceted search): with
+ * Publisher=DC active, the Author counts reflect only DC comics, yet the
+ * Publisher list still shows every publisher so you can widen the selection.
  */
-export function computeFacets(comics: ComicDTO[]): MetaDTO {
-  const tally = (pick: (c: ComicDTO) => string[]) => {
+export function computeFacets(comics: ComicDTO[], filters?: Filters): MetaDTO {
+  const tally = (source: ComicDTO[], pick: (c: ComicDTO) => string[]) => {
     const m = new Map<string, number>();
-    for (const c of comics) {
+    for (const c of source) {
       for (const v of pick(c)) {
         if (v) m.set(v, (m.get(v) ?? 0) + 1);
       }
@@ -74,13 +79,18 @@ export function computeFacets(comics: ComicDTO[]): MetaDTO {
       .map(([value, count]) => ({ value, count }))
       .sort((a, b) => a.value.localeCompare(b.value));
   };
+  // For a facet, the comics to count over: everything matching the other
+  // filters, with this facet's own selections cleared. With no filters this is
+  // just the full list, so behavior is unchanged.
+  const scoped = (facet: keyof Filters) =>
+    filters ? applyFilters(comics, { ...filters, [facet]: [] }) : comics;
   return {
-    series: tally((c) => [c.series]),
-    publishers: tally((c) => (c.publisher ? [c.publisher] : [])),
-    authors: tally((c) => c.authors),
-    artists: tally((c) => c.artists),
-    characters: tally((c) => c.characters),
-    tags: tally((c) => c.tags),
+    series: tally(scoped("series"), (c) => [c.series]),
+    publishers: tally(scoped("publishers"), (c) => (c.publisher ? [c.publisher] : [])),
+    authors: tally(scoped("authors"), (c) => c.authors),
+    artists: tally(scoped("artists"), (c) => c.artists),
+    characters: tally(scoped("characters"), (c) => c.characters),
+    tags: tally(scoped("tags"), (c) => c.tags),
   };
 }
 

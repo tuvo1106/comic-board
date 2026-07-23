@@ -78,6 +78,34 @@ describe("computeFacets", () => {
     const facets = computeFacets([makeComic({ publisher: null }), makeComic({ publisher: "" })]);
     expect(facets.publishers).toEqual([]);
   });
+
+  it("scopes other facets to the active filters but leaves each facet self-unfiltered", () => {
+    const comics = [
+      makeComic({ publisher: "DC", authors: ["Alice"] }),
+      makeComic({ publisher: "DC", authors: ["Bob"] }),
+      makeComic({ publisher: "Marvel", authors: ["Alice"] }),
+      makeComic({ publisher: "Marvel", authors: ["Carol"] }),
+    ];
+    const facets = computeFacets(comics, f({ publishers: ["DC"] }));
+    // Author counts reflect only DC comics.
+    expect(facets.authors).toEqual([
+      { value: "Alice", count: 1 },
+      { value: "Bob", count: 1 },
+    ]);
+    // Publisher list ignores its own selection, so Marvel is still offered.
+    expect(facets.publishers).toEqual([
+      { value: "DC", count: 2 },
+      { value: "Marvel", count: 2 },
+    ]);
+  });
+
+  it("without filters, counts span the whole set (backward compatible)", () => {
+    const comics = [
+      makeComic({ publisher: "DC", authors: ["Alice"] }),
+      makeComic({ publisher: "Marvel", authors: ["Alice"] }),
+    ];
+    expect(computeFacets(comics)).toEqual(computeFacets(comics, f()));
+  });
 });
 
 describe("filters URL round-trip", () => {
