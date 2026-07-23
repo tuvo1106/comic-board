@@ -39,6 +39,7 @@ function ownedBy(col: SQLiteColumn, userId: string | null): SQL {
 // ---------------------------------------------------------------------------
 
 function upsertNames(
+  handle: DBOrTx,
   table: typeof artists | typeof characters | typeof authors | typeof tags,
   names: string[],
 ): string[] {
@@ -47,12 +48,12 @@ function upsertNames(
     const name = raw.trim();
     if (!name) continue;
     const key = nameKey(name);
-    const existing = db.select({ id: table.id }).from(table).where(eq(table.nameKey, key)).get();
+    const existing = handle.select({ id: table.id }).from(table).where(eq(table.nameKey, key)).get();
     if (existing) {
       ids.push(existing.id);
     } else {
       const id = newId();
-      db.insert(table).values({ id, name, nameKey: key }).run();
+      handle.insert(table).values({ id, name, nameKey: key }).run();
       ids.push(id);
     }
   }
@@ -60,19 +61,19 @@ function upsertNames(
 }
 
 /** Resolve a publisher name to its (find-or-created) row id; null clears it. */
-function upsertPublisher(name: string | null | undefined): string | null {
+function upsertPublisher(handle: DBOrTx, name: string | null | undefined): string | null {
   if (name == null) return null;
   const trimmed = name.trim();
   if (!trimmed) return null;
   const key = nameKey(trimmed);
-  const existing = db
+  const existing = handle
     .select({ id: publishers.id })
     .from(publishers)
     .where(eq(publishers.nameKey, key))
     .get();
   if (existing) return existing.id;
   const id = newId();
-  db.insert(publishers).values({ id, name: trimmed, nameKey: key }).run();
+  handle.insert(publishers).values({ id, name: trimmed, nameKey: key }).run();
   return id;
 }
 
@@ -114,7 +115,7 @@ function rowToDTO(
 }
 
 /** Batch-load authors, artists, characters, tags, and board memberships. */
-function loadRelations(comicIds: string[]) {
+function loadRelations(handle: DBOrTx, comicIds: string[]) {
   const authorsByComic = new Map<string, string[]>();
   const artistsByComic = new Map<string, string[]>();
   const charsByComic = new Map<string, string[]>();
@@ -125,7 +126,7 @@ function loadRelations(comicIds: string[]) {
     return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic, publisherByComic };
   }
 
-  for (const r of db
+  for (const r of handle
     .select({ comicId: comics.id, name: publishers.name })
     .from(comics)
     .innerJoin(publishers, eq(publishers.id, comics.publisherId))
@@ -139,7 +140,7 @@ function loadRelations(comicIds: string[]) {
     m.set(k, list);
   };
 
-  for (const r of db
+  for (const r of handle
     .select({ comicId: comicAuthors.comicId, name: authors.name })
     .from(comicAuthors)
     .innerJoin(authors, eq(authors.id, comicAuthors.authorId))
@@ -147,7 +148,7 @@ function loadRelations(comicIds: string[]) {
     .all())
     push(authorsByComic, r.comicId, r.name);
 
-  for (const r of db
+  for (const r of handle
     .select({ comicId: comicArtists.comicId, name: artists.name })
     .from(comicArtists)
     .innerJoin(artists, eq(artists.id, comicArtists.artistId))
@@ -155,7 +156,7 @@ function loadRelations(comicIds: string[]) {
     .all())
     push(artistsByComic, r.comicId, r.name);
 
-  for (const r of db
+  for (const r of handle
     .select({ comicId: comicCharacters.comicId, name: characters.name })
     .from(comicCharacters)
     .innerJoin(characters, eq(characters.id, comicCharacters.characterId))
@@ -163,7 +164,7 @@ function loadRelations(comicIds: string[]) {
     .all())
     push(charsByComic, r.comicId, r.name);
 
-  for (const r of db
+  for (const r of handle
     .select({ comicId: comicTags.comicId, name: tags.name })
     .from(comicTags)
     .innerJoin(tags, eq(tags.id, comicTags.tagId))
@@ -171,7 +172,7 @@ function loadRelations(comicIds: string[]) {
     .all())
     push(tagsByComic, r.comicId, r.name);
 
-  for (const r of db
+  for (const r of handle
     .select({ comicId: boardComics.comicId, boardId: boardComics.boardId })
     .from(boardComics)
     .where(inArray(boardComics.comicId, comicIds))
@@ -184,7 +185,7 @@ function loadRelations(comicIds: string[]) {
 const sortNames = (a: string[]) => [...a].sort((x, y) => x.localeCompare(y));
 
 function attachRelations(rows: ComicRow[]): ComicDTO[] {
-  const rel = loadRelations(rows.map((r) => r.id));
+  const rel = loadRelations(db, rows.map((r) => r.id));
   return rows.map((row) =>
     rowToDTO(row, {
       publisher: rel.publisherByComic.get(row.id) ?? null,
@@ -264,7 +265,7 @@ export function createComic(input: CreateComicInput): ComicDTO {
         userId: input.userId,
         series: input.series,
         issueNumber: input.issueNumber ?? null,
-        publisherId: upsertPublisher(input.publisher),
+        publisherId: upsertPublisher(tx, input.publisher),
         coverDate: input.coverDate ?? null,
         rating: input.rating ?? null,
         imagePath: input.image.imagePath,
@@ -277,13 +278,13 @@ export function createComic(input: CreateComicInput): ComicDTO {
       })
       .run();
 
-    for (const authorId of upsertNames(authors, input.authors))
+    for (const authorId of upsertNames(tx, authors, input.authors))
       tx.insert(comicAuthors).values({ comicId: id, authorId }).onConflictDoNothing().run();
-    for (const artistId of upsertNames(artists, input.artists))
+    for (const artistId of upsertNames(tx, artists, input.artists))
       tx.insert(comicArtists).values({ comicId: id, artistId }).onConflictDoNothing().run();
-    for (const characterId of upsertNames(characters, input.characters))
+    for (const characterId of upsertNames(tx, characters, input.characters))
       tx.insert(comicCharacters).values({ comicId: id, characterId }).onConflictDoNothing().run();
-    for (const tagId of upsertNames(tags, input.tags))
+    for (const tagId of upsertNames(tx, tags, input.tags))
       tx.insert(comicTags).values({ comicId: id, tagId }).onConflictDoNothing().run();
 
     for (const boardId of input.boardIds) {
@@ -327,7 +328,7 @@ export function updateComic(
     const fields: Partial<ComicRow> = {};
     if (input.series !== undefined) fields.series = input.series;
     if (input.issueNumber !== undefined) fields.issueNumber = input.issueNumber;
-    if (input.publisher !== undefined) fields.publisherId = upsertPublisher(input.publisher);
+    if (input.publisher !== undefined) fields.publisherId = upsertPublisher(tx, input.publisher);
     if (input.coverDate !== undefined) fields.coverDate = input.coverDate;
     if (input.rating !== undefined) fields.rating = input.rating;
     if (Object.keys(fields).length > 0) {
@@ -336,22 +337,22 @@ export function updateComic(
 
     if (input.authors !== undefined) {
       tx.delete(comicAuthors).where(eq(comicAuthors.comicId, id)).run();
-      for (const authorId of upsertNames(authors, input.authors))
+      for (const authorId of upsertNames(tx, authors, input.authors))
         tx.insert(comicAuthors).values({ comicId: id, authorId }).onConflictDoNothing().run();
     }
     if (input.artists !== undefined) {
       tx.delete(comicArtists).where(eq(comicArtists.comicId, id)).run();
-      for (const artistId of upsertNames(artists, input.artists))
+      for (const artistId of upsertNames(tx, artists, input.artists))
         tx.insert(comicArtists).values({ comicId: id, artistId }).onConflictDoNothing().run();
     }
     if (input.characters !== undefined) {
       tx.delete(comicCharacters).where(eq(comicCharacters.comicId, id)).run();
-      for (const characterId of upsertNames(characters, input.characters))
+      for (const characterId of upsertNames(tx, characters, input.characters))
         tx.insert(comicCharacters).values({ comicId: id, characterId }).onConflictDoNothing().run();
     }
     if (input.tags !== undefined) {
       tx.delete(comicTags).where(eq(comicTags.comicId, id)).run();
-      for (const tagId of upsertNames(tags, input.tags))
+      for (const tagId of upsertNames(tx, tags, input.tags))
         tx.insert(comicTags).values({ comicId: id, tagId }).onConflictDoNothing().run();
     }
     return getComicTx(tx, id)!;
@@ -677,7 +678,7 @@ export function renamePublisher(userId: string, currentName: string, newName: st
 function getComicTx(tx: DBOrTx, id: string): ComicDTO | null {
   const row = tx.select().from(comics).where(eq(comics.id, id)).get();
   if (!row) return null;
-  const rel = loadRelations([id]);
+  const rel = loadRelations(tx, [id]);
   return rowToDTO(row, {
     publisher: rel.publisherByComic.get(id) ?? null,
     authors: sortNames(rel.authorsByComic.get(id) ?? []),

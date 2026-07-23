@@ -350,7 +350,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
 
 ## Phase 6 — Internal cleanup (low urgency; pair with nearby work)
 
-- [ ] **34. Thread `tx` through query helpers** — `[CR#11]`
+- [x] **34. Thread `tx` through query helpers** — `[CR#11]`
   - Files: `src/db/queries.ts` (`upsertNames`, `upsertPublisher`, `getComicTx`→`loadRelations`)
   - Change: accept a `DBOrTx` param and pass `tx` from `createComic`/
     `updateComic`/`renamePublisher`, so atomicity doesn't rely on the
