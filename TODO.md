@@ -18,6 +18,8 @@ Detail lives in `CODE_REVIEW.md` / `DESIGN_REVIEW.md` / `ROADMAP.md`; refs like
 5. Tick the box `- [x]`, commit with a message naming the item, stop.
 6. `[dep: N]` means item N must be done first — confirm its result exists in the
    code before starting.
+6b. `- [-]` marks an item **deliberately skipped** (reason noted inline). Treat it
+   as done-for-now: don't pick it, don't redo it.
 7. **Do NOT start anything in the Epics section from a cold context.** Each is a
    multi-file feature with unmade decisions; it needs its own planning session.
 
@@ -289,7 +291,14 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, throttle, screenshot load then content.
   - Already-done check: `BoardSkeleton` uses `computeMasonry`.
 
-- [ ] **28. Clickable series title in the modal** — `[DR#5a]`
+- [-] **28. Clickable series title in the modal** — `[DR#5a]`  *(SKIPPED — decided 2026-07-22)*
+  - Skipped deliberately; not worth the plumbing right now. Series is a filter
+    dimension that has no other UI (no facet dropdown, and `FACET_CHIPS` in
+    `filters.ts` omits it), so this click would be the *only* way to set a series
+    filter — and it'd render as an unclearable, invisible filter unless we also
+    add a Series chip. Plus the modal is an intercepting route, so it doesn't
+    cleanly know which board it's over, forcing a "close + apply filter to which
+    board?" decision. Revisit as part of a proper faceted-series pass, not here.
   - Files: `src/components/detail/ComicDetail.tsx`
   - Change: make the header series title filter the board by series (like the
     other facet chips).
@@ -297,7 +306,10 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, click the title, confirm the board filters.
   - Already-done check: the title is a filter link.
 
-- [ ] **29. Show "date added" in the modal** — `[DR#5b]`
+- [-] **29. Show "date added" in the modal** — `[DR#5b]`  *(SKIPPED — decided 2026-07-22)*
+  - Skipped deliberately; low value. `createdAt` is a sort option but surfacing
+    it as a metadata field in the modal wasn't judged worth the space. Revisit if
+    users ask to see when a cover was added.
   - Files: `src/components/detail/ComicDetail.tsx`
   - Change: surface `createdAt` in the detail metadata (it's a sort option but
     invisible in the UI).
