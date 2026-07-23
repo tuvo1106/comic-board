@@ -246,7 +246,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, screenshot the toolbar.
   - Already-done check: `ColumnSelector` has an icon/tooltip.
 
-- [ ] **23. Consistent "My Comics" tab count** — `[DR#4e]`
+- [x] **23. Consistent "My Comics" tab count** — `[DR#4e]`
   - Files: `src/components/board/BoardTabs.tsx`
   - Change: either show a count on "My Comics" like custom boards, or drop
     counts from custom tabs — pick one.

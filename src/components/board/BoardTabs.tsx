@@ -3,7 +3,13 @@
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useBoards, useCreateBoard, useDeleteBoard, useUpdateBoard } from "@/lib/client-api";
+import {
+  useBoards,
+  useComics,
+  useCreateBoard,
+  useDeleteBoard,
+  useUpdateBoard,
+} from "@/lib/client-api";
 import type { BoardDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
@@ -16,12 +22,13 @@ interface Props {
 
 export function BoardTabs({ activeBoardId }: Props) {
   const { data: boards } = useBoards();
+  const { data: comics } = useComics();
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <div className="sticky top-[57px] z-30 border-b border-border bg-bg/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center gap-1 overflow-x-auto px-5 py-1.5">
-        <Tab href="/" label="My Comics" active={!activeBoardId} pinned />
+        <Tab href="/" label="My Comics" active={!activeBoardId} count={comics?.length} pinned />
         {boards?.map((b) => (
           <BoardTab key={b.id} board={b} active={activeBoardId === b.id} />
         ))}
