@@ -359,7 +359,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test` (`queries.test.ts`).
   - Already-done check: helper signatures take a handle.
 
-- [ ] **35. Delete dead fractional-index API** — `[CR#12]`
+- [x] **35. Delete dead fractional-index API** — `[CR#12]`
   - Files: `src/lib/fractional-index.ts`, `src/lib/fractional-index.test.ts`
   - Change: remove `positionBetween`, `positionBeforeMin`, `needsRenumber`
     (no callers since swap-reorder); keep `positionAfterMax`; rewrite the
