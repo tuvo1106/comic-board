@@ -99,6 +99,17 @@ function invalidateComicWorld(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: keys.meta });
 }
 
+// Name-bearing fields whose values feed the meta facet lists + counts. A patch
+// touching any of these can change meta; a rating/date/issue-only edit can't.
+const META_FIELDS = ["series", "publisher", "authors", "artists", "characters", "tags"] as const;
+
+/** Replace a comic in-place in every cached list, without refetching them. */
+function patchComicInLists(qc: QueryClient, updated: ComicDTO) {
+  qc.setQueriesData<ComicDTO[]>({ queryKey: ["comics"] }, (list) =>
+    list?.map((c) => (c.id === updated.id ? updated : c)),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Comic mutations
 // ---------------------------------------------------------------------------
@@ -165,11 +176,17 @@ export function useUpdateComic() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),
       }),
-    onSuccess: (updated) => {
-      // Push the fresh comic straight into the detail cache so the modal
-      // reflects the edit immediately, then refresh the derived lists.
+    onSuccess: (updated, { patch }) => {
+      // Push the fresh comic straight into the detail cache (open modal) and
+      // patch it into every cached list in place — a rating/date/issue edit
+      // shouldn't refetch every list + all details + boards + meta.
       qc.setQueryData(keys.comic(updated.id), updated);
-      invalidateComicWorld(qc);
+      patchComicInLists(qc, updated);
+      // Board membership/counts can't change from a field edit. Only a
+      // name/publisher/tag change alters the meta facets, so refetch it lazily.
+      if (META_FIELDS.some((f) => f in patch)) {
+        qc.invalidateQueries({ queryKey: keys.meta });
+      }
     },
   });
 }

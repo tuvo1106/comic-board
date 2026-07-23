@@ -420,7 +420,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm run test:integration` (upload path) or a manual upload.
   - Already-done check: `processUpload` uses `.clone()`.
 
-- [ ] **42. Targeted cache invalidation for rating** — `[CR#19]`
+- [x] **42. Targeted cache invalidation for rating** — `[CR#19]`
   - Files: `src/lib/client-api.ts`
   - Change: for a rating-only mutation, patch the list entry with `setQueryData`
     and only invalidate `meta` when names actually changed, instead of the blunt
