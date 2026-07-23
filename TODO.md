@@ -328,7 +328,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npx tsc --noEmit`; trigger several toasts quickly.
   - Already-done check: `ToastProvider` caps/dedupes.
 
-- [ ] **33. Declare dark-only deliberate** — `[DR#9]`
+- [x] **33. Declare dark-only deliberate** — `[DR#9]`
   - Files: `src/app/globals.css`
   - Change: a comment stating dark-only is intentional (so nobody half-adds a
     light mode against the `[color-scheme:dark]` sprinkles).

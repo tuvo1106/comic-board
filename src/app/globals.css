@@ -3,6 +3,16 @@
 /*
   Comic Board design tokens.
   Dark, gallery-like surface so the covers carry the color.
+
+  DARK-ONLY BY DESIGN — this is deliberate, not an unfinished light mode.
+  The tokens below are the single source of truth and are dark-baked; there is
+  intentionally no `prefers-color-scheme: light` branch or theme toggle. The
+  `[color-scheme:dark]` utilities sprinkled on native date/number inputs across
+  the components exist to force the browser's built-in input chrome dark to
+  match this surface — they are NOT the start of a light theme. Adding light
+  mode is an epic (restructure these tokens behind a selector, audit every
+  component for dark assumptions, make those sprinkles conditional), not a
+  drop-in override. Don't half-add it.
 */
 @theme {
   --color-bg: #0e0f13;
