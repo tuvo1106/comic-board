@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { signIn, signUp } from "@/lib/auth-client";
-import { Check } from "@/components/ui/icons";
+import { Check, Eye, EyeOff } from "@/components/ui/icons";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
@@ -13,6 +13,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,12 +73,23 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             />
             <Field
               label="Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={setPassword}
               placeholder={isSignup ? "At least 8 characters" : "••••••••"}
               autoComplete={isSignup ? "new-password" : "current-password"}
               required
+              trailing={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="grid h-6 w-6 place-items-center rounded text-muted transition hover:text-fg"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              }
             />
 
             {!isSignup && (
@@ -129,23 +141,32 @@ function Field({
   label,
   value,
   onChange,
+  trailing,
   ...rest
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  trailing?: React.ReactNode;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
       </span>
-      <input
-        {...rest}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent placeholder:text-muted"
-      />
+      <div className="relative">
+        <input
+          {...rest}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full rounded-lg border border-border bg-surface-2 py-2 pl-3 text-sm outline-none focus:border-accent placeholder:text-muted ${
+            trailing ? "pr-10" : "pr-3"
+          }`}
+        />
+        {trailing && (
+          <div className="absolute inset-y-0 right-2 flex items-center">{trailing}</div>
+        )}
+      </div>
     </label>
   );
 }

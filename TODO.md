@@ -313,7 +313,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, hover a rated card, screenshot.
   - Already-done check: the hover label includes rating.
 
-- [ ] **31. Password visibility toggle** — `[DR#9]`
+- [x] **31. Password visibility toggle** — `[DR#9]`
   - Files: `src/components/auth/AuthForm.tsx`
   - Change: a show/hide toggle on the password field.
   - Done when: the password field can be revealed.
