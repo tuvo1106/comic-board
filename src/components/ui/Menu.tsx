@@ -56,6 +56,38 @@ export function Menu({ trigger, children, align = "right", widthClass = "w-52" }
     };
   }, [open]);
 
+  // Move focus to the first item on open; restore it to the trigger on close.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const id = requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(id);
+      previouslyFocused?.focus?.();
+    };
+  }, [open]);
+
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
+    );
+    if (items.length === 0) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === "ArrowDown"
+        ? items[(i + 1) % items.length]
+        : e.key === "ArrowUp"
+          ? items[(i - 1 + items.length) % items.length]
+          : e.key === "Home"
+            ? items[0]
+            : items[items.length - 1];
+    next.focus();
+  };
+
   return (
     <div ref={triggerRef} className="relative inline-flex">
       {trigger({ open, toggle: () => setOpen((o) => !o) })}
@@ -65,6 +97,9 @@ export function Menu({ trigger, children, align = "right", widthClass = "w-52" }
             {open && (
               <motion.div
                 ref={menuRef}
+                role="menu"
+                aria-orientation="vertical"
+                onKeyDown={onMenuKeyDown}
                 initial={{ opacity: 0, y: -6, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.97 }}
@@ -97,6 +132,7 @@ export function MenuItem({
 }) {
   return (
     <button
+      role="menuitem"
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition hover:bg-surface-2 ${
         danger ? "text-danger hover:bg-danger/10" : "text-fg"

@@ -1,10 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { X } from "./icons";
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface Props {
   open: boolean;
@@ -23,7 +26,18 @@ interface Props {
  */
 export function Dialog({ open, onClose, title, children, widthClass = "max-w-md" }: Props) {
   const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  const titleId = useId();
   useEffect(() => setMounted(true), []);
+
+  // Capture the element to restore focus to at the moment the dialog opens —
+  // during render, before a child's `autoFocus` moves focus into the panel.
+  if (open && !wasOpen.current) {
+    restoreRef.current = document.activeElement as HTMLElement | null;
+  }
+  wasOpen.current = open;
 
   useEffect(() => {
     if (!open) return;
@@ -35,6 +49,46 @@ export function Dialog({ open, onClose, title, children, widthClass = "max-w-md"
       unlockScroll();
     };
   }, [open, onClose]);
+
+  // Focus management: move focus into the panel on open, trap Tab within it,
+  // and restore focus to the trigger on close. Depends only on `open` so an
+  // unstable `onClose` can't refocus the trigger mid-dialog.
+  useEffect(() => {
+    if (!open) return;
+    const focusables = () =>
+      Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+    // Honor a child's `autoFocus`; otherwise focus the panel itself rather than
+    // the header close button, so a stray Space/Enter can't dismiss the dialog.
+    if (!panelRef.current?.contains(document.activeElement)) {
+      panelRef.current?.focus();
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const items = focusables();
+      if (items.length === 0) {
+        e.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const inside = panelRef.current.contains(active);
+      if (e.shiftKey && (active === first || !inside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !inside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      restoreRef.current?.focus?.();
+    };
+  }, [open]);
 
   if (!mounted) return null;
 
@@ -53,15 +107,22 @@ export function Dialog({ open, onClose, title, children, widthClass = "max-w-md"
             onClick={onClose}
           />
           <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 12, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.97 }}
             transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className={`relative w-full ${widthClass} overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl`}
+            className={`relative w-full ${widthClass} overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl outline-none`}
           >
             {title && (
               <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-                <h2 className="text-base font-semibold">{title}</h2>
+                <h2 id={titleId} className="text-base font-semibold">
+                  {title}
+                </h2>
                 <button
                   onClick={onClose}
                   className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg"

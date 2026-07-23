@@ -272,7 +272,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, keyboard-tab, screenshot a focused control.
   - Already-done check: `globals.css` has a `:focus-visible` rule.
 
-- [ ] **26. Overlay a11y (roles + focus trap)** — `[CR#20]`  *(larger; read CR#20)*
+- [x] **26. Overlay a11y (roles + focus trap)** — `[CR#20]`  *(larger; read CR#20)*
   - Files: `src/components/ui/Menu.tsx`, `src/components/ui/Dialog.tsx`
   - Change: `role="dialog"`/`aria-modal` + focus trap + focus restore on Dialog;
     `role="menu"`/`menuitem` + arrow-key nav on Menu.
