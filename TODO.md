@@ -412,7 +412,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`.
   - Already-done check: the count query filters by user.
 
-- [ ] **41. `clone()` the sharp pipeline** — `[CR#18]`
+- [x] **41. `clone()` the sharp pipeline** — `[CR#18]`
   - Files: `src/lib/images.ts` (`processUpload`)
   - Change: `sharp(input).rotate()` once, then `.clone()` per output instead of
     constructing four pipelines.

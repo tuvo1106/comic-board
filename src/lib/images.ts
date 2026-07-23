@@ -22,14 +22,16 @@ const MAX_FULL_WIDTH = 1600; // cap the "full" image to keep storage sane
  */
 export async function processUpload(input: Buffer): Promise<ProcessedImage> {
   const id = newId();
-  const base = sharp(input, { failOn: "none" }).rotate(); // respect EXIF orientation
+  // Decode + EXIF-orient once; clone() per output so full/thumb/blur share the
+  // single decoded input instead of re-decoding the buffer four times.
+  const base = sharp(input, { failOn: "none" }).rotate();
   const meta = await base.metadata();
   if (!meta.width || !meta.height) {
     throw new Error("Could not read image dimensions");
   }
 
   // Full image: cap width, re-encode as webp.
-  const fullPipeline = sharp(input, { failOn: "none" }).rotate();
+  const fullPipeline = base.clone();
   if (meta.width > MAX_FULL_WIDTH) {
     fullPipeline.resize({ width: MAX_FULL_WIDTH });
   }
@@ -38,14 +40,14 @@ export async function processUpload(input: Buffer): Promise<ProcessedImage> {
   const width = fullMeta.width ?? meta.width;
   const height = fullMeta.height ?? meta.height;
 
-  const thumbBuf = await sharp(input, { failOn: "none" })
-    .rotate()
+  const thumbBuf = await base
+    .clone()
     .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
     .webp({ quality: 78 })
     .toBuffer();
 
-  const blurBuf = await sharp(input, { failOn: "none" })
-    .rotate()
+  const blurBuf = await base
+    .clone()
     .resize({ width: BLUR_WIDTH })
     .webp({ quality: 45 })
     .toBuffer();
