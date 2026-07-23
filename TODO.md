@@ -212,7 +212,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `run`, apply two facets, screenshot the chip row.
   - Already-done check: chips render a facet prefix/icon.
 
-- [ ] **21. Stale/invalid session cookie causes a login redirect loop** — `[CR#22]`
+- [x] **21. Stale/invalid session cookie causes a login redirect loop** — `[CR#22]`
   - Files: `src/middleware.ts`, `src/lib/client-api.ts` (`jsonFetch`, the upload
     401 branch), possibly `src/app/login`.
   - Problem: the page gate (`middleware.ts`) only checks cookie **presence**

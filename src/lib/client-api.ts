@@ -6,16 +6,36 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { signOut } from "./auth-client";
 import type { BoardDTO, ComicDTO, MetaDTO } from "./types";
 
 // ---------------------------------------------------------------------------
 // Low-level fetch
 // ---------------------------------------------------------------------------
 
+// A present-but-invalid session cookie (after a BETTER_AUTH_SECRET rotation, a
+// server-side session revocation, or a DB reset) sails past the middleware gate
+// — which only checks cookie *presence* — but the API rejects it with 401. A
+// bare redirect to /login would bounce straight back to "/" (the gate sends
+// cookie-bearing requests off the auth pages), looping forever. So clear the bad
+// cookie via sign-out first, then redirect, so /login actually loads. Guarded so
+// a burst of concurrent 401s (comics + boards + meta) only signs out once.
+let redirecting = false;
+async function redirectToLogin(): Promise<void> {
+  if (typeof window === "undefined" || redirecting) return;
+  redirecting = true;
+  try {
+    await signOut(); // best effort: expires the session cookie server-side
+  } catch {
+    /* head to /login regardless of whether the clear succeeded */
+  }
+  window.location.href = "/login";
+}
+
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = "/login";
+    await redirectToLogin();
     throw new Error("Not signed in");
   }
   if (!res.ok) {
@@ -108,7 +128,7 @@ export function useUploadComic() {
       form.append("meta", JSON.stringify(meta));
       const res = await fetch("/api/comics", { method: "POST", body: form });
       if (res.status === 401 && typeof window !== "undefined") {
-        window.location.href = "/login";
+        await redirectToLogin();
         throw new Error("Not signed in");
       }
       if (!res.ok) {

@@ -573,6 +573,35 @@ try {
     await p.setRequestInterception(false);
   }
 
+  // A present-but-invalid session cookie must NOT loop / ⇄ /login (item 21).
+  // The middleware gate only checks cookie *presence*; the API validates it. A
+  // stale cookie (after a BETTER_AUTH_SECRET rotation, a session revocation, or
+  // a DB reset) passes the gate, 401s at the API, and — unless the 401 path
+  // clears it — the redirect to /login bounces straight back to "/", forever.
+  // Simulate a stale cookie with a garbage token under the real cookie name;
+  // this must settle on a usable /login instead of a redirect storm.
+  {
+    await p.setCookie({
+      name: "better-auth.session_token",
+      value: "invalid.stale-token",
+      domain: "localhost",
+      path: "/",
+      httpOnly: true,
+    });
+    let navs = 0;
+    const onNav = (frame) => {
+      if (frame === p.mainFrame()) navs++;
+    };
+    p.on("framenavigated", onNav);
+    await p.goto(BASE, { waitUntil: "networkidle0" }).catch(() => {});
+    await sleep(2500); // let the 401 → sign-out → /login settle (or expose a loop)
+    p.off("framenavigated", onNav);
+    const landedOnLogin = new URL(p.url()).pathname === "/login";
+    const hasLoginForm = (await p.$("input[type='password']")) !== null;
+    ck(landedOnLogin && hasLoginForm, "stale session cookie lands on a usable /login");
+    ck(navs < 8, `stale session cookie doesn't loop / ⇄ /login (${navs} navigations)`);
+  }
+
   console.log(`\n==== INTEGRATION: ${fails.length ? `${fails.length} FAILED` : "ALL PASSED"} ====`);
 } catch (e) {
   console.error("ERROR:", e.message);
