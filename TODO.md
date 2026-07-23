@@ -395,7 +395,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Already-done check: `EditPublisher` renders `Autocomplete`; `loadRelations`
     is table-driven.
 
-- [ ] **39. Remove minor dead code** — `[CR#16]`
+- [x] **39. Remove minor dead code** — `[CR#16]`
   - Files: `src/db/queries.ts` (`series.filter((s) => s.count > 0)`),
     `src/components/board/BoardTabs.tsx` (`{pinned && null}`)
   - Change: delete both (a GROUP BY row can't have count 0; the JSX renders

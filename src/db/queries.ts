@@ -591,7 +591,7 @@ export function getMeta(userId: string): MetaDTO {
     .all();
 
   return {
-    series: series.filter((s) => s.count > 0),
+    series,
     publishers: publisherRows.filter(
       (p): p is { value: string; count: number } => Boolean(p.value) && p.count > 0,
     ),

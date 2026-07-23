@@ -28,7 +28,7 @@ export function BoardTabs({ activeBoardId }: Props) {
   return (
     <div className="sticky top-[57px] z-30 border-b border-border bg-bg/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center gap-1 overflow-x-auto px-5 py-1.5">
-        <Tab href="/" label="My Comics" active={!activeBoardId} count={comics?.length} pinned />
+        <Tab href="/" label="My Comics" active={!activeBoardId} count={comics?.length} />
         {boards?.map((b) => (
           <BoardTab key={b.id} board={b} active={activeBoardId === b.id} />
         ))}
@@ -50,14 +50,12 @@ function Tab({
   label,
   active,
   count,
-  pinned,
   menu,
 }: {
   href: string;
   label: string;
   active: boolean;
   count?: number;
-  pinned?: boolean;
   menu?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -82,7 +80,6 @@ function Tab({
           />
         )}
       </button>
-      {pinned && null}
     </div>
   );
 }
