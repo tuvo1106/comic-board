@@ -196,7 +196,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Verify: `npm test`.
   - Already-done check: `computeFacets` takes active filters / a test covers it.
 
-- [ ] **19. Date-range filter as a pill+popover** — `[DR#4a]`
+- [x] **19. Date-range filter as a pill+popover** — `[DR#4a]`
   - Files: `src/components/filters/FilterBar.tsx`
   - Change: wrap the two native date inputs in a "Date" pill that opens a small
     popover, matching the other facet dropdowns.

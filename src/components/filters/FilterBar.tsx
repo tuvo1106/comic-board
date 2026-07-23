@@ -12,6 +12,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Filter, Layers, X } from "@/components/ui/icons";
 import { MultiSelect } from "./MultiSelect";
+import { DateRangeFilter } from "./DateRangeFilter";
 
 interface Props {
   /** The current board's full comic list — drives facet options + counts. */
@@ -80,23 +81,7 @@ export function FilterBar({ boardComics, visibleComics }: Props) {
         onToggle={(v) => toggle("tags", v)}
       />
 
-      <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-sm text-muted">
-        <input
-          type="date"
-          value={filters.dateFrom ?? ""}
-          onChange={(e) => update({ dateFrom: e.target.value || null })}
-          className="bg-transparent text-fg outline-none [color-scheme:dark]"
-          aria-label="Cover date from"
-        />
-        <span className="text-muted">→</span>
-        <input
-          type="date"
-          value={filters.dateTo ?? ""}
-          onChange={(e) => update({ dateTo: e.target.value || null })}
-          className="bg-transparent text-fg outline-none [color-scheme:dark]"
-          aria-label="Cover date to"
-        />
-      </div>
+      <DateRangeFilter from={filters.dateFrom} to={filters.dateTo} onChange={update} />
     </>
   );
 
