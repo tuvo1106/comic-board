@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { POSITION_STEP, positionAfterMax } from "./fractional-index";
+import { POSITION_STEP, positionAfterMax } from "./positions";
 
-describe("fractional-index", () => {
+describe("positions", () => {
   it("appends after the max", () => {
     expect(positionAfterMax(5)).toBe(6);
     expect(positionAfterMax(null)).toBe(POSITION_STEP);

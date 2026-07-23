@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
-import { positionAfterMax } from "@/lib/fractional-index";
+import { positionAfterMax } from "@/lib/positions";
 import { storage } from "@/lib/storage";
 import type { BoardDTO, ComicDTO, MetaDTO } from "@/lib/types";
 import type { ProcessedImage } from "@/lib/images";

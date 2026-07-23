@@ -214,7 +214,7 @@ src/
                   forms/ (MetadataForm), auth/ (AuthForm), ui/ (Dialog, Menu,
                           TagInput, Autocomplete, StarRating, Toast, icons)
   db/             schema, auth-schema, client, queries, migrations, seed
-  lib/            storage, images, fractional-index (append-only positions),
+  lib/            storage, images, positions (append-after-max),
                   reorder (swap), filters, sort, auth, use-* hooks,
                   schemas (zod), types (DTOs)
 tests/            integration.mjs
