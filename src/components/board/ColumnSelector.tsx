@@ -1,6 +1,7 @@
 "use client";
 
 import type { ColumnPref } from "@/lib/use-columns";
+import { Columns } from "@/components/ui/icons";
 
 const OPTIONS: { label: string; value: ColumnPref }[] = [
   { label: "Auto", value: null },
@@ -19,7 +20,13 @@ export function ColumnSelector({
   onChange: (v: ColumnPref) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-0.5">
+    <div
+      className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-0.5"
+      role="group"
+      aria-label="Column count"
+      title="Column count"
+    >
+      <Columns className="ml-1.5 mr-2 h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
       {OPTIONS.map((o) => {
         const active = o.value === value;
         return (

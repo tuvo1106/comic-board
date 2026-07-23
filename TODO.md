@@ -239,7 +239,7 @@ Baseline verify commands used below: `npx tsc --noEmit` (typecheck),
   - Already-done check: the 401 path clears/expires the session cookie (grep
     `jsonFetch` / `middleware.ts` for cookie-clearing on invalid session).
 
-- [ ] **22. Label the column-count control** — `[DR#4d]`
+- [x] **22. Label the column-count control** — `[DR#4d]`
   - Files: `src/components/board/ColumnSelector.tsx`
   - Change: add a columns glyph before the `Auto 3 4 5 6` group or a tooltip.
   - Done when: the control's purpose is clear without clicking.
