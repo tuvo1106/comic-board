@@ -437,8 +437,9 @@ Each is a multi-file feature with product/architecture decisions. Open a
 planning pass (scope, schema, API shape, UI flow) before writing code. Detail
 in `ROADMAP.md`.
 
-- **Export / backup** `[RM 1a]` — highest-value epic; do early. `GET /api/export`
-  zips `collection.json` + covers; CLI import re-creates via `createComic`.
+- [x] **Export / backup** `[RM 1a]` — **DONE** (PR #2). `GET /api/export` zips
+  `collection.json` + covers (account-menu "Export backup" button); CLI
+  `npm run db:import <zip> -- --replace` re-creates via `createComic`.
   Makes every later change reversible; defuses the reseed footgun.
 - **Undo delete** `[RM 1b]` — `deletedAt` column, scope all queries to
   `IS NULL`, "Undo" toast, deferred file sweep. Touches the whole query layer.
