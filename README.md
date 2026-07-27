@@ -32,13 +32,18 @@ Built to the spec in [`DESIGN.md`](./DESIGN.md).
 npm install
 npm run db:migrate   # create the SQLite schema
 npm run db:seed      # load sample covers (uses real images in ./images)
-npm run dev          # http://localhost:3000
+npm run dev          # http://localhost:3939
 ```
 
 The app requires sign-in. The seed creates an owner account — log in with
 `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` (defaults in `src/db/seed.ts`), or
 register a new one at `/signup`. In production, set `BETTER_AUTH_SECRET` (the
 app refuses to boot without it).
+
+> **Port must match `BETTER_AUTH_URL`.** better-auth only accepts sign-in from
+> the origin in `BETTER_AUTH_URL` (`.env`), so the dev server has to run on that
+> same port or login fails with `Invalid origin`. Both default to **3939**
+> (`npm run dev` passes `-p 3939`); if you change one, change the other.
 
 Uploaded images and the SQLite database live under `./data` (gitignored).
 
@@ -51,6 +56,7 @@ Uploaded images and the SQLite database live under `./data` (gitignored).
 | `npm run db:migrate` | Apply Drizzle migrations |
 | `npm run db:generate` | Generate a migration after editing `src/db/schema.ts` |
 | `npm run db:seed` | Reset + seed sample data |
+| `npm run db:import <zip> -- --replace` | Restore a collection from an exported backup zip |
 | `npm test` | Unit tests (vitest) |
 | `npm run test:integration` | Browser E2E against an isolated DB (puppeteer) |
 
@@ -92,6 +98,26 @@ src/
 - **Storage is abstracted** behind `StorageAdapter` (local FS today) so S3/R2 is
   a drop-in later. All DB access goes through the API layer, and every query is
   scoped to the signed-in user's id, so UI code stays out of ownership concerns.
+
+## Backup & restore
+
+The whole collection can be exported as a single zip — a `collection.json`
+manifest plus every cover's `full.webp`. Grab one from the account menu
+(**Export backup**) or `GET /api/export`; it's one click before any risky
+operation.
+
+To restore, point `db:import` at a backup zip. It's a **replace**: it wipes the
+target account's comics, boards, and covers, then rebuilds them (regenerating
+ids/thumbnails/blur placeholders via the normal upload pipeline). It refuses to
+run without `--replace` so it can't clobber a collection by accident:
+
+```bash
+IMPORT_USER_EMAIL=you@example.com npm run db:import path/to/backup.zip -- --replace
+```
+
+The `--` is required so npm forwards `--replace` to the script. The target
+account (`IMPORT_USER_EMAIL`, or `SEED_USER_EMAIL` as a fallback) must already
+exist — import is a restore, not signup.
 
 ## Roadmap
 
