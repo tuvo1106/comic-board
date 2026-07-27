@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Menu, MenuItem } from "@/components/ui/Menu";
-import { Search, Upload } from "@/components/ui/icons";
+import { Download, Search, Upload } from "@/components/ui/icons";
 
 interface Props {
   search: string;
@@ -75,6 +75,17 @@ function UserMenu() {
             <p className="truncate text-xs text-muted">{user?.email}</p>
           </div>
           <div className="my-1 h-px bg-border" />
+          <MenuItem
+            icon={<Download className="h-4 w-4" />}
+            onClick={() => {
+              close();
+              // The response is Content-Disposition: attachment, so this
+              // downloads the zip without navigating away from the board.
+              window.location.href = "/api/export";
+            }}
+          >
+            Export backup
+          </MenuItem>
           <MenuItem
             onClick={async () => {
               close();

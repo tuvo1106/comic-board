@@ -56,6 +56,12 @@ Then, in the browser, authenticate **before** loading the board.
 
 ### Gotchas
 
+- **Dev port must match `BETTER_AUTH_URL`.** `.env` sets
+  `BETTER_AUTH_URL=http://localhost:3939`, and better-auth only accepts sign-in
+  from that exact origin. `npm run dev` runs on 3939 to match — don't launch the
+  dev server on another port (e.g. bare `next dev` → 3000), or login fails with
+  `Invalid origin: http://localhost:3000`. The throwaway instance above sets its
+  own `BETTER_AUTH_URL` to whatever port it uses, so keep those two in sync too.
 - **Stale-cookie 401 freeze.** Better Auth's session cookie is `httpOnly` and
   scoped to `localhost:<port>`. A leftover cookie from an earlier run on the
   same port (signed with a different `BETTER_AUTH_SECRET`) passes the middleware
