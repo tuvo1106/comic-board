@@ -456,6 +456,9 @@ in `ROADMAP.md`.
   upload (new file, or a Metron variant via the autofill cover picker); re-run
   `processUpload` to regenerate full/thumb/blur, keep metadata + board
   memberships. Detail-modal + card-menu action + an image-replace endpoint.
+- **Autocomplete the collection search** `[RM 4f]` — typeahead on the top-bar
+  search suggesting series/authors/characters from the current collection
+  (`getMeta` lists; client-side, no API). Reuses the `Autocomplete` component.
 - **Collector fields** `[RM 4d]` — price/value/grade/condition; schema + form +
   optional list columns + a total-value stat.
 - **Public read-only board links** `[RM#5]` — **gated:** first resolve `/images`

@@ -88,6 +88,14 @@ e.g. grab a specific variant or a higher-res scan after the fact). Mostly
 wiring: an image-replace endpoint that regenerates the derivatives + cache
 invalidation. Pairs naturally with the metadata-autofill work.
 
+### 4f. Autocomplete the collection search — ~half a day
+The top-bar search ("Search series, artists, characters…") is plain free-text.
+Add a typeahead dropdown suggesting matches from the **current collection** —
+`getMeta` already returns the series / publisher / author / artist / character
+lists, so this is entirely client-side (no API): filter those on input, show a
+grouped suggestion list, and selecting one sets the search term. Can reuse the
+existing `Autocomplete` component. Keyboard nav + click-to-select.
+
 ## 5. Sharing — bigger; decide deliberately
 Public read-only board links are the natural evolution of boards, but they
 force two review findings to be resolved first:
