@@ -75,7 +75,7 @@ export async function fetchCover(raw: string): Promise<FetchedCover> {
 }
 
 /** Read a response body into an ArrayBuffer, aborting once it exceeds `max`. */
-async function readCapped(res: Response, max: number): Promise<ArrayBuffer> {
+export async function readCapped(res: Response, max: number): Promise<ArrayBuffer> {
   const reader = res.body?.getReader();
   if (!reader) {
     const buf = await res.arrayBuffer();
