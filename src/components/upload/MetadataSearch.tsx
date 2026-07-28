@@ -55,9 +55,11 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
   const { toast } = useToast();
   const detail = useMetadataDetail();
 
-  const [seriesInput, setSeriesInput] = useState(value.series);
-  const [issueInput, setIssueInput] = useState(value.issueNumber);
-  const [query, setQuery] = useState<{ series: string; issue: string } | null>(null);
+  // Single free-text box seeded from the form ("Black Cat" + issue "4" → "Black Cat 4").
+  const [queryInput, setQueryInput] = useState(
+    value.series + (value.issueNumber ? ` ${value.issueNumber}` : ""),
+  );
+  const [query, setQuery] = useState<string | null>(null);
 
   const [picked, setPicked] = useState<MetadataDetail | null>(null);
   const [coverIdx, setCoverIdx] = useState(0);
@@ -66,12 +68,7 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
 
   const active = config?.default ?? null;
 
-  const search = useMetadataSearch({
-    provider: active,
-    series: query?.series ?? "",
-    issue: query?.issue ?? "",
-    enabled: query != null,
-  });
+  const search = useMetadataSearch({ provider: active, q: query ?? "", enabled: query != null });
 
   // Load the selected cover (fetch bytes + read dimensions) whenever the picked
   // record or the chosen cover index changes. Revokes the previous object URL.
@@ -112,9 +109,9 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!seriesInput.trim()) return;
+    if (!queryInput.trim()) return;
     setPicked(null);
-    setQuery({ series: seriesInput.trim(), issue: issueInput.trim() });
+    setQuery(queryInput.trim());
   };
 
   const pick = async (c: MetadataCandidate) => {
@@ -137,20 +134,14 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
     <div className="rounded-xl border border-border bg-surface-2/40 p-3">
       <form onSubmit={submit} className="flex gap-2">
         <input
-          value={seriesInput}
-          onChange={(e) => setSeriesInput(e.target.value)}
-          placeholder="Series to search"
+          value={queryInput}
+          onChange={(e) => setQueryInput(e.target.value)}
+          placeholder="Series and issue — e.g. Black Cat 4"
           className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-accent placeholder:text-muted"
-        />
-        <input
-          value={issueInput}
-          onChange={(e) => setIssueInput(e.target.value)}
-          placeholder="#"
-          className="w-16 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-accent placeholder:text-muted"
         />
         <button
           type="submit"
-          disabled={!seriesInput.trim() || search.isFetching}
+          disabled={!queryInput.trim() || search.isFetching}
           className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg transition hover:brightness-110 disabled:opacity-50"
         >
           {search.isFetching ? "…" : "Search"}

@@ -62,8 +62,7 @@ export const keys = {
   boards: ["boards"] as const,
   meta: ["meta"] as const,
   metadataConfig: ["metadata", "config"] as const,
-  metadataSearch: (provider: string, series: string, issue: string) =>
-    ["metadata", "search", provider, series, issue] as const,
+  metadataSearch: (provider: string, q: string) => ["metadata", "search", provider, q] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -119,22 +118,17 @@ interface SearchResponse {
 }
 
 /**
- * Search for candidate matches. Gated behind `enabled` so it fires on submit,
- * not per keystroke; `retry: false` avoids hammering a rate-limited provider.
+ * Search for candidate matches from a single free-text box ("black cat 4").
+ * Gated behind `enabled` so it fires on submit, not per keystroke; `retry: false`
+ * avoids hammering a rate-limited provider.
  */
-export function useMetadataSearch(args: {
-  provider: ProviderId | null;
-  series: string;
-  issue: string;
-  enabled: boolean;
-}) {
-  const { provider, series, issue, enabled } = args;
+export function useMetadataSearch(args: { provider: ProviderId | null; q: string; enabled: boolean }) {
+  const { provider, q, enabled } = args;
   return useQuery({
-    queryKey: keys.metadataSearch(provider ?? "", series.trim(), issue.trim()),
-    enabled: enabled && !!provider && series.trim().length > 0,
+    queryKey: keys.metadataSearch(provider ?? "", q.trim()),
+    enabled: enabled && !!provider && q.trim().length > 0,
     queryFn: () => {
-      const p = new URLSearchParams({ series: series.trim() });
-      if (issue.trim()) p.set("issue", issue.trim());
+      const p = new URLSearchParams({ q: q.trim() });
       if (provider) p.set("provider", provider);
       return jsonFetch<SearchResponse>(`/api/metadata/search?${p.toString()}`);
     },
