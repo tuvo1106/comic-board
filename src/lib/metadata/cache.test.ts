@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { _clearCache, cached } from "./cache";
 
 beforeEach(() => _clearCache());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 describe("cached", () => {
   it("runs fn once for a key and returns the cached value on a hit", async () => {
@@ -32,6 +35,14 @@ describe("cached", () => {
     await expect(cached("k", fn)).rejects.toThrow("boom");
     await expect(cached("k", fn)).rejects.toThrow("boom");
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("bypasses the cache in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const fn = vi.fn(async () => "v");
+    await cached("k", fn);
+    await cached("k", fn);
+    expect(fn).toHaveBeenCalledTimes(2); // not cached in dev
   });
 
   it("evicts the oldest entry past capacity", async () => {

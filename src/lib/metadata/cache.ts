@@ -15,6 +15,11 @@ const MAX_ENTRIES = 500;
 export const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export async function cached<T>(key: string, fn: () => Promise<T>, ttlMs = DEFAULT_TTL_MS): Promise<T> {
+  // Skip the cache in dev so edits + fresh provider data show immediately (a
+  // stale entry surviving hot-reloads is confusing during iteration). Production
+  // caches for rate limits; tests (NODE_ENV=test) still exercise the cache path.
+  if (process.env.NODE_ENV === "development") return fn();
+
   const now = Date.now();
   const hit = store.get(key);
   if (hit && hit.expires > now) return hit.value as T;
