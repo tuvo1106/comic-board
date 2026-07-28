@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { mapMetronIssue, mapMetronIssueDetail } from "./metron";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mapMetronIssue, mapMetronIssueDetail, metronProvider } from "./metron";
 
 // Fixtures trimmed from real Metron responses (issue 7406 — The Amazing
 // Spider-Man #1, 1963). See PROVIDERS.md.
@@ -78,5 +78,71 @@ describe("mapMetronIssueDetail", () => {
       { url: "https://static.metron.cloud/media/variants/asm-1a.jpg", label: "Second Printing Variant Cover" },
       { url: "https://static.metron.cloud/media/variants/asm-1b.jpg", label: "Variant 2" },
     ]);
+  });
+});
+
+describe("metronProvider (fetch wiring)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const lite = {
+    id: 7406,
+    series: { name: "Batman", year_began: 1940 },
+    number: "1",
+    store_date: "1940-04-01",
+    cover_date: "1940-05-01",
+    image: "https://static.metron.cloud/b.jpg",
+  };
+  const fullDetail = {
+    series: { name: "Batman", year_began: 1940 },
+    number: "1",
+    publisher: { name: "DC" },
+    store_date: "1940-04-01",
+    cover_date: "1940-05-01",
+    credits: [{ creator: "Bob Kane", role: [{ name: "Cover" }] }],
+    image: "https://static.metron.cloud/b.jpg",
+    variants: [],
+  };
+
+  function jsonRes(body: unknown, headers?: Record<string, string>) {
+    return new Response(JSON.stringify(body), { headers });
+  }
+
+  it("search() hits the issue endpoint with auth + query and maps the results", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL, _init?: RequestInit) =>
+      jsonRes({ results: [lite] }, { "x-ratelimit-burst-remaining": "10" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const candidates = await metronProvider("tok").search({ series: "Batman", issue: "1" });
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ provider: "metron", ref: "7406", coverDate: "1940-04-01" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/issue/");
+    expect(String(url)).toContain("series_name=Batman");
+    expect(String(url)).toContain("number=1");
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+  });
+
+  it("search() warns when the burst budget runs low", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonRes({ results: [] }, { "x-ratelimit-burst-remaining": "2" })),
+    );
+    await metronProvider("tok").search({ series: "x" });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("budget low"));
+    warn.mockRestore();
+  });
+
+  it("detail() fetches the issue by ref and maps it", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL, _init?: RequestInit) => jsonRes(fullDetail));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const d = await metronProvider("tok").detail("326");
+    expect(d).toMatchObject({ series: "Batman", publisher: "DC", coverDate: "1940-04-01" });
+    expect(d.artists).toEqual(["Bob Kane"]);
+    expect(d.covers[0]).toMatchObject({ label: "Main cover" });
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/issue/326/");
   });
 });
