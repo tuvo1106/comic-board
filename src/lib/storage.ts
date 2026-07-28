@@ -13,7 +13,11 @@ import { DATA_DIR } from "@/db/client";
 export interface StorageAdapter {
   put(key: string, data: Buffer): Promise<void>;
   delete(key: string): Promise<void>;
+  /** Delete everything under a prefix (e.g. a whole `covers/<id>` folder). */
+  deletePrefix(prefix: string): Promise<void>;
   getUrl(key: string): string;
+  /** Inverse of `getUrl`: map a client image URL back to its storage key. */
+  keyFromUrl(url: string): string;
   /** Absolute filesystem path for a key, used by the image-serving route. */
   resolve(key: string): string;
 }
@@ -32,10 +36,20 @@ class LocalStorage implements StorageAdapter {
     await fs.rm(abs, { force: true });
   }
 
+  async deletePrefix(prefix: string): Promise<void> {
+    const abs = this.resolve(prefix);
+    await fs.rm(abs, { recursive: true, force: true });
+  }
+
   getUrl(key: string): string {
     // key is "covers/<id>/full.webp" -> served under /images/<id>/full.webp
     const rel = key.startsWith("covers/") ? key.slice("covers/".length) : key;
     return `/images/${rel}`;
+  }
+
+  keyFromUrl(url: string): string {
+    // "/images/<id>/full.webp" -> "covers/<id>/full.webp"
+    return url.startsWith("/images/") ? `covers/${url.slice("/images/".length)}` : url;
   }
 
   resolve(key: string): string {

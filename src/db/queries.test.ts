@@ -219,3 +219,29 @@ describe("partial update preserves untouched associations (rating regression)", 
     expect(q.getComic(userA, c.id)!.tags).toEqual([]);
   });
 });
+
+describe("replaceComicCover", () => {
+  it("swaps the image but keeps metadata + board membership", async () => {
+    const comic = makeComic(userA, { series: "Batman", authors: ["Bob Kane"] });
+    const board = q.createBoard(userA, "B", [comic.id]);
+    const oldUrl = comic.imageUrl;
+
+    const img = { ...fakeImage(), width: 999, height: 1500 };
+    const updated = await q.replaceComicCover(userA, comic.id, img);
+
+    expect(updated).not.toBeNull();
+    expect(updated!.id).toBe(comic.id); // same comic
+    expect(updated!.imageUrl).not.toBe(oldUrl); // new url → busts the immutable cache
+    expect(updated!.imageUrl).toContain(img.id);
+    expect(updated!.width).toBe(999);
+    // metadata + boards preserved
+    expect(updated!.series).toBe("Batman");
+    expect(updated!.authors).toEqual(["Bob Kane"]);
+    expect(updated!.boardIds).toContain(board.id);
+  });
+
+  it("returns null for a comic the user doesn't own", async () => {
+    const comic = makeComic(userA);
+    expect(await q.replaceComicCover(userB, comic.id, fakeImage())).toBeNull();
+  });
+});
