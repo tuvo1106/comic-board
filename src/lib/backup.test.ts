@@ -123,6 +123,34 @@ describe("buildBackupZip", () => {
     const manifest = JSON.parse(strFromU8(unzipSync(zip)["collection.json"])) as BackupManifest;
     expect(manifest.comics.map((c) => c.series)).toEqual(["Mine"]);
   });
+
+  it("exports a replaced cover from its new folder, not covers/<comicId>", async () => {
+    const comic = await makeComicWithCover(userA, { series: "Batman" });
+
+    // Replace the cover with a distinct image in a different folder.
+    const newImgId = newId();
+    const buf = await sharp({
+      create: { width: 10, height: 15, channels: 3, background: { r: 200, g: 30, b: 30 } },
+    })
+      .webp()
+      .toBuffer();
+    const newImage: ProcessedImage = {
+      id: newImgId,
+      imagePath: `covers/${newImgId}/full.webp`,
+      thumbPath: `covers/${newImgId}/thumb.webp`,
+      blurDataUrl: "data:,",
+      width: 10,
+      height: 15,
+    };
+    await storage.put(newImage.imagePath, buf);
+    await q.replaceComicCover(userA, comic.id, newImage);
+
+    // Before the fix this threw (covers/<comicId> was deleted by the replace).
+    const files = unzipSync(await buildBackupZip(userA));
+    const manifest = JSON.parse(strFromU8(files["collection.json"])) as BackupManifest;
+    const coverFile = manifest.comics[0].coverFile;
+    expect(files[coverFile].length).toBe(buf.length); // bytes are the new image's
+  });
 });
 
 describe("importBackup (replace)", () => {

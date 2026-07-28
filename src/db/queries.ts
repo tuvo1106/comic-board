@@ -362,8 +362,7 @@ export async function deleteComic(userId: string, id: string): Promise<boolean> 
     .get();
   if (!row) return false;
   db.delete(comics).where(eq(comics.id, id)).run(); // cascades join rows
-  await storage.delete(row.imagePath);
-  await storage.delete(row.thumbPath);
+  await storage.deletePrefix(coverDir(row.imagePath)); // full.webp + thumb.webp + folder
   return true;
 }
 
@@ -400,10 +399,16 @@ export async function replaceComicCover(
     return getComicTx(tx, id)!;
   });
 
-  // Best-effort cleanup of the previous image, now that the row points elsewhere.
-  if (row.imagePath !== image.imagePath) await storage.delete(row.imagePath).catch(() => {});
-  if (row.thumbPath !== image.thumbPath) await storage.delete(row.thumbPath).catch(() => {});
+  // Best-effort cleanup of the previous cover's whole folder (leaves no empty
+  // dir behind), now that the row points at the new one.
+  const oldDir = coverDir(row.imagePath);
+  if (oldDir !== coverDir(image.imagePath)) await storage.deletePrefix(oldDir).catch(() => {});
   return dto;
+}
+
+/** Folder of a cover key: "covers/<id>/full.webp" -> "covers/<id>". */
+function coverDir(imagePath: string): string {
+  return imagePath.replace(/\/[^/]+$/, "");
 }
 
 export function updateComicPosition(

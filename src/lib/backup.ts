@@ -67,8 +67,11 @@ export async function buildBackupZip(userId: string): Promise<Uint8Array> {
   const comicExports: ComicExport[] = [];
 
   for (const c of comics) {
+    // Zip entry keyed by comic id (stable for import), but read the bytes from
+    // the comic's *actual* image path — a replaced cover lives in a different
+    // folder than covers/<comicId>.
     const coverFile = `covers/${c.id}/full.webp`;
-    const bytes = await fs.readFile(storage.resolve(coverFile));
+    const bytes = await fs.readFile(storage.resolve(storage.keyFromUrl(c.imageUrl)));
     files[coverFile] = new Uint8Array(bytes);
     comicExports.push({
       id: c.id,
