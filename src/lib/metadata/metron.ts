@@ -121,7 +121,11 @@ export function metronProvider(token: string): MetadataProvider {
         console.warn(`Metron burst budget low: ${burstRemaining} remaining`);
       }
       const page = data as MetronPage<MetronIssueLite>;
-      return (page.results ?? []).map(mapMetronIssue);
+      // Newest series first — "batman 2" returns many issues across decades and
+      // the recent run is usually what's wanted. Unknown years sort last.
+      return (page.results ?? [])
+        .map(mapMetronIssue)
+        .sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
     },
 
     async detail(ref) {

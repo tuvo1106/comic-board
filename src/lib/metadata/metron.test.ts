@@ -124,6 +124,16 @@ describe("metronProvider (fetch wiring)", () => {
     expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
   });
 
+  it("search() sorts candidates by newest series year first", async () => {
+    const mk = (id: number, year: number) => ({ ...lite, id, series: { name: "Batman", year_began: year } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonRes({ results: [mk(1, 1940), mk(2, 2016), mk(3, 2011)] })),
+    );
+    const candidates = await metronProvider("tok").search({ series: "Batman", issue: "2" });
+    expect(candidates.map((c) => c.year)).toEqual([2016, 2011, 1940]);
+  });
+
   it("search() warns when the burst budget runs low", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal(
