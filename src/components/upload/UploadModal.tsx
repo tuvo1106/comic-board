@@ -6,7 +6,9 @@ import { useBoards, useUploadComic } from "@/lib/client-api";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
 import { MetadataForm, EMPTY_FORM, type ComicFormValue } from "@/components/forms/MetadataForm";
-import { Check, ImageIcon, Upload } from "@/components/ui/icons";
+import { MetadataSearch } from "@/components/upload/MetadataSearch";
+import type { MetadataDetail } from "@/lib/metadata/types";
+import { Check, ImageIcon, Search, Upload } from "@/components/ui/icons";
 
 interface Props {
   open: boolean;
@@ -14,6 +16,8 @@ interface Props {
   /** Board currently being viewed — pre-checked in the board picker. */
   defaultBoardId?: string;
 }
+
+type Mode = "search" | "upload";
 
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 15 * 1024 * 1024;
@@ -23,6 +27,7 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   const upload = useUploadComic();
   const { toast } = useToast();
 
+  const [mode, setMode] = useState<Mode>("search");
   const [files, setFiles] = useState<File[]>([]);
   const [index, setIndex] = useState(0);
   const [form, setForm] = useState<ComicFormValue>(EMPTY_FORM);
@@ -30,6 +35,7 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   const [dragOver, setDragOver] = useState(false);
 
   const reset = useCallback(() => {
+    setMode("search");
     setFiles([]);
     setIndex(0);
     setForm(EMPTY_FORM);
@@ -80,6 +86,26 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     onClose();
   };
 
+  // Merge a chosen metadata record into the form. Overwrites the fields the
+  // provider supplies; keeps tags + characters (not autofilled) and untouched
+  // values when a field is absent.
+  const applyMetadata = (d: MetadataDetail) =>
+    setForm((f) => ({
+      ...f,
+      series: d.series || f.series,
+      issueNumber: d.issueNumber ?? f.issueNumber,
+      publisher: d.publisher ?? f.publisher,
+      coverDate: d.coverDate ?? f.coverDate,
+      authors: d.authors.length ? d.authors : f.authors,
+      artists: d.artists.length ? d.artists : f.artists,
+    }));
+
+  // Commit a provider cover as the image. When starting from search (no file
+  // yet) it becomes the sole upload; in the details step it replaces the current
+  // one. Moves the modal into the details step.
+  const applyCover = (file: File) =>
+    setFiles((fs) => (fs.length === 0 ? [file] : fs.map((f, i) => (i === index ? file : f))));
+
   const saveCurrent = async () => {
     const file = files[index];
     if (!file || !form.series.trim()) return;
@@ -125,41 +151,48 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     <Dialog
       open={open}
       onClose={close}
-      title={hasFiles ? "Add cover details" : "Upload covers"}
+      title={hasFiles ? "Add cover details" : "Add a comic"}
       widthClass="max-w-3xl"
     >
       {!hasFiles ? (
         <div className="p-5">
-          <label
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(false);
-              addFiles(e.dataTransfer.files);
-            }}
-            className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-16 text-center transition ${
-              dragOver ? "border-accent bg-accent/10" : "border-border hover:border-muted"
-            }`}
-          >
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 text-muted">
-              <Upload className="h-7 w-7" />
+          <ModeToggle mode={mode} onChange={setMode} />
+          {mode === "search" ? (
+            <div className="mt-4">
+              <MetadataSearch value={form} onApply={applyMetadata} onUseCover={applyCover} />
             </div>
-            <div>
-              <p className="font-medium">Drop cover images here</p>
-              <p className="mt-1 text-sm text-muted">or click to browse — JPG, PNG, WebP up to 15MB</p>
-            </div>
-            <input
-              type="file"
-              accept={ACCEPT.join(",")}
-              multiple
-              className="hidden"
-              onChange={(e) => e.target.files && addFiles(e.target.files)}
-            />
-          </label>
+          ) : (
+            <label
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                addFiles(e.dataTransfer.files);
+              }}
+              className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-16 text-center transition ${
+                dragOver ? "border-accent bg-accent/10" : "border-border hover:border-muted"
+              }`}
+            >
+              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 text-muted">
+                <Upload className="h-7 w-7" />
+              </div>
+              <div>
+                <p className="font-medium">Drop cover images here</p>
+                <p className="mt-1 text-sm text-muted">or click to browse — JPG, PNG, WebP up to 15MB</p>
+              </div>
+              <input
+                type="file"
+                accept={ACCEPT.join(",")}
+                multiple
+                className="hidden"
+                onChange={(e) => e.target.files && addFiles(e.target.files)}
+              />
+            </label>
+          )}
         </div>
       ) : (
         <div className="flex max-h-[80vh] flex-col">
@@ -185,6 +218,7 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
 
             {/* Form */}
             <div className="space-y-4">
+              <MetadataSearch value={form} onApply={applyMetadata} onUseCover={applyCover} />
               <MetadataForm value={form} onChange={setForm} />
               {boards && boards.length > 0 && (
                 <div>
@@ -256,5 +290,40 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
         </div>
       )}
     </Dialog>
+  );
+}
+
+const MODE_TABS: { id: Mode; label: string; Icon: typeof Search }[] = [
+  { id: "search", label: "Search database", Icon: Search },
+  { id: "upload", label: "Upload image", Icon: Upload },
+];
+
+function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  // Underlined tab strip matching the board tabs (BoardTabs) so it reads as two
+  // switchable options, not a standalone button.
+  return (
+    <div className="flex items-center gap-1 border-b border-border">
+      {MODE_TABS.map(({ id, label, Icon }) => {
+        const active = mode === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            className={`relative flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${
+              active ? "text-fg" : "text-muted hover:text-fg"
+            }`}
+          >
+            <Icon className="h-4 w-4" /> {label}
+            {active && (
+              <motion.span
+                layoutId="mode-tab"
+                className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent"
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }

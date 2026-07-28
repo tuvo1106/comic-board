@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { MetadataError } from "@/lib/metadata/types";
 
 export function ok<T>(data: T, init?: ResponseInit) {
   return NextResponse.json(data, init);
@@ -24,6 +25,10 @@ export async function handle(fn: () => Promise<Response> | Response): Promise<Re
   } catch (err) {
     if (err instanceof ZodError) {
       return badRequest("Validation failed", err.flatten().fieldErrors as Record<string, string[]>);
+    }
+    if (err instanceof MetadataError) {
+      // Client-safe message from an upstream metadata provider (never the key).
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error("API error:", err);
     // Don't leak internal error details (messages, stack hints) to clients.

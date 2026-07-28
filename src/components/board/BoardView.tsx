@@ -41,7 +41,7 @@ export function BoardView({ boardId }: { boardId?: string }) {
     boardId ? "manual" : "coverDate",
   );
   const { data: comics, isLoading, isError, error } = useComics(boardId ?? null);
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [columns, setColumns] = useColumns();
   const [view, setView] = useView();
   const qc = useQueryClient();
@@ -104,12 +104,12 @@ export function BoardView({ boardId }: { boardId?: string }) {
 
   return (
     <div className="min-h-screen">
-      <TopBar search={searchInput} onSearch={onSearch} onUpload={() => setUploadOpen(true)} />
+      <TopBar search={searchInput} onSearch={onSearch} onAdd={() => setAddOpen(true)} />
       <BoardTabs activeBoardId={boardId} />
       <FilterBar boardComics={comics ?? []} visibleComics={filtered} />
       <UploadModal
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
         defaultBoardId={boardId}
       />
 
@@ -218,7 +218,7 @@ function EmptyBoard() {
       </div>
       <div>
         <p className="text-lg font-semibold">No covers yet</p>
-        <p className="mt-1 text-sm text-muted">Upload your first comic cover to get started.</p>
+        <p className="mt-1 text-sm text-muted">Add your first comic to get started.</p>
       </div>
     </div>
   );

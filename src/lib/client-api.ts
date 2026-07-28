@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { signOut } from "./auth-client";
 import type { BoardDTO, ComicDTO, MetaDTO } from "./types";
+import type { MetadataCandidate, MetadataDetail, ProviderId } from "./metadata/types";
 
 // ---------------------------------------------------------------------------
 // Low-level fetch
@@ -60,6 +61,9 @@ export const keys = {
   comic: (id: string) => ["comic", id] as const,
   boards: ["boards"] as const,
   meta: ["meta"] as const,
+  metadataConfig: ["metadata", "config"] as const,
+  metadataSearch: (provider: string, series: string, issue: string) =>
+    ["metadata", "search", provider, series, issue] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -89,6 +93,65 @@ export function useBoards() {
 
 export function useMeta() {
   return useQuery({ queryKey: keys.meta, queryFn: () => jsonFetch<MetaDTO>("/api/meta") });
+}
+
+// ---------------------------------------------------------------------------
+// Metadata autofill (external comics DB proxy)
+// ---------------------------------------------------------------------------
+
+export interface MetadataConfig {
+  providers: ProviderId[];
+  default: ProviderId | null;
+}
+
+/** Which providers the server has keys for — gates the autofill UI. */
+export function useMetadataConfig() {
+  return useQuery({
+    queryKey: keys.metadataConfig,
+    queryFn: () => jsonFetch<MetadataConfig>("/api/metadata"),
+    staleTime: Infinity, // config only changes on a server restart
+  });
+}
+
+interface SearchResponse {
+  provider: ProviderId;
+  candidates: MetadataCandidate[];
+}
+
+/**
+ * Search for candidate matches. Gated behind `enabled` so it fires on submit,
+ * not per keystroke; `retry: false` avoids hammering a rate-limited provider.
+ */
+export function useMetadataSearch(args: {
+  provider: ProviderId | null;
+  series: string;
+  issue: string;
+  enabled: boolean;
+}) {
+  const { provider, series, issue, enabled } = args;
+  return useQuery({
+    queryKey: keys.metadataSearch(provider ?? "", series.trim(), issue.trim()),
+    enabled: enabled && !!provider && series.trim().length > 0,
+    queryFn: () => {
+      const p = new URLSearchParams({ series: series.trim() });
+      if (issue.trim()) p.set("issue", issue.trim());
+      if (provider) p.set("provider", provider);
+      return jsonFetch<SearchResponse>(`/api/metadata/search?${p.toString()}`);
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+/** Fetch a chosen candidate's full record to prefill the form. */
+export function useMetadataDetail() {
+  return useMutation({
+    mutationFn: (args: { provider: ProviderId; ref: string; issue?: string | null }) => {
+      const p = new URLSearchParams({ provider: args.provider, ref: args.ref });
+      if (args.issue) p.set("issue", args.issue);
+      return jsonFetch<MetadataDetail>(`/api/metadata/detail?${p.toString()}`);
+    },
+  });
 }
 
 /** Invalidate everything that a comic mutation can affect. */
