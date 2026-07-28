@@ -51,5 +51,9 @@ export async function fetchJson(url: string, init?: RequestInit): Promise<JsonRe
 /** Read Metron's rate-limit headers if present. Returned for logging/backoff. */
 export function readRateLimit(res: Response): { burstRemaining: number | null } {
   const raw = res.headers.get("x-ratelimit-burst-remaining");
-  return { burstRemaining: raw == null ? null : Number(raw) };
+  // Guard blank/absent headers — Number("") is 0, which would false-trigger the
+  // low-budget warning. "0" is a real value and is kept.
+  if (raw == null || raw.trim() === "") return { burstRemaining: null };
+  const n = Number(raw);
+  return { burstRemaining: Number.isFinite(n) ? n : null };
 }

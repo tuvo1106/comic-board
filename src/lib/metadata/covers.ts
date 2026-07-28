@@ -37,28 +37,68 @@ export async function fetchCover(raw: string): Promise<FetchedCover> {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  let res: Response;
   try {
-    res = await fetch(url, {
+    const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
+      // Don't follow redirects: only the initial URL is host-validated, so a 30x
+      // from the allowlisted host could point at an internal address and defeat
+      // the SSRF guard. Cover URLs are direct assets, so a redirect is a red flag.
+      redirect: "manual",
     });
+
+    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+      throw new MetadataError("Cover URL redirected — refusing to follow", 400);
+    }
+    if (!res.ok) throw new MetadataError(`Cover fetch failed (${res.status})`);
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) {
+      throw new MetadataError("Cover URL did not return an image", 400);
+    }
+
+    // Reject oversize by Content-Length up front, then enforce the cap while
+    // streaming so a missing/lying header can't buffer unbounded bytes into memory.
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_COVER_BYTES) {
+      throw new MetadataError("Cover image is too large", 400);
+    }
+    const bytes = await readCapped(res, MAX_COVER_BYTES);
+    return { bytes, contentType };
   } catch (err) {
+    if (err instanceof MetadataError) throw err;
     const timedOut = err instanceof Error && err.name === "AbortError";
     throw new MetadataError(timedOut ? "Cover fetch timed out" : "Cover is unreachable");
   } finally {
     clearTimeout(timer);
   }
+}
 
-  if (!res.ok) throw new MetadataError(`Cover fetch failed (${res.status})`);
-  const contentType = res.headers.get("content-type") ?? "";
-  if (!contentType.startsWith("image/")) {
-    throw new MetadataError("Cover URL did not return an image", 400);
+/** Read a response body into an ArrayBuffer, aborting once it exceeds `max`. */
+async function readCapped(res: Response, max: number): Promise<ArrayBuffer> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > max) throw new MetadataError("Cover image is too large", 400);
+    return buf;
   }
-
-  const buf = await res.arrayBuffer();
-  if (buf.byteLength > MAX_COVER_BYTES) {
-    throw new MetadataError("Cover image is too large", 400);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      throw new MetadataError("Cover image is too large", 400);
+    }
+    chunks.push(value);
   }
-  return { bytes: buf, contentType };
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out.buffer as ArrayBuffer;
 }

@@ -25,7 +25,11 @@ export function defaultProvider(): ProviderId | null {
 export function resolveProvider(raw?: string | null): ProviderId {
   const configured = configuredProviders();
   if (configured.length === 0) throw new MetadataError("Metadata autofill is not configured", 501);
-  if (raw && !isProviderId(raw)) throw new MetadataError(`Unknown provider "${raw}"`, 400);
+  if (raw) {
+    if (!isProviderId(raw)) throw new MetadataError(`Unknown provider "${raw}"`, 400);
+    if (!configured.includes(raw)) throw new MetadataError(`${raw} is not configured`, 501);
+    return raw; // honor the client's choice, not just the default
+  }
   return defaultProvider() as ProviderId; // non-null: configured is non-empty
 }
 

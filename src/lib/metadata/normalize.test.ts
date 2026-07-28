@@ -40,6 +40,13 @@ describe("normalizeCoverDate", () => {
     expect(normalizeCoverDate("March 1963")).toBeNull();
     expect(normalizeCoverDate("1963-13-01")).toBeNull();
   });
+
+  it("rejects impossible calendar dates (no rollover)", () => {
+    expect(normalizeCoverDate("1963-02-31")).toBeNull();
+    expect(normalizeCoverDate("2018-04-31")).toBeNull();
+    expect(normalizeCoverDate("2019-02-29")).toBeNull(); // not a leap year
+    expect(normalizeCoverDate("2020-02-29")).toBe("2020-02-29"); // leap year OK
+  });
 });
 
 describe("cleanNames", () => {

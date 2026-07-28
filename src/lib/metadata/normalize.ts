@@ -28,9 +28,9 @@ export function normalizeCoverDate(raw?: string | null): string | null {
     // Sources use "00" to mean "unknown day/month" — clamp to the 1st.
     const mo = moRaw === "00" ? "01" : moRaw;
     const d = dRaw === "00" ? "01" : dRaw;
-    const mi = Number(mo);
-    const di = Number(d);
-    if (mi < 1 || mi > 12 || di < 1 || di > 31) return null;
+    // Reject impossible calendar dates (e.g. 1963-02-31) — a real Date rolls
+    // over rather than round-tripping, so require it to match exactly.
+    if (!isRealDate(Number(y), Number(mo), Number(d))) return null;
     return `${y}-${mo}-${d}`;
   }
 
@@ -45,6 +45,15 @@ export function normalizeCoverDate(raw?: string | null): string | null {
   if (y) return `${y[1]}-01-01`;
 
   return null;
+}
+
+/** True only if (year, month, day) is a real calendar date (no rollover). */
+function isRealDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return (
+    dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day
+  );
 }
 
 /** Trim, drop blanks, de-dupe case-insensitively, preserve first-seen order. */
