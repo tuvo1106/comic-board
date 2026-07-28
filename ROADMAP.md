@@ -78,6 +78,16 @@ collection browsable in a new way.
 Schema migration + form fields + optional list-view columns + a total-value
 stat. This is what turns "cover gallery" into "collection tracker."
 
+### 4e. Replace an existing comic's cover — ~half a day
+The cover image is set only at upload; there's no way to swap it later. Add a
+"Replace cover" action (detail modal + card menu) that re-runs `processUpload`
+on a new image and overwrites the `full`/`thumb`/`blur` assets for that comic
+id, keeping all metadata/board memberships. Two sources: upload a new file, or
+pull a different cover from Metron (reuse the autofill cover picker + variants —
+e.g. grab a specific variant or a higher-res scan after the fact). Mostly
+wiring: an image-replace endpoint that regenerates the derivatives + cache
+invalidation. Pairs naturally with the metadata-autofill work.
+
 ## 5. Sharing — bigger; decide deliberately
 Public read-only board links are the natural evolution of boards, but they
 force two review findings to be resolved first:

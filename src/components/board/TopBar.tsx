@@ -3,15 +3,15 @@
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Menu, MenuItem } from "@/components/ui/Menu";
-import { Download, Search, Upload } from "@/components/ui/icons";
+import { Download, Plus, Search } from "@/components/ui/icons";
 
 interface Props {
   search: string;
   onSearch: (value: string) => void;
-  onUpload: () => void;
+  onAdd: () => void;
 }
 
-export function TopBar({ search, onSearch, onUpload }: Props) {
+export function TopBar({ search, onSearch, onAdd }: Props) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center gap-4 px-5 py-3">
@@ -35,11 +35,11 @@ export function TopBar({ search, onSearch, onUpload }: Props) {
         <div className="flex-1" />
 
         <button
-          onClick={onUpload}
-          className="inline-flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:brightness-110 active:scale-95"
+          onClick={onAdd}
+          className="inline-flex items-center gap-2 rounded-lg bg-accent py-2 pl-3 pr-3.5 text-sm font-semibold text-accent-fg shadow-sm transition hover:brightness-110 active:scale-95"
         >
-          <Upload className="h-4 w-4" />
-          Upload
+          <Plus className="h-4 w-4" />
+          Add
         </button>
 
         <UserMenu />

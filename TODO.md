@@ -437,8 +437,9 @@ Each is a multi-file feature with product/architecture decisions. Open a
 planning pass (scope, schema, API shape, UI flow) before writing code. Detail
 in `ROADMAP.md`.
 
-- **Export / backup** `[RM 1a]` — highest-value epic; do early. `GET /api/export`
-  zips `collection.json` + covers; CLI import re-creates via `createComic`.
+- [x] **Export / backup** `[RM 1a]` — **DONE** (PR #2). `GET /api/export` zips
+  `collection.json` + covers (account-menu "Export backup" button); CLI
+  `npm run db:import <zip> -- --replace` re-creates via `createComic`.
   Makes every later change reversible; defuses the reseed footgun.
 - **Undo delete** `[RM 1b]` — `deletedAt` column, scope all queries to
   `IS NULL`, "Undo" toast, deferred file sweep. Touches the whole query layer.
@@ -451,6 +452,10 @@ in `ROADMAP.md`.
   on near-matches.
 - **Stats page** `[RM 4c]` — counts by publisher/decade/artist, rating
   distribution, growth. `getMeta` already computes most aggregates.
+- **Replace an existing comic's cover** `[RM 4e]` — swap the cover image after
+  upload (new file, or a Metron variant via the autofill cover picker); re-run
+  `processUpload` to regenerate full/thumb/blur, keep metadata + board
+  memberships. Detail-modal + card-menu action + an image-replace endpoint.
 - **Collector fields** `[RM 4d]` — price/value/grade/condition; schema + form +
   optional list columns + a total-value stat.
 - **Public read-only board links** `[RM#5]` — **gated:** first resolve `/images`
