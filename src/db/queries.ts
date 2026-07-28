@@ -367,6 +367,45 @@ export async function deleteComic(userId: string, id: string): Promise<boolean> 
   return true;
 }
 
+/**
+ * Swap a comic's cover to an already-processed image, keeping all metadata and
+ * board memberships. The new image lives in its own `covers/<newId>/` folder, so
+ * `imageUrl`/`thumbUrl` change — busting the `immutable` cache without a
+ * per-comic version. The old folder is deleted afterward. Returns null if the
+ * comic isn't owned by the user.
+ */
+export async function replaceComicCover(
+  userId: string,
+  id: string,
+  image: ProcessedImage,
+): Promise<ComicDTO | null> {
+  const row = db
+    .select({ imagePath: comics.imagePath, thumbPath: comics.thumbPath })
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .get();
+  if (!row) return null;
+
+  const dto = db.transaction((tx) => {
+    tx.update(comics)
+      .set({
+        imagePath: image.imagePath,
+        thumbPath: image.thumbPath,
+        blurDataUrl: image.blurDataUrl,
+        width: image.width,
+        height: image.height,
+      })
+      .where(eq(comics.id, id))
+      .run();
+    return getComicTx(tx, id)!;
+  });
+
+  // Best-effort cleanup of the previous image, now that the row points elsewhere.
+  if (row.imagePath !== image.imagePath) await storage.delete(row.imagePath).catch(() => {});
+  if (row.thumbPath !== image.thumbPath) await storage.delete(row.thumbPath).catch(() => {});
+  return dto;
+}
+
 export function updateComicPosition(
   userId: string,
   comicId: string,

@@ -209,6 +209,33 @@ export function useUploadComic() {
   });
 }
 
+/** Replace a comic's cover image (multipart), keeping all metadata. */
+export function useReplaceCover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/comics/${id}/cover`, { method: "PUT", body: form });
+      if (res.status === 401 && typeof window !== "undefined") {
+        await redirectToLogin();
+        throw new Error("Not signed in");
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Replace failed");
+      }
+      return (await res.json()) as ComicDTO;
+    },
+    onSuccess: (updated) => {
+      // Image url/thumb change; push the fresh comic into the detail cache and
+      // every cached list in place (no meta/board change to invalidate).
+      qc.setQueryData(keys.comic(updated.id), updated);
+      patchComicInLists(qc, updated);
+    },
+  });
+}
+
 export interface UpdateComicArgs {
   id: string;
   patch: {

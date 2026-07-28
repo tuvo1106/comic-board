@@ -12,10 +12,12 @@ import { Menu } from "@/components/ui/Menu";
 import { StarRating } from "@/components/ui/StarRating";
 import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataForm";
 import { BoardMembershipList } from "@/components/board/BoardMembershipList";
+import { ReplaceCoverDialog } from "@/components/detail/ReplaceCoverDialog";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ImageIcon,
   Pencil,
   Plus,
   Trash,
@@ -49,6 +51,7 @@ export function ComicDetail({ id, asModal }: Props) {
   const updateComic = useUpdateComic();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const [form, setForm] = useState<ComicFormValue | null>(null);
 
   // A cold open mounts the <img> before full.webp has decoded, so the shared
@@ -211,7 +214,7 @@ export function ComicDetail({ id, asModal }: Props) {
         className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl ring-1 ring-border md:flex-row"
       >
         {/* Cover — shared element with the board card. */}
-        <div className="flex items-center justify-center bg-black/40 p-4 md:w-[55%]">
+        <div className="relative flex items-center justify-center bg-black/40 p-4 md:w-[55%]">
           {comic ? (
             <motion.img
               layoutId={`cover-${id}`}
@@ -225,6 +228,14 @@ export function ComicDetail({ id, asModal }: Props) {
             // Reserve the cover space while loading (cold deep-link) so the panel
             // opens full-size instead of a small box that grows.
             <div className="aspect-[2/3] h-[45vh] max-w-full animate-pulse rounded-lg bg-surface-2 md:h-[76vh]" />
+          )}
+          {comic && editing && (
+            <button
+              onClick={() => setReplacing(true)}
+              className="absolute bottom-6 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
+            >
+              <ImageIcon className="h-4 w-4" /> Replace cover
+            </button>
           )}
         </div>
 
@@ -392,6 +403,10 @@ export function ComicDetail({ id, asModal }: Props) {
           </div>
         </div>
       </div>
+
+      {comic && (
+        <ReplaceCoverDialog comic={comic} open={replacing} onClose={() => setReplacing(false)} />
+      )}
     </div>
   );
 }
