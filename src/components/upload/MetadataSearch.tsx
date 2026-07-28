@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMetadataConfig, useMetadataDetail, useMetadataSearch } from "@/lib/client-api";
 import { useToast } from "@/components/ui/toast";
-import { Sparkles, ImageIcon, ChevronLeft } from "@/components/ui/icons";
+import { ImageIcon, ChevronLeft } from "@/components/ui/icons";
 import type { CoverOption, MetadataCandidate, MetadataDetail, ProviderId } from "@/lib/metadata/types";
 import type { ComicFormValue } from "@/components/forms/MetadataForm";
 
@@ -135,12 +135,7 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
 
   return (
     <div className="rounded-xl border border-border bg-surface-2/40 p-3">
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-        <Sparkles className="h-3.5 w-3.5 text-accent" />
-        Find metadata
-      </div>
-
-      <form onSubmit={submit} className="mt-3.5 flex gap-2">
+      <form onSubmit={submit} className="flex gap-2">
         <input
           value={seriesInput}
           onChange={(e) => setSeriesInput(e.target.value)}
