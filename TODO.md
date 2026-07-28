@@ -443,19 +443,21 @@ in `ROADMAP.md`.
   Makes every later change reversible; defuses the reseed footgun.
 - **Undo delete** `[RM 1b]` — `deletedAt` column, scope all queries to
   `IS NULL`, "Undo" toast, deferred file sweep. Touches the whole query layer.
-- **Metadata autofill** `[RM#3]` — the headline feature. Proxy route to
-  Comic Vine / Metron / GCD; prefill the upload form. Decisions: which API, key
-  handling, caching.
+- [x] **Metadata autofill** `[RM#3]` — **DONE** (PR #3). Metron search in the
+  Add-comic modal (one smart query box, e.g. "black cat 4"); prefills
+  series/issue/release-date/publisher/cover-artists and imports the cover (main
+  + labeled variants). Comic Vine was evaluated and dropped (weaker search).
 - **Multi-select + bulk actions** `[RM 4a]`  *(needs item 10 done)* — selection
   UI + an action bar reusing existing board/tag/delete mutations.
 - **Duplicate detection at upload** `[RM 4b]` — perceptual hash per comic; warn
   on near-matches.
 - **Stats page** `[RM 4c]` — counts by publisher/decade/artist, rating
   distribution, growth. `getMeta` already computes most aggregates.
-- **Replace an existing comic's cover** `[RM 4e]` — swap the cover image after
-  upload (new file, or a Metron variant via the autofill cover picker); re-run
-  `processUpload` to regenerate full/thumb/blur, keep metadata + board
-  memberships. Detail-modal + card-menu action + an image-replace endpoint.
+- [x] **Replace an existing comic's cover** `[RM 4e]` — **DONE** (PR #4).
+  "Replace cover" in the detail-modal edit: upload a file or pull a Metron
+  cover/variant. `PUT /api/comics/:id/cover` processes into a new folder and
+  repoints the comic (busts the immutable cache), keeping metadata + boards.
+  (Card-menu entry deferred; detail-modal only for now.)
 - **Autocomplete the collection search** `[RM 4f]` — typeahead on the top-bar
   search suggesting series/authors/characters from the current collection
   (`getMeta` lists; client-side, no API). Reuses the `Autocomplete` component.
