@@ -6,6 +6,9 @@
 next-env.d.ts
 *.tsbuildinfo
 
+# test coverage output (generated)
+/coverage
+
 # local data (sqlite db + uploaded covers)
 /data
 
