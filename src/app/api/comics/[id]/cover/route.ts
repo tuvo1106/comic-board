@@ -2,6 +2,7 @@ import { badRequest, handle, notFound, ok, unauthorized } from "@/lib/api";
 import { processUpload } from "@/lib/images";
 import { getComic, replaceComicCover } from "@/db/queries";
 import { getUserId } from "@/lib/session";
+import { storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,12 @@ export async function PUT(req: Request, { params }: Params) {
     }
 
     const updated = await replaceComicCover(userId, id, image);
-    return updated ? ok(updated) : notFound("Comic not found");
+    if (!updated) {
+      // The comic was removed between the ownership check and the swap — clean
+      // up the image we just wrote so it isn't orphaned on disk.
+      await storage.deletePrefix(image.imagePath.replace(/\/[^/]+$/, "")).catch(() => {});
+      return notFound("Comic not found");
+    }
+    return ok(updated);
   });
 }

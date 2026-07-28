@@ -30,7 +30,12 @@ export function ReplaceCoverDialog({ comic, open, onClose }: Props) {
   const [mode, setMode] = useState<Mode>("upload");
   const [dragOver, setDragOver] = useState(false);
 
+  // Single sink for both entry points (upload + Metron cover), so validation and
+  // the in-flight guard apply consistently.
   const doReplace = async (file: File) => {
+    if (replace.isPending) return; // ignore rapid re-clicks (e.g. "Use cover" ×2)
+    if (!ACCEPT.includes(file.type)) return toast(`${file.name}: unsupported type`, "error");
+    if (file.size > MAX_BYTES) return toast(`${file.name}: exceeds 15MB`, "error");
     try {
       await replace.mutateAsync({ id: comic.id, file });
       toast("Cover replaced", "success");
@@ -42,10 +47,7 @@ export function ReplaceCoverDialog({ comic, open, onClose }: Props) {
 
   const addFile = (list: FileList | File[]) => {
     const f = Array.from(list)[0];
-    if (!f) return;
-    if (!ACCEPT.includes(f.type)) return toast(`${f.name}: unsupported type`, "error");
-    if (f.size > MAX_BYTES) return toast(`${f.name}: exceeds 15MB`, "error");
-    doReplace(f);
+    if (f) doReplace(f);
   };
 
   // Seed the Metron search from the comic; only series/issue are read.
@@ -83,7 +85,10 @@ export function ReplaceCoverDialog({ comic, open, onClose }: Props) {
               type="file"
               accept={ACCEPT.join(",")}
               className="hidden"
-              onChange={(e) => e.target.files && addFile(e.target.files)}
+              onChange={(e) => {
+                if (e.target.files) addFile(e.target.files);
+                e.target.value = ""; // allow re-selecting the same file after a failure
+              }}
             />
           </label>
         ) : (
