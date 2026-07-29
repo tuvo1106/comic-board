@@ -3,6 +3,20 @@
 import { useMemo, useRef, useState } from "react";
 import { X } from "./icons";
 
+// Approx dropdown height (max-h-52 + paddings) used to decide flip direction.
+const DROPDOWN_H = 232;
+
+/** Nearest ancestor that scrolls (the edit/upload form), for room calculations. */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  let p = el.parentElement;
+  while (p) {
+    const oy = getComputedStyle(p).overflowY;
+    if (oy === "auto" || oy === "scroll") return p;
+    p = p.parentElement;
+  }
+  return null;
+}
+
 interface Props {
   values: string[];
   onChange: (values: string[]) => void;
@@ -14,6 +28,7 @@ interface Props {
 export function TagInput({ values, onChange, suggestions, placeholder }: Props) {
   const [input, setInput] = useState("");
   const [focused, setFocused] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
@@ -34,6 +49,25 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
   };
 
   const remove = (value: string) => onChange(values.filter((v) => v !== value));
+
+  const onFocus = () => {
+    setFocused(true);
+    const el = inputRef.current;
+    if (!el) return;
+    // The dropdown is absolutely positioned and clipped by the scroll container
+    // (edit/upload form). A bottom field (Tags) can't scroll far enough to fit it
+    // below — so open it *upward* when there's more room above than below.
+    const sp = scrollParent(el);
+    const bounds = sp
+      ? sp.getBoundingClientRect()
+      : { top: 0, bottom: window.innerHeight };
+    const r = el.getBoundingClientRect();
+    const below = bounds.bottom - r.bottom;
+    const above = r.top - bounds.top;
+    setOpenUp(below < DROPDOWN_H && above > below);
+    // Nudge the field fully into view if it sits at the container's edge.
+    requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+  };
 
   return (
     <div className="relative">
@@ -63,7 +97,7 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onFocus={() => setFocused(true)}
+          onFocus={onFocus}
           onBlur={() => {
             // Commit whatever was typed but not yet Entered, so "type a name
             // then click Save" works without an explicit Enter first.
@@ -84,7 +118,11 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
       </div>
 
       {focused && (filtered.length > 0 || input.trim()) && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-2xl">
+        <div
+          className={`absolute left-0 z-50 max-h-52 w-full overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-2xl ${
+            openUp ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
+        >
           {input.trim() &&
             !suggestions.some((s) => s.toLowerCase() === input.trim().toLowerCase()) && (
               <button
