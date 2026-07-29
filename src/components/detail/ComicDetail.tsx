@@ -218,7 +218,19 @@ export function ComicDetail({ id, asModal }: Props) {
         className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl ring-1 ring-border md:flex-row"
       >
         {/* Cover — shared element with the board card. */}
-        <div className="relative flex items-center justify-center bg-black/40 p-4 md:w-[55%]">
+        <div className="relative flex items-center justify-center overflow-hidden bg-black/40 p-4 md:w-[55%]">
+          {comic && (
+            <>
+              {/* Blurred backdrop of the same cover, scaled up so the blur's
+                  soft edges don't reveal the container boundary. */}
+              <div
+                aria-hidden
+                className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
+                style={{ backgroundImage: `url(${comic.blurDataUrl})` }}
+              />
+              <div aria-hidden className="absolute inset-0 bg-black/50" />
+            </>
+          )}
           {comic ? (
             <motion.img
               layoutId={`cover-${id}`}
