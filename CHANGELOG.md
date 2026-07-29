@@ -4,8 +4,16 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-29 — Undo delete, search, detail-modal, and board-tabs fixes
+## 2026-07-29 — Account settings, undo delete, search, detail-modal, and board-tabs fixes
 
+- **Account settings.** A new "Account settings" dialog off the account menu
+  lets you change your email and password — the first settings surface this
+  app has had. Both actions were already core better-auth endpoints
+  (`changeEmail`/`changePassword`), served by the existing auth catch-all
+  route with no new API needed; `changeEmail` just needed one config flag
+  (`updateEmailWithoutVerification`, since this app has no email-verification
+  flow at all). Extracted the shared `Field` input component (label + input +
+  optional trailing control) out of the login/signup form so both use it.
 - **Undo delete.** Deleting a comic now soft-deletes it (`comics.deletedAt`) —
   every read query excludes it, so it disappears immediately, but a "Cover
   deleted" toast with an "Undo" action (6s) restores it. Actual row + cover

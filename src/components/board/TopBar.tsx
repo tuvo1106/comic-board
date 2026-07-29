@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
+import { AccountSettingsDialog } from "@/components/auth/AccountSettingsDialog";
 import { Menu, MenuItem } from "@/components/ui/Menu";
-import { Download, Plus, Search } from "@/components/ui/icons";
+import { Download, Plus, Search, Settings } from "@/components/ui/icons";
 
 interface Props {
   search: string;
@@ -51,53 +53,66 @@ export function TopBar({ search, onSearch, onAdd }: Props) {
 function UserMenu() {
   const { data } = useSession();
   const router = useRouter();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const user = data?.user;
   const initial = (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
 
   return (
-    <Menu
-      align="right"
-      widthClass="w-56"
-      trigger={({ toggle }) => (
-        <button
-          onClick={toggle}
-          className="grid h-9 w-9 place-items-center rounded-full bg-surface-2 text-sm font-semibold text-fg ring-1 ring-border transition hover:ring-accent/50"
-          title={user?.email ?? "Account"}
-        >
-          {initial}
-        </button>
-      )}
-    >
-      {(close) => (
-        <>
-          <div className="px-2.5 py-1.5">
-            <p className="truncate text-sm font-medium text-fg">{user?.name || "Signed in"}</p>
-            <p className="truncate text-xs text-muted">{user?.email}</p>
-          </div>
-          <div className="my-1 h-px bg-border" />
-          <MenuItem
-            icon={<Download className="h-4 w-4" />}
-            onClick={() => {
-              close();
-              // The response is Content-Disposition: attachment, so this
-              // downloads the zip without navigating away from the board.
-              window.location.href = "/api/export";
-            }}
+    <>
+      <Menu
+        align="right"
+        widthClass="w-56"
+        trigger={({ toggle }) => (
+          <button
+            onClick={toggle}
+            className="grid h-9 w-9 place-items-center rounded-full bg-surface-2 text-sm font-semibold text-fg ring-1 ring-border transition hover:ring-accent/50"
+            title={user?.email ?? "Account"}
           >
-            Export backup
-          </MenuItem>
-          <MenuItem
-            onClick={async () => {
-              close();
-              await signOut();
-              router.push("/login");
-              router.refresh();
-            }}
-          >
-            Sign out
-          </MenuItem>
-        </>
-      )}
-    </Menu>
+            {initial}
+          </button>
+        )}
+      >
+        {(close) => (
+          <>
+            <div className="px-2.5 py-1.5">
+              <p className="truncate text-sm font-medium text-fg">{user?.name || "Signed in"}</p>
+              <p className="truncate text-xs text-muted">{user?.email}</p>
+            </div>
+            <div className="my-1 h-px bg-border" />
+            <MenuItem
+              icon={<Settings className="h-4 w-4" />}
+              onClick={() => {
+                close();
+                setSettingsOpen(true);
+              }}
+            >
+              Account settings
+            </MenuItem>
+            <MenuItem
+              icon={<Download className="h-4 w-4" />}
+              onClick={() => {
+                close();
+                // The response is Content-Disposition: attachment, so this
+                // downloads the zip without navigating away from the board.
+                window.location.href = "/api/export";
+              }}
+            >
+              Export backup
+            </MenuItem>
+            <MenuItem
+              onClick={async () => {
+                close();
+                await signOut();
+                router.push("/login");
+                router.refresh();
+              }}
+            >
+              Sign out
+            </MenuItem>
+          </>
+        )}
+      </Menu>
+      <AccountSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </>
   );
 }

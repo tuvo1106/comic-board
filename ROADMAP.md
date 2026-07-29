@@ -249,43 +249,12 @@ prerequisites — `/images/**` having no session check, and the
 globally-shared publisher/tag namespace having cross-user rename effects —
 are still true of the app as-is; they're just not gating anything anymore.)
 
-## 6. Account settings — change email/password — ~half a day
+## 6. Account settings — shipped (2026-07-29)
 
-Currently there's no way to change either. Confirmed by checking the code,
-not assuming: no `changeEmail`/`changePassword` call anywhere in the app,
-and the account menu (`TopBar.tsx`) only has "Export backup" and "Sign out"
-— no settings surface exists at all.
-
-**Both endpoints already exist server-side — this is UI work, not backend
-work.** better-auth ships `changePassword` and `changeEmail` as core
-endpoints (`node_modules/better-auth/dist/api/routes/update-user.mjs`),
-already served by the existing `ALL /api/auth/[...all]` catch-all — no new
-API route needed. `src/lib/auth-client.ts`'s `createAuthClient()` exposes
-both as base client methods with no plugin required.
-
-- **`changePassword` needs zero config changes.** Just `currentPassword` +
-  `newPassword` from a form, calling `authClient.changePassword(...)`.
-- **`changeEmail` needs one explicit config addition**, or it 400s. Its
-  handler requires `user.changeEmail.enabled: true` (not set in
-  `src/lib/auth.ts` today) and, since there's no email verification in this
-  app at all (confirmed earlier — `emailVerified` is always `false`, never
-  checked), it also needs `updateEmailWithoutVerification: true` — without
-  *some* verification path enabled, the endpoint refuses to run at all. The
-  config addition is small:
-  ```ts
-  user: {
-    changeEmail: { enabled: true, updateEmailWithoutVerification: true },
-  },
-  ```
-  Worth naming the coupling: `updateEmailWithoutVerification` only behaves
-  this way *because* `emailVerified` is always false here. If real email
-  verification is ever added later (see the "no email verification exists"
-  finding from this session), this flag would need revisiting — it doesn't
-  mean "always skip verification," it means "skip verification for
-  not-yet-verified users," which today is everyone.
-- **No UI surface exists for this at all** — needs a new "Account settings"
-  entry point (a menu item off the existing account menu → a dialog or
-  page) with two forms.
+Change email/password via a new "Account settings" dialog off the account
+menu (`AccountSettingsDialog.tsx`), backed by better-auth's built-in
+`changeEmail`/`changePassword` endpoints — no new API route was needed,
+just `src/lib/auth.ts`'s `user.changeEmail` config flag (see `CHANGELOG.md`).
 
 ---
 
@@ -293,15 +262,14 @@ both as base client methods with no plugin required.
 
 What's actually active after review (2026-07-29), in order:
 
-1. **Account settings** (6) — change email/password; a real, basic gap, and
-   most of it (both endpoints) already exists server-side.
-2. **Multi-select + bulk actions** (2a), **stats page** (2c), **autocomplete
+1. **Multi-select + bulk actions** (2a), **stats page** (2c), **autocomplete
    search** (2e) — by appetite; 2b and 2d were skipped.
-3. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
+2. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
    on anything else here. **Server-side pagination** (4c) only once one of
    its two concrete signals shows up (list view gets janky, or search stops
    feeling instant); **spec-driven behaviors** (4d) whenever process
    overhead is justified. 4b was skipped.
-4. ~~Sharing~~ — skipped.
+3. ~~Sharing~~ — skipped.
 
-Undo delete (1) and drag tabs to reorder (3) shipped 2026-07-29.
+Undo delete (1), drag tabs to reorder (3), and account settings (6) shipped
+2026-07-29.

@@ -35,6 +35,16 @@ export const auth = betterAuth({
     autoSignIn: true, // sign in immediately after signup
     minPasswordLength: 8,
   },
+  // changePassword needs no config (it's core once emailAndPassword is on).
+  // changeEmail is opt-in, and its "without verification" path only applies
+  // to not-yet-verified users — which today is everyone, since this app has
+  // no email-sending/verification flow at all (see ROADMAP.md item 6).
+  user: {
+    changeEmail: {
+      enabled: true,
+      updateEmailWithoutVerification: true,
+    },
+  },
   secret: process.env.BETTER_AUTH_SECRET || "dev-only-insecure-secret-change-me",
   databaseHooks: {
     user: {
