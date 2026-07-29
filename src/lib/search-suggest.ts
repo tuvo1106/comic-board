@@ -91,9 +91,12 @@ const TOTAL = 5;
 export function suggestSearch(
   meta: MetaDTO | undefined,
   query: string,
-  opts: { total?: number } = {},
+  opts: { total?: number; kinds?: SuggestionKind[] } = {},
 ): Suggestion[] {
   const total = opts.total ?? TOTAL;
+  // `kinds` narrows which fields are offered at all — the provider-search box
+  // only wants series names, since that's the grain the external API searches.
+  const allowed = opts.kinds ? new Set(opts.kinds) : null;
   const q = query.trim().toLowerCase();
   if (!meta || !q) return [];
 
@@ -102,6 +105,7 @@ export function suggestSearch(
   // fields even though each field de-dupes internally.
   const groups = new Map<string, Suggestion & { prefix: number }>();
   for (const [key, kind] of SOURCES) {
+    if (allowed && !allowed.has(kind)) continue;
     for (const { value, count } of meta[key] ?? []) {
       const lower = value.toLowerCase();
       if (!lower.includes(q)) continue;

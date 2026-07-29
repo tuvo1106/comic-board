@@ -124,20 +124,126 @@ export async function metadataAutofill({ p, ck, sleep }) {
       [...document.querySelectorAll("button")].find((b) => b.textContent.includes(t))?.click();
     }, text);
   const bodyHas = (text) => p.evaluate((t) => document.body.textContent.includes(t), text);
-  const openAutofill = async () => {
+  const PROVIDER_INPUT = "input[placeholder^='Series and issue']";
+  const PROVIDER_OPTION = "#provider-series-suggestions [role='option']";
+  const openModal = async () => {
     await clickByText("Add");
     await sleep(600);
-    await p.type("input[placeholder^='Series and issue']", "stub");
+  };
+  const runSearch = async (q) => {
+    await p.type(PROVIDER_INPUT, q);
     await clickByText("Search");
     await sleep(600);
   };
+  const openAutofill = async () => {
+    await openModal();
+    await runSearch("stub");
+  };
 
   try {
-    await openAutofill();
+    // --- Series typeahead on the provider-search box ------------------------
+    // Suggestions come from the local collection (/api/meta), not the provider:
+    // the usual reason to be here is adding the next issue of a run you already
+    // own. Series-only, since that's the grain the external API searches.
+    await openModal();
     ck(
-      (await p.$("input[placeholder^='Series and issue']")) !== null,
+      (await p.$(PROVIDER_INPUT)) !== null,
       "the autofill panel renders once a provider is configured",
     );
+    await p.type(PROVIDER_INPUT, "abso", { delay: 30 });
+    await sleep(400);
+    const seriesRows = await p.$$eval(PROVIDER_OPTION, (els) =>
+      els.map((el) => ({
+        text: el.textContent.trim(),
+        value: el.children[0]?.textContent.trim() ?? "",
+        columns: el.children.length,
+      })),
+    );
+    ck(
+      seriesRows.some((r) => r.value === "Absolute Batman") &&
+        seriesRows.some((r) => r.value === "Absolute Catwoman"),
+      `the provider box suggests series from the collection (${seriesRows.map((r) => r.value).join(", ")})`,
+    );
+    ck(
+      seriesRows.every((r) => r.columns === 2 && !/Series/.test(r.text)),
+      "series-only rows omit the redundant field label, keeping just value + count",
+    );
+
+    // Regression: the list must escape the dialog, which is `overflow-hidden`
+    // (it has to be, to clip its own rounded corners). Rendered in place it was
+    // silently cut off at the panel edge — the first row sliced in half and the
+    // rest invisible. Caught by looking at it; asserted here so it stays fixed.
+    // `getBoundingClientRect` can't see overflow clipping, so the check is
+    // structural: portalled to <body>, and extending past the panel's bottom
+    // (which is exactly what would have been clipped before).
+    const geometry = await p.evaluate(() => {
+      const lb = document.getElementById("provider-series-suggestions");
+      const panel = document.querySelector("[role='dialog']");
+      // Must be the provider input specifically — the top-bar search box is also
+      // a combobox and comes first in document order.
+      const input = document.querySelector("input[placeholder^='Series and issue']");
+      if (!lb || !panel || !input) return null;
+      const lbBox = lb.getBoundingClientRect();
+      const panelBox = panel.getBoundingClientRect();
+      const inputBox = input.getBoundingClientRect();
+      return {
+        portalled: lb.parentElement === document.body,
+        insidePanel: panel.contains(lb),
+        overhangsPanel: lbBox.bottom > panelBox.bottom,
+        withinViewport: lbBox.top >= 0 && lbBox.bottom <= window.innerHeight + 1,
+        leftDelta: Math.round(lbBox.left - inputBox.left),
+        widthDelta: Math.round(lbBox.width - inputBox.width),
+      };
+    });
+    ck(
+      geometry?.portalled === true && geometry?.insidePanel === false,
+      "the suggestion list portals out of the dialog instead of being clipped by it",
+    );
+    ck(
+      geometry?.overhangsPanel === true,
+      "it extends past the dialog panel's edge — the case that used to be cut off",
+    );
+    ck(geometry?.withinViewport === true, "and it still lands fully on screen");
+    ck(
+      Math.abs(geometry?.leftDelta ?? 99) <= 1 && Math.abs(geometry?.widthDelta ?? 99) <= 1,
+      `a portalled list still tracks its input's box (left off by ${geometry?.leftDelta}px, width by ${geometry?.widthDelta}px)`,
+    );
+
+    // Escape must dismiss the dropdown WITHOUT closing the upload dialog, which
+    // closes itself on a document-level Escape listener.
+    await p.keyboard.press("Escape");
+    await sleep(300);
+    ck(
+      (await p.$$(PROVIDER_OPTION)).length === 0 && (await p.$(PROVIDER_INPUT)) !== null,
+      "Escape dismisses the suggestions without closing the upload dialog",
+    );
+
+    // Arrow + Enter picks, and must not submit the enclosing search form.
+    await p.keyboard.press("ArrowDown");
+    await sleep(250);
+    ck((await p.$$(PROVIDER_OPTION)).length > 0, "ArrowDown re-opens the suggestions");
+    await p.keyboard.press("ArrowDown");
+    await sleep(150);
+    await p.keyboard.press("Enter");
+    await sleep(400);
+    const afterPick = await p.$eval(PROVIDER_INPUT, (el) => el.value);
+    ck(
+      afterPick === "Absolute Batman ",
+      `picking a series fills the box and leaves a trailing space for the issue (got "${afterPick}")`,
+    );
+
+    // Appending an issue number stops matching any series, so the list self-hides.
+    await p.type(PROVIDER_INPUT, "23", { delay: 30 });
+    await sleep(350);
+    ck(
+      (await p.$$(PROVIDER_OPTION)).length === 0,
+      "once an issue number is typed the series list gets out of the way",
+    );
+    await p.keyboard.press("Escape"); // close the dialog; reopening resets it
+    await sleep(500);
+
+    // --- Provider search flow ----------------------------------------------
+    await openAutofill();
     const rows = await p.$$eval("ul li button p", (els) => els.map((e) => e.textContent.trim()));
     ck(
       rows.some((r) => r.includes("Stub Detective Comics")) && rows.some((r) => r.includes("(1937)")),

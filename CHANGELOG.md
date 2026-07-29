@@ -20,6 +20,22 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   Most likely trigger is the `ALLOWED_COVER_HOSTS` allowlist (currently just
   `static.metron.cloud`), which would fail every cover the day Metron adds a CDN
   host. Fixed with a distinct `coverError` state and a persistent message.
+- **Series typeahead on the provider-search box too.** The upload panel's
+  "Series and issue" field now suggests series you already own — the common case
+  being "add the next issue of a run I collect". Suggestions come from the local
+  cached `/api/meta`, never the provider: a remote typeahead would fire a
+  rate-limited third-party call per keystroke. Series-only (that's the grain the
+  external API searches), so the field label is dropped as redundant while the
+  count — issues of that run already owned — is kept. Picking leaves a trailing
+  space so the caret is ready for the issue number, which also self-hides the
+  list once a digit is typed.
+  The shared behaviour moved into `Typeahead.tsx` (`useTypeahead` +
+  `SuggestionList`), headless so the two very different layouts keep their own
+  markup. Two bugs fixed in the process: the list is now **portalled** — in
+  place it was silently clipped by `Dialog`'s `overflow-hidden`, slicing the
+  first row in half (found by looking at it, now asserted structurally) — and
+  Escape stops propagating so dismissing the list no longer closes the whole
+  upload dialog.
 - **Search autocomplete.** The top-bar search now has a typeahead dropdown of
   terms that actually exist in the collection, built entirely from the
   already-cached `/api/meta` payload — no new endpoint. Suggestion sources

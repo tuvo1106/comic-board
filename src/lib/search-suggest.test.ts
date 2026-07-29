@@ -147,6 +147,28 @@ describe("suggestSearch", () => {
     expect(suggestSearch(m, "bat", { total: 2 })).toHaveLength(2);
   });
 
+  it("restricts to the requested kinds (the provider box wants series only)", () => {
+    const m = meta({
+      series: [{ value: "Batman", count: 1 }],
+      characters: [{ value: "Batman", count: 5 }],
+      tags: [{ value: "Bat-signal", count: 2 }],
+    });
+    const got = suggestSearch(m, "bat", { kinds: ["series"] });
+    // Character normally wins the "Batman" collapse; excluded here, so the
+    // series row survives instead of the value vanishing altogether.
+    expect(v(got)).toEqual(["series:Batman"]);
+  });
+
+  it("still collapses duplicates within a restricted set", () => {
+    const m = meta({
+      series: [
+        { value: "Batman", count: 1 },
+        { value: "batman", count: 1 }, // same name, different case
+      ],
+    });
+    expect(suggestSearch(m, "bat", { kinds: ["series"] })).toHaveLength(1);
+  });
+
   it("returns nothing when the query matches no known value", () => {
     const m = meta({ series: [{ value: "Batman", count: 3 }] });
     expect(suggestSearch(m, "zzz")).toEqual([]);

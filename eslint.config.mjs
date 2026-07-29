@@ -4,9 +4,13 @@ import typescript from "eslint-config-next/typescript";
 const eslintConfig = [
   {
     ignores: [
-      ".next/**",
-      ".next-itest/**",
-      ".next-build/**",
+      // Any Next build output, however the dist dir is named. The bare-name
+      // entries were missing `.next-manual`, which AGENTS.md's own
+      // browser-check recipe creates (NEXT_DIST_DIR=.next-manual) — leaving a
+      // throwaway instance behind made `npm run lint` report 7000+ problems
+      // from generated code. Glob rather than enumerate, so the next dist dir
+      // someone invents is covered too.
+      ".next*/**",
       "coverage/**",
       "node_modules/**",
       "next-env.d.ts",

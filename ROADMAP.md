@@ -142,6 +142,14 @@ Notes from doing it, beyond what was predicted below:
 - **Everything is case-insensitive**, including the dedupe key: series is a
   plain column while characters/tags are their own tables, so the same name can
   differ in case *across* fields even though each field de-dupes internally.
+- **Extended to the provider-search box** (`MetadataSearch.tsx`), series-only,
+  via `suggestSearch`'s `kinds` option. Shared behaviour lives in
+  `src/components/ui/Typeahead.tsx` — headless (`useTypeahead`) plus a
+  `SuggestionList`, since the two call sites have very different layouts. Two
+  bugs surfaced only by putting it inside a dialog: the list has to be
+  **portalled** (rendered in place, `Dialog`'s required `overflow-hidden` clipped
+  it mid-row), and Escape must `stopPropagation` or dismissing the list also
+  closes the modal via its document-level key handler. Both now asserted.
 - The existing `Autocomplete.tsx` has **no keyboard navigation at all** (only
   Enter/Escape, and only when given an `onCommit`), so arrow-key nav and the
   `aria` combobox/listbox wiring were new work rather than a reuse.

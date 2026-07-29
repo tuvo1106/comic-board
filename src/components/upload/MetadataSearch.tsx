@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMetadataConfig, useMetadataDetail, useMetadataSearch } from "@/lib/client-api";
+import { useMeta, useMetadataConfig, useMetadataDetail, useMetadataSearch } from "@/lib/client-api";
+import { suggestSearch } from "@/lib/search-suggest";
+import { SuggestionList, useTypeahead } from "@/components/ui/Typeahead";
 import { useToast } from "@/components/ui/toast";
 import { ImageIcon, ChevronLeft } from "@/components/ui/icons";
 import type { CoverOption, MetadataCandidate, MetadataDetail, ProviderId } from "@/lib/metadata/types";
@@ -10,6 +12,8 @@ import type { ComicFormValue } from "@/components/forms/MetadataForm";
 const PROVIDER_LABELS: Record<ProviderId, string> = {
   metron: "Metron",
 };
+
+const PROVIDER_LISTBOX_ID = "provider-series-suggestions";
 
 interface LoadedCover {
   objectUrl: string;
@@ -72,6 +76,24 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
   const active = config?.default ?? null;
 
   const search = useMetadataSearch({ provider: active, q: query ?? "", enabled: query != null });
+
+  // Typeahead over series you already own. Suggestions come from the local
+  // collection (`/api/meta`, already cached), never the provider — a remote
+  // typeahead would fire a rate-limited third-party call per keystroke. It's the
+  // right source anyway: the usual reason to be here is adding the next issue of
+  // a run you already collect.
+  const { data: meta } = useMeta();
+  const seriesSuggestions = suggestSearch(meta, queryInput, { kinds: ["series"] });
+  const typeahead = useTypeahead({
+    listboxId: PROVIDER_LISTBOX_ID,
+    value: queryInput,
+    onChange: setQueryInput,
+    suggestions: seriesSuggestions,
+    // Trailing space: this box takes series *and* issue ("Black Cat 4"), so leave
+    // the caret ready for the number. It also self-hides the list, since no
+    // series name matches once a digit is appended.
+    onPick: (v) => setQueryInput(`${v} `),
+  });
 
   // Clear the previously-loaded cover the moment the selection changes, during
   // render rather than inside the effect below. Doing it in the effect renders
@@ -150,12 +172,26 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
   return (
     <div className="rounded-xl border border-border bg-surface-2/40 p-3">
       <form onSubmit={submit} className="flex gap-2">
-        <input
-          value={queryInput}
-          onChange={(e) => setQueryInput(e.target.value)}
-          placeholder="Series and issue — e.g. Black Cat 4"
-          className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-accent placeholder:text-muted"
-        />
+        <div className="relative min-w-0 flex-1">
+          <input
+            {...typeahead.inputProps}
+            placeholder="Series and issue — e.g. Black Cat 4"
+            className="w-full rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-accent placeholder:text-muted"
+          />
+          {typeahead.open && (
+            <SuggestionList
+              id={PROVIDER_LISTBOX_ID}
+              anchorRef={typeahead.anchorRef}
+              suggestions={seriesSuggestions}
+              activeIndex={typeahead.activeIndex}
+              onHover={typeahead.setActiveIndex}
+              onPick={typeahead.pick}
+              // Every row is a series here, so the field label would be noise.
+              // The count (issues of that run already owned) still earns its place.
+              showKind={false}
+            />
+          )}
+        </div>
         <button
           type="submit"
           disabled={!queryInput.trim() || search.isFetching}
