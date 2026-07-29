@@ -6,6 +6,19 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, detail-modal, and board-tabs fixes
 
+- **Test-coverage gap fill (item 4d, reframed from a planned spec doc).**
+  Rather than write a separate markdown spec, treated the test suites
+  themselves as the spec and audited for behaviors with no test at all. Added
+  6 new tests: `navOrder.neighbors()` unit coverage, and integration coverage
+  for detail-modal click-to-edit-per-field, modal arrow-key prev/next
+  navigation, add/remove board membership (single + bulk), the cover-replace
+  flow, and the sign-up flow. `GET /api/export` is now exercised directly via
+  `fetch` rather than the real UI control, since clicking the account menu's
+  export button triggers a real page navigation to a binary response that
+  crashes headless Chrome. Found and fixed one real bug along the way: a bulk
+  "remove from board" test left a board empty that a later, unrelated test
+  depended on being non-empty. See `ENGINEERING_NOTES.md` for the fuller
+  story.
 - **List-view multi-select + bulk actions.** A leading checkbox column with
   shift-click range-select, and a bulk action bar for add to board / remove
   from board / set publisher / add tag / delete — each looping an existing

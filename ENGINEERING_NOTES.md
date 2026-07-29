@@ -20,6 +20,42 @@ the elevator pitch, the rest is what I'd say if asked to go deeper.
 
 ## Bugs
 
+### Isolating "is this my bug or the environment's?" under a flaky test harness (2026-07-29)
+
+**A new test failed intermittently, and the fastest way to find out whose
+fault that was turned out to be running the exact same seed step in
+isolation, outside the suite.**
+
+While adding integration coverage for bulk board-membership actions, an
+unrelated, pre-existing check ("DC-published comics" count) started
+returning a different number on different runs of the *same, untouched*
+early section of the suite — 14, then 13, then 12 — even though nothing in
+that code path had changed. The tempting move is to assume your own new code
+caused it (recency bias — it's the thing that just changed). Instead:
+`npm run db:migrate && npm run db:seed` against a disposable throwaway DB,
+outside the full browser-driven suite entirely, and query the result
+directly with a one-off `better-sqlite3` script — same seed script, zero
+browser/network/animation involved. It came back deterministic every time
+(14, exactly). That isolates the variable precisely: the *data* is
+deterministic; whatever's non-deterministic is downstream of it — something
+about running a full `next build` + fresh headless Chrome launch back-to-back,
+rapidly, repeatedly (which is exactly what iterating on a failing integration
+test does). The interesting part isn't the root cause (never fully chased
+down — that's a separate investigation) but the isolation *technique*: strip
+away every layer that isn't strictly necessary to reproduce the discrepancy,
+one at a time, until only one variable is left that could explain it.
+
+Separately, in the same pass, I *did* introduce one real bug: a bulk
+"remove from board" test emptied a board that a later, unrelated test
+depended on being non-empty (`BoardView.tsx` swaps to a no-toolbar empty
+state at zero members) — state pollution between tests, not flakiness. Fix:
+capture the board's original membership before mutating it, restore it
+after. Two different problems that looked identical at first ("a test I
+touched now fails") — one was mine, one wasn't, and the fix for each was
+completely different.
+
+- Where: `tests/integration.mjs` (bulk board-membership block)
+
 ### Debounced search silently dropped fast-typed characters (2026-07-29)
 
 **A 150ms search debounce had a feedback loop with its own echo, and the fix

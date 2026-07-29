@@ -143,6 +143,83 @@ try {
     await sleep(300);
   }
 
+  // Export backup: GET /api/export streams a zip attachment. The account
+  // menu's "Export backup" item triggers this via `window.location.href =
+  // "/api/export"` — a real page navigation to a binary response, which
+  // crashed the whole suite in headless Chrome (no download-behavior
+  // configured here) when clicked through the UI. The actual gap was route
+  // coverage (auth + headers + content), not proving that assignment line
+  // runs, so verify the route directly instead.
+  {
+    const exportRes = await p.evaluate(async () => {
+      const r = await fetch("/api/export");
+      return { status: r.status, disposition: r.headers.get("content-disposition") ?? "" };
+    });
+    ck(exportRes.status === 200, `GET /api/export streams the zip (status ${exportRes.status})`);
+    ck(
+      /attachment/.test(exportRes.disposition) && /\.zip/.test(exportRes.disposition),
+      `response is a downloadable zip attachment (got "${exportRes.disposition}")`,
+    );
+  }
+
+  // Sign-up: creates a new, independent account with an empty collection —
+  // every other test in this suite logs in via the seed account instead.
+  {
+    // The middleware redirects an already-signed-in user straight from
+    // /signup back to the board (middleware.ts) — sign out first. Native DOM
+    // clicks (not Puppeteer's ElementHandle.click) for both steps, same
+    // robustness fix as the animated-popover clicks earlier in this file.
+    // The trigger's visible text is just an initial letter — it's the
+    // `title` attribute that holds the email.
+    const openAccountMenu = (email) =>
+      p.evaluate((e) => document.querySelector(`button[title='${e}']`)?.click(), email);
+    const clickByText = (text) =>
+      p.evaluate((t) => {
+        [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t)?.click();
+      }, text);
+    await openAccountMenu(env.SEED_USER_EMAIL);
+    await sleep(500);
+    await clickByText("Sign out");
+    await sleep(800);
+
+    const newEmail = `newuser-${Date.now()}@example.com`;
+    await p.goto(`${BASE}/signup`, { waitUntil: "networkidle0" });
+    await sleep(500);
+    await p.type("input[type='email']", newEmail);
+    await p.type("input[type='password']", "newuserpass123");
+    await Promise.all([
+      p.waitForNavigation({ waitUntil: "networkidle0" }).catch(() => {}),
+      p.click("button[type='submit']"),
+    ]);
+    await sleep(1000);
+    ck(new URL(p.url()).pathname === "/", "sign-up lands on the board");
+    // apiJson isn't defined until later in this file — inline the same fetch here.
+    const newUserComics = await p.evaluate(() => fetch("/api/comics").then((r) => r.json()));
+    ck(
+      Array.isArray(newUserComics) && newUserComics.length === 0,
+      "the new account starts with an empty collection, not the seed data",
+    );
+
+    // Sign back in as the seed user for the rest of the suite.
+    await openAccountMenu(newEmail);
+    await sleep(500);
+    await clickByText("Sign out");
+    await sleep(800);
+    await p.goto(`${BASE}/login`, { waitUntil: "networkidle0" });
+    await sleep(500);
+    await p.type("input[type='email']", env.SEED_USER_EMAIL);
+    await p.type("input[type='password']", env.SEED_USER_PASSWORD);
+    await Promise.all([
+      p.waitForNavigation({ waitUntil: "networkidle0" }).catch(() => {}),
+      p.click("button[type='submit']"),
+    ]);
+    await sleep(1000);
+    ck(
+      new URL(p.url()).pathname === "/",
+      "signs back in as the seed account for the rest of the suite",
+    );
+  }
+
   const imgs = () => p.$$eval("main img[src*='thumb.webp']", (e) => e.length);
   // The board's "N covers" counter reflects the full (filtered) dataset, unlike
   // the mounted <img> count, which is a windowed subset now that the masonry is
@@ -347,6 +424,64 @@ try {
     `rating keeps other metadata (rating=${afterRate.rating}, artists kept=${afterRate.artists.includes("Integration Tester")})`,
   );
 
+  // Click-to-edit-per-field: clicking a display field (not the global Edit
+  // button) enters edit mode with that specific field focused.
+  await p.evaluate(() => {
+    document.querySelector("h2").closest("button").click();
+  });
+  await sleep(400);
+  const seriesFocused = await p.evaluate(() => {
+    const label = [...document.querySelectorAll("label")].find((l) =>
+      l.textContent.trim().startsWith("Series"),
+    );
+    const input = label?.parentElement.querySelector("input");
+    return !!input && document.activeElement === input;
+  });
+  ck(seriesFocused, "clicking the series title enters edit mode with the Series field focused");
+  await p.keyboard.press("Escape"); // back to display mode (cancelEdit), not closing the modal
+  await sleep(400);
+
+  // Arrow-key prev/next navigation follows the board's visible order (navOrder).
+  const beforeArrowUrl = p.url();
+  await p.keyboard.press("ArrowRight");
+  await sleep(500);
+  const afterArrowUrl = p.url();
+  ck(
+    afterArrowUrl !== beforeArrowUrl && /\/comic\//.test(afterArrowUrl),
+    "ArrowRight navigates the modal to the next comic",
+  );
+  await p.keyboard.press("ArrowLeft");
+  await sleep(500);
+  ck(p.url() === beforeArrowUrl, "ArrowLeft navigates back to the previous comic");
+
+  // Replace cover: upload path only — the Metron-search tab needs a live
+  // provider API key, same reason the Metron autofill UI isn't exercised
+  // elsewhere in this suite.
+  {
+    const tmpPngPath = path.join(DATA_DIR, "replace-cover-test.png");
+    fs.writeFileSync(
+      tmpPngPath,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    const beforeImage = (await apiJson(`/api/comics/${cid}`)).imageUrl;
+    const [replaceBtn] = await p.$$("xpath/.//button[normalize-space(.)='Replace cover']");
+    await replaceBtn.click();
+    await sleep(400);
+    const fileInput = await p.$("input[type='file']");
+    await fileInput.uploadFile(tmpPngPath);
+    await sleep(1200);
+    const afterReplace = await apiJson(`/api/comics/${cid}`);
+    ck(afterReplace.imageUrl !== beforeImage, "replacing the cover changes the comic's image URL");
+    ck(
+      await p.evaluate(() => document.body.textContent.includes("Cover replaced")),
+      "replace cover shows a success toast",
+    );
+    fs.rmSync(tmpPngPath, { force: true });
+  }
+
   await p.keyboard.press("Escape");
   await sleep(400);
 
@@ -441,6 +576,53 @@ try {
   );
   await p.keyboard.press("Escape");
   await sleep(600);
+
+  // Add-to-board / remove-from-board via the card menu (BoardMembershipList) —
+  // shared by the grid card menu and the detail modal, tested once here.
+  {
+    const boardsForMenu = await apiJson("/api/boards");
+    const targetBoard = boardsForMenu[0];
+    if (targetBoard) {
+      const cardLabel = await p.evaluate(() => document.querySelector("main img[src*='thumb.webp']").alt);
+      await p.evaluate(() => {
+        const img = document.querySelector("main img[src*='thumb.webp']");
+        img.closest(".group.relative").querySelector("div.absolute.right-2 button").click();
+      });
+      await sleep(300);
+      const findCard = async () => {
+        const all = await apiJson("/api/comics");
+        return all.find(
+          (c) => `${c.series} ${c.issueNumber ? `#${c.issueNumber}` : ""}`.trim() === cardLabel,
+        );
+      };
+      // A native DOM click (not Puppeteer's ElementHandle.click, which needs
+      // a real CDP clickable-point) re-queried fresh each time — robust
+      // against both the popover's own open animation and the toggle
+      // mutation's refetch potentially replacing the button's DOM node.
+      const clickBoardItem = () =>
+        p.evaluate((name) => {
+          [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === name)?.click();
+        }, targetBoard.name);
+      await clickBoardItem();
+      await sleep(500);
+      const afterAdd = await findCard();
+      ck(
+        !!afterAdd?.boardIds.includes(targetBoard.id),
+        "card menu 'Add to board' adds the comic to that board",
+      );
+      // Same button toggles it back off — the menu doesn't close between
+      // clicks (BoardMembershipList's toggle doesn't call a close()).
+      await clickBoardItem();
+      await sleep(500);
+      const afterRemove = await findCard();
+      ck(
+        !afterRemove?.boardIds.includes(targetBoard.id),
+        "clicking it again removes the comic from that board",
+      );
+      await p.keyboard.press("Escape");
+      await sleep(300);
+    }
+  }
 
   // Upload: POST /api/comics (multipart) creates a comic owned by the user, with
   // a generated thumbnail + dimensions; empty series is rejected.
@@ -642,6 +824,82 @@ try {
       countWithTag(after, "Variant") === variantBefore,
       "bulk 'Add tag' doesn't wipe an existing tag on comics that already had one (union, not overwrite)",
     );
+
+    // Bulk add-to-board / remove-from-board. Counts, not per-row identity —
+    // same reasoning as the tag check above. `boards[i].count` already
+    // exists on the API response, so this doesn't need its own lookup.
+    const boardsList = await apiJson("/api/boards");
+    const targetBoard = boardsList[0];
+    if (targetBoard) {
+      const countBefore = boardsList.find((b) => b.id === targetBoard.id).count;
+      // A later test ("custom board defaults to Manual sort") reuses this
+      // same board and needs it non-empty — BoardView shows an EmptyBoard
+      // state (no toolbar, no sort selector) once a board hits 0 comics
+      // (BoardView.tsx:128). Capture original membership so it can be
+      // restored after this test empties the board.
+      const originalMemberIds = (await apiJson("/api/comics"))
+        .filter((c) => c.boardIds.includes(targetBoard.id))
+        .map((c) => c.id);
+
+      const boardLabels1 = await p.$$("main .overflow-x-auto label");
+      await boardLabels1[1].click();
+      await p.keyboard.down("Shift");
+      await boardLabels1[3].click();
+      await p.keyboard.up("Shift");
+      await sleep(300);
+
+      const [addToBoardBtn] = await p.$$("xpath/.//button[normalize-space(.)='Add to board']");
+      await addToBoardBtn.click();
+      await sleep(300);
+      // Native DOM click (not Puppeteer's ElementHandle.click) — this button
+      // is inside an animated popover, same clickable-point flakiness as the
+      // card-menu case above.
+      await p.evaluate((name) => {
+        [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === name)?.click();
+      }, targetBoard.name);
+      await sleep(600);
+      const countAfterAdd = (await apiJson("/api/boards")).find((b) => b.id === targetBoard.id).count;
+      ck(
+        countAfterAdd === countBefore + 3,
+        `bulk 'Add to board' adds all 3 selected (count ${countBefore} -> ${countAfterAdd})`,
+      );
+
+      // "Remove from board" only shows while viewing that specific board (not
+      // My Comics) — go there, select everything on it, and clear it out.
+      await p.goto(`${BASE}/board/${targetBoard.id}`, { waitUntil: "networkidle0" });
+      await sleep(600);
+      await (await p.$$("button[aria-label='List view']"))[0].click();
+      await sleep(600);
+      const boardLabels2 = await p.$$("main .overflow-x-auto label");
+      await boardLabels2[0].click(); // header "select all"
+      await sleep(300);
+      const [removeBtn] = await p.$$("xpath/.//button[normalize-space(.)='Remove from board']");
+      await removeBtn.click();
+      await sleep(700);
+      const countAfterRemove = (await apiJson("/api/boards")).find((b) => b.id === targetBoard.id).count;
+      ck(countAfterRemove === 0, `bulk 'Remove from board' clears the board (count -> ${countAfterRemove})`);
+
+      // Restore original membership (see comment above) via direct API calls
+      // — this is cleanup, not the thing under test, so no need to go
+      // through the UI again.
+      for (const id of originalMemberIds) {
+        await p.evaluate(
+          ({ boardId, comicId }) =>
+            fetch(`/api/boards/${boardId}/comics/${comicId}`, { method: "PUT" }),
+          { boardId: targetBoard.id, comicId: id },
+        );
+      }
+      const countAfterRestore = (await apiJson("/api/boards")).find((b) => b.id === targetBoard.id).count;
+      ck(
+        countAfterRestore === countBefore,
+        `restores the board's original ${countBefore} members after the test (got ${countAfterRestore})`,
+      );
+
+      await p.goto(BASE, { waitUntil: "networkidle0" });
+      await sleep(500);
+      await (await p.$$("button[aria-label='List view']"))[0].click();
+      await sleep(600);
+    }
 
     // A successful bulk action clears the selection (onDone), so the bar from
     // "Add tag" above is already gone — re-select before testing Delete.

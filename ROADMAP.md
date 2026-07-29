@@ -220,10 +220,61 @@ needs it (maybe only list view, maybe only facet counts, maybe search but
 not sort), and building ahead of that risks solving the wrong piece. Wait
 for one of the two signals above.
 
-### 4d. Spec-driven behaviors *(design-for, don't build yet)*
+### 4d. Spec-driven behaviors — reframed as a test-coverage pass (shipped 2026-07-29)
 
-Convert the current feature set + ad-hoc test flows into structured
-per-feature behavior specs the unit + integration suites map onto.
+Originally scoped as a separate markdown spec file the test suites would map
+onto. Reframed: a spec file that just restates what the tests already check
+is redundant with the tests themselves — the integration/unit suites *are*
+the executable spec (each `ck(...)` and `it(...)` names a behavior in plain
+language). So instead of writing a spec doc, this became a coverage audit —
+find behaviors with no test at all, not behaviors with an undocumented test —
+which surfaced 13 real gaps. The 6 high-priority ones were filled:
+
+- `navOrder`'s `neighbors()` (`src/lib/nav-order.test.ts`, new unit tests) —
+  middle/first/last/not-found/empty/single-item cases.
+- Detail-modal click-to-edit-per-field (integration): clicking a display
+  field focuses that field in edit mode.
+- Modal arrow-key prev/next navigation (integration): `ArrowRight`/
+  `ArrowLeft` move between comics and the URL reflects it.
+- Add-to-board / remove-from-board, single and bulk (integration).
+- Cover-replace flow (integration): uploading a new file changes the comic's
+  `imageUrl` and shows a toast.
+- `GET /api/export` (integration): tested the route directly via `fetch`
+  rather than the real UI control, since clicking the account menu's export
+  button does a real `window.location.href` navigation to a binary response —
+  headless Chrome has no download behavior configured, and that navigation
+  crashed the whole Puppeteer session. The actual gap was route coverage
+  (auth + headers + content), not proving the click fires.
+- Sign-up flow (integration): a brand-new account lands on an empty board,
+  not the seed data.
+
+Along the way, found and fixed one real bug: a bulk "remove from board" test
+emptied a board a later, unrelated test depended on being non-empty
+(`BoardView.tsx` swaps to a no-toolbar empty state at 0 members) — state
+pollution between tests, fixed by restoring the board's original membership
+after the test. See `ENGINEERING_NOTES.md` for the fuller story, including a
+separate, pre-existing flakiness issue (an unrelated facet-count assertion
+varying across repeated full-suite runs) that was investigated and
+determined *not* to be caused by this work, then deliberately not chased
+further.
+
+Splitting `tests/integration.mjs` into per-feature files was considered as a
+followup to this reframing but deferred — a separate decision, not bundled
+with the coverage-gap fill.
+
+### 4e. Investigate integration-test-harness flakiness — not started
+
+A facet-count assertion ("DC-published comics" count) in an untouched,
+early part of the integration suite has returned different values (14, 13,
+12) across consecutive full-suite runs. Isolated during the 4d pass: a
+standalone seed+query script (same seed step, `better-sqlite3` directly, no
+browser/build involved) reliably returns 14 every time — so the *data* is
+deterministic, and whatever's non-deterministic is downstream of running a
+full `next build` + fresh headless-Chrome launch repeatedly and rapidly
+(exactly what iterating on a failing test does). Root cause not chased down
+yet — deferred during 4d at your call. See `ENGINEERING_NOTES.md` for the
+isolation technique. Worth a real look before this suite gets much bigger,
+since intermittent failures erode trust in "all green" over time.
 
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 
@@ -251,9 +302,9 @@ What's actually active after review (2026-07-29), in order:
 2. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
    on anything else here. **Server-side pagination** (4c) only once one of
    its two concrete signals shows up (list view gets janky, or search stops
-   feeling instant); **spec-driven behaviors** (4d) whenever process
-   overhead is justified. 4b was skipped.
+   feeling instant). 4b was skipped.
 3. ~~Sharing~~ — skipped.
 
-Undo delete (1), drag tabs to reorder (3), account settings (6), and
-list-view multi-select + bulk actions (2a) shipped 2026-07-29.
+Undo delete (1), drag tabs to reorder (3), account settings (6), list-view
+multi-select + bulk actions (2a), and the spec-driven-behaviors test-coverage
+pass (4d) shipped 2026-07-29.
