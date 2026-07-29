@@ -6,6 +6,14 @@ import { X } from "./icons";
 // Approx dropdown height (max-h-52 + paddings) used to decide flip direction.
 const DROPDOWN_H = 232;
 
+/**
+ * Whether the suggestions dropdown should open upward: only when it wouldn't fit
+ * in the room below the field and there's more room above than below.
+ */
+export function shouldOpenUp(above: number, below: number, dropdownHeight = DROPDOWN_H): boolean {
+  return below < dropdownHeight && above > below;
+}
+
 /** Nearest ancestor that scrolls (the edit/upload form), for room calculations. */
 function scrollParent(el: HTMLElement): HTMLElement | null {
   let p = el.parentElement;
@@ -64,7 +72,7 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
     const r = el.getBoundingClientRect();
     const below = bounds.bottom - r.bottom;
     const above = r.top - bounds.top;
-    setOpenUp(below < DROPDOWN_H && above > below);
+    setOpenUp(shouldOpenUp(above, below));
     // Nudge the field fully into view if it sits at the container's edge.
     requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   };
