@@ -272,19 +272,38 @@ the board's `N`, list view leaving the page in list mode for bulk-actions to
 continue from); each feature file documents its own preconditions/what it
 returns for the next one rather than pretending to be fully isolated.
 
-### 4e. Investigate integration-test-harness flakiness — not started
+### 4e. Integration-test-harness flakiness — root-caused and fixed (2026-07-29)
 
-A facet-count assertion ("DC-published comics" count) in an untouched,
-early part of the integration suite has returned different values (14, 13,
-12) across consecutive full-suite runs. Isolated during the 4d pass: a
-standalone seed+query script (same seed step, `better-sqlite3` directly, no
-browser/build involved) reliably returns 14 every time — so the *data* is
-deterministic, and whatever's non-deterministic is downstream of running a
-full `next build` + fresh headless-Chrome launch repeatedly and rapidly
-(exactly what iterating on a failing test does). Root cause not chased down
-yet — deferred during 4d at your call. See `ENGINEERING_NOTES.md` for the
-isolation technique. Worth a real look before this suite gets much bigger,
-since intermittent failures erode trust in "all green" over time.
+The suite wasn't flaky; it was intermittently testing **a different server
+serving an already-deleted database**. Interrupting a run (Ctrl-C on a failing
+test) orphaned the `next-server`, because teardown lived only in a `finally`
+block that signals skip. The orphan kept port 3940 *and* its open
+`better-sqlite3` file descriptors, so it went on serving the previous run's
+database even after the next run deleted `data/test` and re-seeded — POSIX
+keeps an unlinked inode alive while an fd references it. The next run's own
+server then failed with `EADDRINUSE` into an undrained stdio pipe (invisible),
+and `waitForServer()` — which only checked "does the port answer 200?" —
+happily accepted the orphan. Mutations accumulated across runs in a deleted
+database, and assertion counts drifted.
+
+Fixed in `tests/integration/lifecycle.mjs`:
+
+- `assertPortFree()` pre-flights the port *before* the build and fails in
+  ~0.1s with the `lsof` command to fix it, rather than burning a full build
+  cycle to produce wrong answers.
+- `startServer()` drains stdout/stderr into a bounded tail (the previous
+  unread `stdio: 'pipe'` was also a latent deadlock at ~64KB) and runs
+  `detached` so teardown can signal the whole `npx` → `npm exec` →
+  `next-server` group instead of just the direct child.
+- `waitForServer()` bails immediately with the server's output if it exited,
+  instead of looping 60s and reporting a bare "did not become ready".
+- `installSignalTeardown()` handles `SIGINT`/`SIGTERM`/`SIGHUP`, so
+  interrupting a run — the thing that created every orphan — cleans up.
+
+Verified: the port guard fires in 0.1s; a mid-run SIGINT now leaves no
+orphan and no leftover dirs; the full suite still reports the same 74 passes.
+See `ENGINEERING_NOTES.md` for the forensics (an `lsof` showing six open fds
+to a database directory that `ls` said didn't exist).
 
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 

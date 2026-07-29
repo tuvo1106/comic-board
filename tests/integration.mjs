@@ -17,7 +17,13 @@
  * the page in list view for bulk-actions to continue from).
  */
 import { fails, ck, env, sleep } from "./integration/env.mjs";
-import { buildAndSeed, startServer, launchBrowser, teardown } from "./integration/lifecycle.mjs";
+import {
+  buildAndSeed,
+  startServer,
+  launchBrowser,
+  teardown,
+  installSignalTeardown,
+} from "./integration/lifecycle.mjs";
 import { makeHelpers } from "./integration/helpers.mjs";
 
 import { loginAsSeed, signUpFlow, staleCookieLoop } from "./integration/features/auth.mjs";
@@ -37,11 +43,12 @@ import { listViewBasics } from "./integration/features/list-view.mjs";
 import { bulkActions } from "./integration/features/bulk-actions.mjs";
 import { boardTabsAndReorder } from "./integration/features/board-tabs.mjs";
 
-buildAndSeed();
+await buildAndSeed();
 const server = startServer();
 let browser;
+installSignalTeardown(() => ({ server, browser }));
 try {
-  const launched = await launchBrowser();
+  const launched = await launchBrowser(server);
   browser = launched.browser;
   const p = launched.p;
   const ctx = { p, ck, env, sleep, ...makeHelpers(p) };

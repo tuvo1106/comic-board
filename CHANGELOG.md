@@ -6,6 +6,22 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, detail-modal, and board-tabs fixes
 
+- **Root-caused the "flaky" integration suite (item 4e): it was testing a
+  deleted database.** Interrupting a run orphaned the test server (teardown
+  lived only in a `finally`, which signals skip); the orphan kept port 3940
+  and its open sqlite fds, so it served the *previous* run's database even
+  after the next run deleted and re-seeded — while that run's own server died
+  of `EADDRINUSE` into an undrained stdio pipe, and `waitForServer()` (which
+  only checked for a 200) accepted the orphan. Hardened
+  `tests/integration/lifecycle.mjs`: pre-flight the port and fail in 0.1s with
+  the fix command, drain and surface server output, bail early if the server
+  exits, kill the whole process group, and tear down on
+  `SIGINT`/`SIGTERM`/`SIGHUP`.
+- **Split `tests/integration.mjs` into per-feature files** —
+  `tests/integration/{env,lifecycle,helpers}.mjs` plus one file per feature
+  area under `tests/integration/features/`, with the entry point reduced to
+  setup/teardown and run order. Pure reorganization; same single build,
+  server, and browser page, same assertions.
 - **Test-coverage gap fill (item 4d, reframed from a planned spec doc).**
   Rather than write a separate markdown spec, treated the test suites
   themselves as the spec and audited for behaviors with no test at all. Added

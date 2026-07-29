@@ -20,6 +20,71 @@ the elevator pitch, the rest is what I'd say if asked to go deeper.
 
 ## Bugs
 
+### The flaky test suite was testing a deleted database (2026-07-29)
+
+**A "flaky" integration suite turned out to be deterministic all along — it
+was just talking to the wrong server, which was serving a database that no
+longer existed on disk.**
+
+Symptom: an assertion in an untouched, early part of the suite ("DC-published
+comics" count) returned different numbers on different runs — 14, then 13,
+then 12 — while re-running the seed step in isolation was perfectly
+deterministic (always 14). Classic "must be a timing thing" shape, and easy
+to write off as slow-CI flakiness.
+
+It wasn't timing. The harness had three small gaps that compounded into one
+big one:
+
+1. **`waitForServer()` only asked "does the port answer 200?"** — it never
+   verified the answering server was the one it had just started.
+2. **`spawn()` used the default `stdio: 'pipe'` with nothing reading it**, so
+   when the real `next start` failed with `EADDRINUSE`, the error went into a
+   pipe no one drained — completely invisible. (That unread pipe is also a
+   latent deadlock: fill ~64KB and the child blocks on write forever.)
+3. **Teardown lived only in `finally`**, which a signal skips entirely. Ctrl-C
+   on a failing test — the single most routine thing you do while iterating —
+   orphaned the server instead of killing it.
+
+Chain it together: interrupt one run → orphaned `next-server` keeps port 3940
+→ next run deletes `data/test`, re-seeds a fresh db, starts its own server,
+which fails silently on the taken port → `waitForServer` gets its 200 from the
+**orphan** → the whole suite runs against the orphan. And the orphan is still
+serving the *old* database, because `better-sqlite3` holds open file
+descriptors and POSIX keeps an unlinked inode alive as long as an fd
+references it. So each interrupted run's mutations accumulated in a database
+that had already been deleted, and the counts drifted.
+
+The satisfying part was the forensics: `lsof -p <orphan>` showed six open fds
+to `data/test/test.db`, `-wal`, and `-shm` while `ls data/test` reported no
+such directory — a live process reading and writing a directory that doesn't
+exist. The `-wal` had grown to 3.5MB of accumulated mutations. That single
+command turned "probably flaky" into a proven mechanism. (The orphan had also
+been pegged at 100% CPU for two and a half hours, which is its own reason to
+care.)
+
+Fixes, in order of how much they'd have saved: pre-flight the port and refuse
+to run if it's taken (fails in 0.1s with the `lsof` line to fix it, instead of
+a full build cycle producing wrong answers); drain the server's stdio into a
+bounded buffer and surface it when the server dies or never becomes ready;
+tear down on `SIGINT`/`SIGTERM`/`SIGHUP`, not just in `finally`; and kill the
+whole process *group* (`process.kill(-pid)`), since `spawn("npx", …)` builds a
+three-level tree (`npx` → `npm exec` → `next-server`) and signalling only the
+direct child can leave the actual server behind.
+
+Two general lessons worth stating out loud in an interview: **"flaky" is a
+hypothesis, not a diagnosis** — here the data was deterministic and the
+*plumbing* was non-deterministic, which is a different bug in a different
+place than where everyone looks. And **a readiness check that doesn't verify
+identity isn't a readiness check** — "something answered" is not "the thing I
+started answered," and that gap is where a whole class of test-infrastructure
+bugs lives.
+
+- Where: `tests/integration/lifecycle.mjs` (`assertPortFree`, `startServer`,
+  `waitForServer`, `killServerTree`, `installSignalTeardown`)
+- See also: the entry below, written while this was still unexplained — kept
+  as-is, since the isolation technique it describes is what eventually
+  cornered this.
+
 ### Isolating "is this my bug or the environment's?" under a flaky test harness (2026-07-29)
 
 **A new test failed intermittently, and the fastest way to find out whose
