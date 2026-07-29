@@ -16,6 +16,99 @@ it.
 tradeoff) → outcome. Optimized for "tell me about a time…" — the bold line is
 the elevator pitch, the rest is what I'd say if asked to go deeper.
 
+**Sections:** `Patterns` first — synthesis across several bugs, for "what have
+you learned" rather than "what did you fix"; that's the stronger answer and the
+one worth leading with. Then `Bugs` and `Design decisions`, the individual
+stories it draws on. When a new entry rhymes with an existing one, add it to the
+relevant pattern too — the connection is the valuable part and it's the first
+thing to go stale in memory.
+
+---
+
+## Patterns
+
+Synthesis across the individual entries below. More useful in an interview than
+any single war story: it answers "what have you learned" rather than "what did
+you fix."
+
+### Two sources of truth that agree in the happy path
+
+**Six bugs in this project turned out to be the same bug. Two things that
+normally agree, and nobody handled the case where they don't.** Individually
+each check was correct, and often *necessarily* different from its counterpart —
+the disagreement space just went unconsidered. (Only some have their own entry
+below; the rest are in `CHANGELOG.md`.)
+
+Three flavours, which matter because the fix differs:
+
+**a) Two checks of the same fact at different layers.** They can't be unified —
+the layers have different capabilities — so the fix is to handle disagreement
+explicitly, not to make them agree.
+
+- Page middleware checked auth-cookie *presence* (all the edge can do cheaply);
+  the API checked its *signature*. A rotated secret makes a cookie present but
+  invalid → 401 → redirect to `/login` → the gate sees the cookie and bounces
+  back. Infinite loop, and `httpOnly` means client JS can't break out. Fix: the
+  401 path clears the cookie server-side. → [see below](#a-stale-but-present-auth-cookie-caused-an-infinite-redirect-loop-2026-07-22)
+- The integration harness checked the server's *liveness* ("does the port answer
+  200?") but not its *identity* ("is this the server I started?"). An orphan
+  from an interrupted run answers 200 perfectly well — while serving a database
+  that had already been deleted. Fix: pre-flight the port, and make teardown
+  crash-safe so orphans stop being created.
+
+**b) Two variables holding one piece of state, with a reachable combination —
+or a stale copy — unhandled.** The fix is usually a third state, an enum, or a
+way to tell "mine" from "theirs".
+
+- `coverLoading` and `cover` were read as `coverLoading || !cover` → "loading".
+  On success: `false` + set. On *failure*: `false` + still null — the same cell
+  as "loading", so a failed fetch rendered a spinner that could never resolve,
+  with only a transient toast to say otherwise. Fix: an explicit `coverError`.
+- Same file, same day, different cell: the early-return branch cleared `cover`
+  but not `coverLoading`, so deselecting mid-load left the spinner stuck.
+- The search box keeps local input state *and* mirrors it into the URL. Both
+  hold the same value, and the re-sync couldn't tell "the URL changed because
+  the user hit back" from "the URL changed because my own debounced write
+  landed" — so a late echo clobbered newer keystrokes. Purest form of the
+  pattern: not two *checks* disagreeing but two *copies* diverging. Fix: track
+  what this component last wrote, and only adopt changes that aren't its own.
+  → [see below](#debounced-search-silently-dropped-fast-typed-characters-2026-07-29)
+
+**c) A hardcoded mirror of external reality, which drifts.** The fix is a loud
+failure and a note about what would invalidate it.
+
+- `ALLOWED_COVER_HOSTS` is exactly `{"static.metron.cloud"}` — necessary as an
+  SSRF guard, but it silently becomes wrong the day the provider adds a CDN
+  host, and then *every* cover fails at once. Config drift that breaks for
+  everyone simultaneously, same shape as the secret rotation in (a).
+- Non-code instance: `AGENTS.md` claimed the repo had no working linter. True
+  once, then false, and nothing detects a stale doc — so two `react-hooks`
+  errors shipped because the docs said not to look. Docs are state too.
+
+**The reusable move:** for any two things that "obviously agree," enumerate the
+product of their states and ask which cells are unhandled. It's a mechanical
+design-review question — cheap to ask, and it would have caught all six before
+they were written.
+
+### The bug class picks the tool that finds it
+
+**None of these were found by the obvious method, and each needed a different
+one.** Worth saying because "write more tests" is the wrong lesson.
+
+| how it was found | what only that method could see |
+|---|---|
+| code review | the auth-cookie loop — invisible until a secret rotation, which then hits every signed-in user at once |
+| `lsof` forensics | the orphaned server holding six fds to a database directory `ls` said didn't exist |
+| a stubbed provider | the failed-cover spinner — I had read that function twice and missed it |
+| a screenshot | the dropdown clipped by the dialog; every DOM assertion passed, because `getBoundingClientRect` can't see overflow clipping |
+
+The middle two are the sharpest pair: in *the same component*, careful reading
+found one stuck-spinner bug and walked straight past a second one four lines
+away — and the stub that caught the second was itself structurally incapable of
+seeing the clipped dropdown, because assertions on the DOM can't observe
+overflow clipping at all. Each layer is blind to a whole class the next one
+sees; knowing which layer to reach for is the actual skill.
+
 ---
 
 ## Bugs
