@@ -53,6 +53,9 @@ export function ComicDetail({ id, asModal }: Props) {
   const [editing, setEditing] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [form, setForm] = useState<ComicFormValue | null>(null);
+  // Which field to focus once the form mounts — set when the user clicks
+  // directly on a display-mode field instead of the global Edit button.
+  const [focusField, setFocusField] = useState<keyof ComicFormValue | null>(null);
 
   // A cold open mounts the <img> before full.webp has decoded, so the shared
   // element measures a zero-size box and the fly-in is skipped. Start from the
@@ -76,9 +79,10 @@ export function ComicDetail({ id, asModal }: Props) {
     };
   }, [imageUrl]);
 
-  const startEdit = () => {
+  const startEdit = (field?: keyof ComicFormValue) => {
     if (comic) {
       setForm(toForm(comic));
+      setFocusField(field ?? null);
       setEditing(true);
     }
   };
@@ -229,7 +233,7 @@ export function ComicDetail({ id, asModal }: Props) {
             // opens full-size instead of a small box that grows.
             <div className="aspect-[2/3] h-[45vh] max-w-full animate-pulse rounded-lg bg-surface-2 md:h-[76vh]" />
           )}
-          {comic && editing && (
+          {comic && (
             <button
               onClick={() => setReplacing(true)}
               className="absolute bottom-6 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
@@ -246,9 +250,21 @@ export function ComicDetail({ id, asModal }: Props) {
               {isLoading && <div className="h-6 w-40 animate-pulse rounded bg-surface-2" />}
               {comic && (
                 <>
-                  <h2 className="text-xl font-bold leading-tight">{comic.series}</h2>
+                  <button
+                    type="button"
+                    onClick={() => startEdit("series")}
+                    className="-mx-1 block rounded-md px-1 text-left transition hover:bg-surface-2"
+                  >
+                    <h2 className="text-xl font-bold leading-tight">{comic.series}</h2>
+                  </button>
                   {comic.issueNumber && (
-                    <p className="mt-0.5 text-sm font-medium text-muted">#{comic.issueNumber}</p>
+                    <button
+                      type="button"
+                      onClick={() => startEdit("issueNumber")}
+                      className="-mx-1 mt-0.5 block rounded-md px-1 text-left transition hover:bg-surface-2"
+                    >
+                      <p className="text-sm font-medium text-muted">#{comic.issueNumber}</p>
+                    </button>
                   )}
                 </>
               )}
@@ -263,7 +279,7 @@ export function ComicDetail({ id, asModal }: Props) {
 
           {comic && editing && form ? (
             <div className="flex-1 overflow-y-auto p-5">
-              <MetadataForm value={form} onChange={setForm} />
+              <MetadataForm value={form} onChange={setForm} focusField={focusField} />
             </div>
           ) : comic ? (
             <motion.div
@@ -282,41 +298,49 @@ export function ComicDetail({ id, asModal }: Props) {
               {(comic.publisher || comic.coverDate) && (
                 <div className="flex flex-wrap gap-x-6 gap-y-3">
                   {comic.publisher && (
-                    <div>
+                    <button
+                      type="button"
+                      onClick={() => startEdit("publisher")}
+                      className="-mx-1 rounded-md px-1 text-left transition hover:bg-surface-2"
+                    >
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
                         Publisher
                       </p>
                       <span className="text-sm text-fg">{comic.publisher}</span>
-                    </div>
+                    </button>
                   )}
                   {comic.coverDate && (
-                    <div>
+                    <button
+                      type="button"
+                      onClick={() => startEdit("coverDate")}
+                      className="-mx-1 rounded-md px-1 text-left transition hover:bg-surface-2"
+                    >
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
                         Cover date
                       </p>
                       <span className="text-sm">{formatDate(comic.coverDate)}</span>
-                    </div>
+                    </button>
                   )}
                 </div>
               )}
 
               {comic.authors.length > 0 && (
-                <Field label="Author">
+                <Field label="Author" onClick={() => startEdit("authors")}>
                   <ChipRow values={comic.authors} />
                 </Field>
               )}
               {comic.artists.length > 0 && (
-                <Field label="Cover Artists">
+                <Field label="Cover Artists" onClick={() => startEdit("artists")}>
                   <ChipRow values={comic.artists} />
                 </Field>
               )}
               {comic.characters.length > 0 && (
-                <Field label="Characters on cover">
+                <Field label="Characters on cover" onClick={() => startEdit("characters")}>
                   <ChipRow values={comic.characters} />
                 </Field>
               )}
               {comic.tags.length > 0 && (
-                <Field label="Tags">
+                <Field label="Tags" onClick={() => startEdit("tags")}>
                   <ChipRow values={comic.tags} />
                 </Field>
               )}
@@ -353,7 +377,7 @@ export function ComicDetail({ id, asModal }: Props) {
             ) : (
               <>
                 <button
-                  onClick={startEdit}
+                  onClick={() => startEdit()}
                   disabled={!comic}
                   className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-50"
                 >
@@ -479,7 +503,31 @@ function BoardsField({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  /** When set, the whole field becomes a click target that enters edit mode.
+   *  Only pass this for fields whose children are non-interactive (e.g.
+   *  ChipRow) — wrapping a field with real buttons in it (e.g. Boards) would
+   *  nest <button> inside <button>. */
+  onClick?: () => void;
+}) {
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="-mx-1 block w-full rounded-md px-1 text-left transition hover:bg-surface-2"
+      >
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+        {children}
+      </button>
+    );
+  }
   return (
     <div>
       <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>

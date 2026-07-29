@@ -12,10 +12,12 @@ interface Props {
   onChange: (values: string[]) => void;
   suggestions: string[];
   placeholder?: string;
+  /** Focus the input on mount (used by the click-to-edit fields). */
+  autoFocus?: boolean;
 }
 
 /** Multi-value tag input with autocomplete and create-on-enter. */
-export function TagInput({ values, onChange, suggestions, placeholder }: Props) {
+export function TagInput({ values, onChange, suggestions, placeholder, autoFocus }: Props) {
   const [input, setInput] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +76,7 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
         ))}
         <input
           ref={inputRef}
+          autoFocus={autoFocus}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onFocus={onFocus}

@@ -29,6 +29,9 @@ export const EMPTY_FORM: ComicFormValue = {
 interface Props {
   value: ComicFormValue;
   onChange: (value: ComicFormValue) => void;
+  /** Field to focus once the form mounts (set when the user clicked directly
+   *  on a display-mode field rather than the global Edit button). */
+  focusField?: keyof ComicFormValue | null;
 }
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -40,7 +43,7 @@ function Label({ children, required }: { children: React.ReactNode; required?: b
   );
 }
 
-export function MetadataForm({ value, onChange }: Props) {
+export function MetadataForm({ value, onChange, focusField }: Props) {
   const { data: meta } = useMeta();
   const set = <K extends keyof ComicFormValue>(key: K, v: ComicFormValue[K]) =>
     onChange({ ...value, [key]: v });
@@ -54,6 +57,7 @@ export function MetadataForm({ value, onChange }: Props) {
           onChange={(v) => set("series", v)}
           suggestions={(meta?.series ?? []).map((s) => s.value)}
           placeholder="e.g. The Amazing Spider-Man"
+          autoFocus={focusField === "series"}
         />
       </div>
 
@@ -64,6 +68,7 @@ export function MetadataForm({ value, onChange }: Props) {
             value={value.issueNumber}
             onChange={(e) => set("issueNumber", e.target.value)}
             placeholder="14"
+            autoFocus={focusField === "issueNumber"}
             className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent placeholder:text-muted"
           />
         </div>
@@ -73,6 +78,7 @@ export function MetadataForm({ value, onChange }: Props) {
             type="date"
             value={value.coverDate ?? ""}
             onChange={(e) => set("coverDate", e.target.value)}
+            autoFocus={focusField === "coverDate"}
             className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent [color-scheme:dark]"
           />
         </div>
@@ -85,6 +91,7 @@ export function MetadataForm({ value, onChange }: Props) {
           onChange={(v) => set("publisher", v)}
           suggestions={(meta?.publishers ?? []).map((p) => p.value)}
           placeholder="e.g. Marvel, DC"
+          autoFocus={focusField === "publisher"}
         />
       </div>
 
@@ -95,6 +102,7 @@ export function MetadataForm({ value, onChange }: Props) {
           onChange={(v) => set("authors", v)}
           suggestions={(meta?.authors ?? []).map((a) => a.value)}
           placeholder="Writer — add and press Enter"
+          autoFocus={focusField === "authors"}
         />
       </div>
 
@@ -105,6 +113,7 @@ export function MetadataForm({ value, onChange }: Props) {
           onChange={(v) => set("artists", v)}
           suggestions={(meta?.artists ?? []).map((a) => a.value)}
           placeholder="Add an artist and press Enter"
+          autoFocus={focusField === "artists"}
         />
       </div>
 
@@ -115,6 +124,7 @@ export function MetadataForm({ value, onChange }: Props) {
           onChange={(v) => set("characters", v)}
           suggestions={(meta?.characters ?? []).map((c) => c.value)}
           placeholder="Add a character and press Enter"
+          autoFocus={focusField === "characters"}
         />
       </div>
 
@@ -125,6 +135,7 @@ export function MetadataForm({ value, onChange }: Props) {
           onChange={(v) => set("tags", v)}
           suggestions={(meta?.tags ?? []).map((t) => t.value)}
           placeholder="e.g. facsimile, homage, key issue"
+          autoFocus={focusField === "tags"}
         />
       </div>
     </div>
