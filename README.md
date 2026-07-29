@@ -121,10 +121,5 @@ exist — import is a restore, not signup.
 
 ## Roadmap
 
-Accounts + ownership, half-star ratings, the editable list view, and CI have all
-shipped (see [`DESIGN.md`](./DESIGN.md) §8). Next:
-
-- Drag tabs to reorder boards; drag a card onto a tab to add it.
-- "Smart boards" (a saved filter query instead of a snapshot).
-- Cloud storage via the existing `StorageAdapter`.
-- ComicVine autofill on upload.
+See [`CHANGELOG.md`](./CHANGELOG.md) for what's shipped and
+[`ROADMAP.md`](./ROADMAP.md) for what's planned next.

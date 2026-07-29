@@ -26,8 +26,9 @@ portal-based overlays, unit + integration tests.
 & boards, half-star (0.5–5) ratings + sort-by-rating, an editable list view, and
 CI (unit + integration). See §8 for the shipped slices; §9 for release status.
 
-**Next (not built):** smart boards, cloud storage, drag card→tab / drag-tabs,
-and ComicVine autofill — see §8.5.
+**Also shipped post-1.0:** export/backup, Metron metadata autofill on upload,
+replace-cover. See [`CHANGELOG.md`](./CHANGELOG.md) for the full history and
+[`ROADMAP.md`](./ROADMAP.md) for what's next.
 
 ---
 
@@ -264,20 +265,10 @@ Ordered; each is a self-contained slice.
 - A second job runs `npm run test:integration` in headless Chrome (provisioned
   via a setup-chrome step) against the isolated test DB/port.
 
-### 8.5 Later (design-for, don't build yet)
-- **Spec-driven behaviors** — convert the current feature set + ad-hoc test flows
-  into structured specs (per-feature behavior specs / BDD-style test descriptions)
-  the unit + integration suites map onto. Formalize eventually.
-- **Cloud storage** via the existing `StorageAdapter`.
-- **Smart boards** — a board backed by a stored filter query (live counterpart to
-  save-view snapshots); `Board.query` JSON column.
-- **Drag card → tab** to add to a board; **drag tabs** to reorder.
-- **ComicVine autofill** on upload (field structure already matches).
-- **Server-side filtering + pagination** for very large collections — the board is
-  already **client-side virtualized** (bounded DOM), so this is only needed when the
-  full-board payload itself (all comics in memory) becomes too big; at that point
-  facet counts, global sort, and search move server-side too.
-- Sharing / public boards.
+### 8.5 Later
+
+Design-for-later work now lives in [`ROADMAP.md`](./ROADMAP.md), tracked in
+one place instead of drifting out of sync with it.
 
 ---
 

@@ -1,27 +1,18 @@
 # Roadmap
 
-What to build after the bug-fix pass (see `CODE_REVIEW.md` for the fixes
-themselves). Ordered by recommended sequence: data safety first, then the
-biggest UX win, then collection features, then sharing. Effort estimates are
-rough single-dev figures.
+What's planned next, in recommended order. Effort estimates are rough
+single-dev figures. For what's already shipped, see
+[`CHANGELOG.md`](./CHANGELOG.md).
+
+Each numbered item below is a multi-file feature with product/architecture
+decisions still to make — open a planning pass (scope, schema, API shape, UI
+flow) before writing code; don't cold-start one from a bare item description
+(see `AGENTS.md`).
 
 ---
 
-## 1. Data safety *(do first — protects everything else)*
+## 1. Undo delete — ~half a day
 
-### 1a. Export / backup — ~1 day
-The whole collection is one sqlite file plus `data/covers/`. Add:
-
-- `GET /api/export` — streams a zip: `collection.json` (comics, boards,
-  memberships, in DTO form) + every cover's `full.webp`.
-- An import path (CLI script is enough to start: `npm run db:import <zip>`)
-  that recreates comics via the existing `createComic`, so ids/thumbs/blurs
-  regenerate cleanly.
-
-Also defuses the standing "reseed wiped my edits" failure mode — a backup is
-one click before any risky operation.
-
-### 1b. Undo delete — ~half a day
 Delete is confirm-dialog-or-nothing. Replace with soft delete:
 
 - Add `deletedAt` to `comics`; scope every query in `src/db/queries.ts` to
@@ -31,89 +22,87 @@ Delete is confirm-dialog-or-nothing. Replace with soft delete:
 - Defer file deletion (`storage.delete`) to a sweep of rows deleted >24h ago,
   run opportunistically at startup.
 
-## 2. Integration suite in CI — ~1 hour
-`.github/workflows/ci.yml` runs typecheck + unit tests only. The integration
-suite (`npm run test:integration`) — where the real regression coverage lives,
-including the modal-animation specs — never runs automatically.
-`tests/integration.mjs` already isolates its DB and honors `CHROME_PATH`;
-ubuntu runners ship Chrome. Add it as a second job (or step) so it gates
-merges. Expect to bump some `sleep`-based waits if the runner is slow — the
-file already documents that pattern.
+## 2. Collection features *(independent; pick by taste)*
 
-## 3. Metadata autofill — ~2–4 days *(biggest UX win)*
-Manual entry is the app's dominant friction; the batch-upload flow carries
-series/publisher/artists forward precisely because typing is tedious.
+### 2a. Multi-select + bulk actions — ~1–2 days
 
-- Wire the upload form to a comics database API — Comic Vine (free API key),
-  or Metron / Grand Comics Database as alternatives.
-- Flow: type series + issue → server-side proxy route queries the API (keeps
-  the key off the client, adds caching) → prefill publisher, cover date,
-  creators, characters → user confirms/edits. `ComicFormValue` maps ~1:1 to
-  what these APIs return.
-- Stretch: match against the uploaded cover image itself (Comic Vine returns
-  cover URLs; a perceptual-hash comparison picks the right variant).
-
-## 4. Collection features *(independent; pick by taste)*
-
-### 4a. Multi-select + bulk actions — ~1–2 days
 Select several covers (click-drag or shift-click) → add to board / tag / set
 publisher / delete. All the mutations exist; this is selection UI plus a
-small action bar. The board-membership list extraction from the review
-(finding #15) is a natural prerequisite.
+small action bar.
 
-### 4b. Duplicate detection at upload — ~1 day
-Store a perceptual hash (dHash off an 9×8 grayscale downsample — sharp does
+### 2b. Duplicate detection at upload — ~1 day
+
+Store a perceptual hash (dHash off a 9×8 grayscale downsample — sharp does
 this in one pipeline step) per comic. On upload, compare against the user's
 hashes and warn "this looks like a cover you already have" with a
 side-by-side. Pure additive: one column, one comparison, one dialog.
 
-### 4c. Stats page — ~1 day
+### 2c. Stats page — ~1 day
+
 Counts by publisher / decade / artist, rating distribution, growth over time.
 `getMeta` already computes most aggregates; cover-date decades and
 `createdAt` growth are simple additions. One page of charts; makes the
 collection browsable in a new way.
 
-### 4d. Collector fields — ~1 day
+### 2d. Collector fields — ~1 day
+
 `purchasePrice`, `currentValue`, `grade` (CGC-style), `condition` on comics.
 Schema migration + form fields + optional list-view columns + a total-value
 stat. This is what turns "cover gallery" into "collection tracker."
 
-### 4e. Replace an existing comic's cover — ~half a day
-The cover image is set only at upload; there's no way to swap it later. Add a
-"Replace cover" action (detail modal + card menu) that re-runs `processUpload`
-on a new image and overwrites the `full`/`thumb`/`blur` assets for that comic
-id, keeping all metadata/board memberships. Two sources: upload a new file, or
-pull a different cover from Metron (reuse the autofill cover picker + variants —
-e.g. grab a specific variant or a higher-res scan after the fact). Mostly
-wiring: an image-replace endpoint that regenerates the derivatives + cache
-invalidation. Pairs naturally with the metadata-autofill work.
+### 2e. Autocomplete the collection search — ~half a day
 
-### 4f. Autocomplete the collection search — ~half a day
-The top-bar search ("Search series, artists, characters…") is plain free-text.
-Add a typeahead dropdown suggesting matches from the **current collection** —
-`getMeta` already returns the series / publisher / author / artist / character
-lists, so this is entirely client-side (no API): filter those on input, show a
-grouped suggestion list, and selecting one sets the search term. Can reuse the
-existing `Autocomplete` component. Keyboard nav + click-to-select.
+The top-bar search ("Search series, artists, characters…") is plain
+free-text. Add a typeahead dropdown suggesting matches from the **current
+collection** — `getMeta` already returns the series / publisher / author /
+artist / character lists, so this is entirely client-side (no API): filter
+those on input, show a grouped suggestion list, and selecting one sets the
+search term. Can reuse the existing `Autocomplete` component. Keyboard nav +
+click-to-select.
+
+## 3. Board interaction
+
+- **Drag tabs to reorder boards**; drag a card onto a tab to add it to that
+  board.
+- **Smart boards** — a board backed by a stored filter query instead of a
+  point-in-time snapshot (`Board.query` JSON column), so it stays live as the
+  collection changes.
+
+## 4. Infrastructure *(design-for, don't build yet)*
+
+- **Cloud storage** via the existing `StorageAdapter` — local FS today, S3/R2
+  is meant to be a drop-in.
+- **Server-side filtering + pagination** for very large collections — the
+  board is already client-side virtualized (bounded DOM), so this is only
+  needed once the full-board payload itself (all comics in memory) gets too
+  big; at that point facet counts, global sort, and search move server-side
+  too.
+- **Spec-driven behaviors** — convert the current feature set + ad-hoc test
+  flows into structured per-feature behavior specs the unit + integration
+  suites map onto.
 
 ## 5. Sharing — bigger; decide deliberately
+
 Public read-only board links are the natural evolution of boards, but they
-force two review findings to be resolved first:
+force two things to be resolved first:
 
-- `/images/**` auth (review #7): shared boards need cover access for
+- **`/images/**` auth** — the route does no session check today (comic ids
+  are unguessable 14-char nanoids, fine for a personal app, but a leaked URL
+  serves the cover to anyone forever). Shared boards need cover access for
   anonymous viewers — likely signed URLs or a per-board access check.
-- The globally-shared publisher/tag namespace (review #10): renames currently
-  have cross-user effects; real multi-user needs per-user or copy-on-write
-  name tables.
+- **The globally-shared publisher/tag namespace** — renames currently have
+  cross-user effects (any user who owns one comic with a publisher can rename
+  the globally-shared row, repointing every user's comics). Fine single-user;
+  real multi-user sharing needs per-user or copy-on-write name tables.
 
-Sequence this after the data-safety work, not before.
+Sequence this after the items above, not before.
 
 ---
 
 ## Suggested order
 
-1. Export/backup (1a) — everything else becomes safe to try.
-2. CI integration job (2) — cheap, compounds immediately.
-3. Undo delete (1b).
-4. Metadata autofill (3) — the headline feature.
-5. Then 4a–4d by appetite; sharing (5) only with its prerequisites.
+1. Undo delete (1) — the remaining data-safety gap.
+2. Collection features (2a–2e) by appetite.
+3. Board interaction (3).
+4. Infrastructure (4) only once something in 2–3 actually needs it.
+5. Sharing (5) only with its two prerequisites resolved.

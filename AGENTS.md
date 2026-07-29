@@ -1,16 +1,32 @@
 # AGENTS.md
 
 Guidance for AI agents working in this repo. Human-facing docs live in
-`README.md`; the review/roadmap docs are `CODE_REVIEW.md`, `DESIGN_REVIEW.md`,
-`ROADMAP.md`.
+`README.md`; what's shipped is `CHANGELOG.md`; what's planned is `ROADMAP.md`.
 
 ## Working the backlog
 
-`TODO.md` is the ordered work queue. Each item is self-contained: pick the first
-unchecked `- [ ]`, do only that, run its **Verify**, tick the box, and commit
-with a message naming the item (e.g. `TODO item 19: …`). Locate code by symbol
-name, not the line numbers in the source docs — those drift. Don't cold-start
-anything in the **Epics** section; each needs its own planning pass.
+There's no standing `TODO.md` right now — the last review pass (a full code
+review + a screenshot-driven UI/UX review, 2026-07-19) is fully resolved; see
+`CHANGELOG.md`. Forward-looking work lives in `ROADMAP.md`.
+
+When a future review pass produces a work queue — a `TODO.md` of self-contained,
+checkbox items — work it like this:
+
+1. Read the whole file, then pick the **first unchecked `- [ ]`** item. Do
+   only that one.
+2. Run its **Already-done check** first. If already satisfied, tick the box
+   and stop — don't redo it.
+3. Make the change in the listed files. Locate code by **symbol name**, not
+   line numbers in the source docs — those drift as items land.
+4. Run **Verify**. It must pass.
+5. Tick the box `- [x]`, commit with a message naming the item (e.g.
+   `TODO item 19: …`), stop.
+6. `[dep: N]` means item N must be done first — confirm its result exists in
+   the code before starting. `- [-]` marks an item **deliberately skipped**
+   (reason noted inline); treat it as done-for-now, don't redo it.
+7. **Never cold-start an Epics-section item** (or a bare `ROADMAP.md` item) —
+   each is a multi-file feature with unmade product/architecture decisions;
+   it needs its own planning session first.
 
 ## Verify commands
 
