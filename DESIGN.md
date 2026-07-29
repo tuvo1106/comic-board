@@ -41,10 +41,12 @@ replace-cover. See [`CHANGELOG.md`](./CHANGELOG.md) for the full history and
 | Animation | **Motion (Framer Motion) v12** | `layout` for reflow, `layoutId` for the card→detail shared element. |
 | Drag & drop | **@dnd-kit** (core + sortable) | Swap on drop; pointer-precise collision; render windowed to viewport. |
 | Database | **SQLite via Drizzle ORM** (better-sqlite3) | Zero-ops; migrates cleanly to Postgres later. |
+| Auth | **better-auth** | Email/password; HTTP-only session cookie. |
 | Image storage | **Local filesystem** behind a `StorageAdapter` | S3/R2 is a drop-in later. |
 | Image processing | **sharp** | full webp + ~500px thumb + tiny blur placeholder on upload. |
 | Validation | **zod** | Shared request schemas. |
 | Data fetching | **TanStack Query** | Optimistic reorder/edit; cache invalidation. |
+| Backup | **fflate** | Zips/unzips the collection export (`collection.json` + covers). |
 | Tests | **vitest** (unit) + **puppeteer-core** (integration) | `npm test`, `npm run test:integration`. |
 
 Node 22 LTS pinned in `.nvmrc` (runs on 25 with `typescript.ignoreBuildErrors`
@@ -82,7 +84,7 @@ Publisher        (id PK, name, nameKey UNIQUE)    -- Comic.publisherId FK; renam
 -- Auth tables (better-auth, in db/auth-schema.ts):
 User             (id PK, email UNIQUE, name, emailVerified, createdAt)
 Session          (id PK, userId FK, token, expiresAt, …)
-Account          (id PK, userId FK, providerId, password hash for email/password)
+Account          (id PK, userId FK, providerId, password hash for email/password, …)
 Verification     (id PK, identifier, value, expiresAt)
 ```
 
@@ -110,19 +112,30 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 | Method & path | Purpose |
 |---|---|
 | `GET /api/comics?board=<id>` | List comics (joined authors/artists/characters/tags + board memberships), ordered by position. |
+| `GET /api/comics/:id` | Fetch a single comic (joined relations) — the detail view / deep link. |
 | `POST /api/comics` | Multipart upload: image + metadata JSON (+ optional `boardIds`). |
 | `PATCH /api/comics/:id` | Update metadata (series, issue, publisher, coverDate, authors, artists, characters, tags[, rating]). |
+| `PUT /api/comics/:id/cover` | Replace the cover image (a new upload, or a Metron pull); regenerates full/thumb/blur and repoints the comic, keeping metadata + board memberships. |
 | `DELETE /api/comics/:id` | Delete row + memberships + image files. |
 | `PATCH /api/comics/:id/position` | `{ position, boardId? }` — single-row reorder. A drag **swap** issues two of these (the two cards trade positions). |
 | `GET/POST /api/boards`, `PATCH/DELETE /api/boards/:id` | Board CRUD (POST accepts `comicIds` for save-view). |
 | `PUT/DELETE /api/boards/:id/comics/:comicId` | Add / remove membership. |
 | `PATCH /api/publishers` | `{ from, to }` — rename a publisher (applies to all its comics; merges on collision). |
 | `GET /api/meta` | Global distinct values + counts — powers **form autocomplete**. |
+| `GET /api/metadata` | List configured metadata providers (Metron) + the default. |
+| `GET /api/metadata/search` | Search a provider for candidates — backs the upload flow's smart search box. |
+| `GET /api/metadata/detail` | Fetch the full record for one search candidate (prefills the form). |
+| `GET /api/metadata/cover` | Proxy a provider's cover image (keeps the provider API key server-side). |
+| `GET /api/export` | Stream a zip backup (`collection.json` + every cover) — see "Backup & restore" in `README.md`. |
 | `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
 | `ALL /api/auth/[...all]` | better-auth handler (sign-up / sign-in / sign-out); HTTP-only session cookie. |
 
 All non-auth routes resolve the session (`getUserId`) and **401 when absent**;
 every query is scoped to that user id.
+
+Restoring a backup is a CLI, not a route — `npm run db:import <zip> --
+--replace` recreates comics/boards via the normal upload pipeline
+(`src/db/import.ts`); see `README.md` for the full recipe.
 
 **Facet counts vs. autocomplete:** filter dropdown facets are computed
 **client-side from the current board's comics** (`computeFacets`) so counts match
@@ -159,6 +172,11 @@ the `board` param scopes the list server-side.
 - **Detail modal** — route-backed intercepting modal with shared-element cover,
   clickable facet chips (apply filter), boards membership, ←/→ nav, inline-confirm
   delete, and **edit mode** (the metadata panel becomes the shared `MetadataForm`).
+  Clicking any display field (series, issue #, publisher, cover date, author,
+  cover artists, characters, tags) jumps straight into edit mode with that field
+  focused, instead of requiring the separate Edit button first. **Replace cover**
+  (upload a file, or pull a Metron cover/variant via `ReplaceCoverDialog`) is
+  always visible on the cover image, not gated behind edit mode.
 - **Filter + search + sort** — facet dropdowns (Publisher, Author, Cover Artist,
   Character, Tag), a **date-range calendar**, debounced search; URL-backed
   (shareable). The **Publisher** facet is renameable inline (hover-pencil → commit,
@@ -168,8 +186,13 @@ the `board` param scopes the list server-side.
   **grid** the sort is a dropdown; in **list** the column headers sort (click to
   sort, click again to flip direction) and the dropdown is hidden. Animated reflow
   via Motion `layout`.
-- **Upload** — drag-drop zone, local preview, multi-file queue carrying
-  series/publisher/authors/artists/boards forward, board pre-selection.
+- **Upload** — defaults to a **Metron search** tab (`MetadataSearch`): one smart
+  search box parses the issue number out of the query, results sort
+  newest-series-year-first, and picking one prefills series/issue/cover
+  date/publisher/creators and imports the cover (main + labeled variants). A
+  **manual** tab falls back to the drag-drop zone with local preview. Either way,
+  a multi-file queue carries series/publisher/authors/artists/boards forward
+  across files, with board pre-selection.
 - **Overlays** — `Dialog` and `Menu` render through React portals to `document.body`
   so ancestor `overflow`/`backdrop-filter` never clips or mis-positions them.
 
@@ -207,17 +230,21 @@ for movement, durations for fades.
 src/
   app/            page.tsx (My Comics), board/[id], comic/[id],
                   @modal/(.)comic/[id] (intercepted), login/, signup/,
-                  api/* (incl. auth/[...all]), images/[...path]
+                  api/* (incl. auth/[...all], export, metadata/*), images/[...path]
   middleware.ts   optimistic cookie gate for page routes
   components/     board/ (Masonry+layout, ComicCard(+Menu), BoardTabs, BoardView,
-                          ListView, Sort/Column selectors), detail/ (ComicDetail),
-                  filters/ (FilterBar, MultiSelect), upload/ (UploadModal),
+                          ListView, TopBar, Sort/Column/View selectors),
+                  detail/ (ComicDetail, ReplaceCoverDialog),
+                  filters/ (FilterBar, MultiSelect, DateRangeFilter),
+                  upload/ (UploadModal, MetadataSearch),
                   forms/ (MetadataForm), auth/ (AuthForm), ui/ (Dialog, Menu,
-                          TagInput, Autocomplete, StarRating, Toast, icons)
-  db/             schema, auth-schema, client, queries, migrations, seed
-  lib/            storage, images, positions (append-after-max),
-                  reorder (swap), filters, sort, auth, use-* hooks,
-                  schemas (zod), types (DTOs)
+                          TagInput, Autocomplete, StarRating, Toast, BottomSheet,
+                          icons)
+  db/             schema, auth-schema, client, queries, migrations, seed, import
+  lib/            storage, images, positions (append-after-max), reorder (swap),
+                  filters, sort, auth, backup (export/import zip),
+                  metadata/ (Metron provider, cache, cover proxy, normalizer),
+                  use-* hooks, schemas (zod), types (DTOs)
 tests/            integration.mjs
 data/             sqlite + covers/ (gitignored)
 ```

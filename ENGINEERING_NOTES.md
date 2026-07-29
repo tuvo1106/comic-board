@@ -1,0 +1,177 @@
+# Engineering notes
+
+Personal reference for technical interviews — the system-design decisions and
+bugs from building this app that are worth telling a story about, kept while
+they're fresh instead of reconstructed from memory later. **Not project
+documentation** (that's `CHANGELOG.md` for what shipped, `DESIGN.md` for the
+architecture) — this is narrative, opinionated, and only needs to make sense
+to me.
+
+Add an entry whenever something notable comes up: a bug whose root cause was
+non-obvious, a design decision with a real tradeoff, a performance fix with a
+measurable before/after. Small is fine — a few sentences beats not capturing
+it.
+
+**Entry shape:** problem → the interesting part (root cause / insight /
+tradeoff) → outcome. Optimized for "tell me about a time…" — the bold line is
+the elevator pitch, the rest is what I'd say if asked to go deeper.
+
+---
+
+## Bugs
+
+### Debounced search silently dropped fast-typed characters (2026-07-29)
+
+**A 150ms search debounce had a feedback loop with its own echo, and the fix
+for it looked reasonable and was still wrong the first time.**
+
+The search input kept its own local state (`searchInput`) so keystrokes never
+waited on the debounce — standard pattern. A separate effect re-synced that
+local state from the URL's `?q=` param, to handle back/forward navigation and
+"clear filters." The bug: that re-sync couldn't tell the difference between
+"the URL changed because the user hit back" and "the URL changed because *my
+own* debounced `update()` call finally landed." If you typed fast enough that
+a second keystroke landed before the first keystroke's URL echo came back,
+the echo would arrive *after* the newer keystroke and stomp it — visually, a
+dropped character, and only under a specific timing window, which is exactly
+why it read as "sometimes."
+
+Root cause pattern: **a component reacting to a side effect it caused itself,
+with no way to distinguish that from an external cause.** The fix wasn't more
+debouncing or a bigger delay (which just narrows the window, doesn't close
+it) — it was tracking the last value the component itself pushed, and only
+treating a URL change as "external" (worth adopting) when it didn't match
+that. Classic self-inflicted race condition; the tell was that it correlated
+with typing *speed* relative to the debounce interval, not typing volume.
+
+- Where: `src/components/board/BoardView.tsx` (search debounce + URL sync)
+- Commit: `8266044`
+
+### A stale-but-present auth cookie caused an infinite redirect loop (2026-07-22)
+
+**Found by code review, not a bug report — the kind of bug that's invisible
+until the one condition that triggers it (a secret rotation) happens to
+everyone signed in at once.**
+
+The page-level middleware gated routes on cookie *presence* only (an
+edge-safe check — no way to verify a signature at the edge without the
+secret). The API layer validated the cookie's *signature*. Those two checks
+normally agree. But after a `BETTER_AUTH_SECRET` rotation, a stale cookie is
+present (passes the page gate) but invalid (fails the API check) — the API
+401s, client code redirects to `/login`, and the page gate sees the same
+(still-present, still-bad) cookie and bounces back. Infinite loop, and
+because the cookie is `httpOnly`, client JS can't even clear it to break out.
+
+The interesting part for an interview: this is a **two-layer-validation
+consistency bug** — each layer's check was individually correct and
+necessary (the edge genuinely can't do full validation cheaply), but their
+disagreement space was never handled. The fix was making the 401 path clear
+the bad cookie server-side so the loop can't sustain itself, rather than
+trying to make the two checks agree (they can't, by design).
+
+- Where: `src/middleware.ts`, `src/lib/client-api.ts`
+- Commit: `f17a296`
+
+---
+
+## Design decisions
+
+### Swap-on-drop instead of fractional-index reordering (2026-07-19)
+
+**Traded a more "clever" data structure for one with a smaller blast
+radius.**
+
+Drag-reorder needs a way to persist "this card moved between these two
+others" without renumbering the whole list on every drop. The textbook
+answer is fractional indexing (insert at the midpoint of the two neighbors'
+positions). This app does something simpler: dragging a card **swaps** its
+`position` with the drop target's — two single-row writes, and every other
+card's position is untouched. New cards append after the current max.
+
+Why not fractional indexing: it needs a renumber pass once positions get
+dense enough to run out of floating-point precision between neighbors, which
+is a whole extra piece of machinery (a `needsRenumber` check + a renumber
+mutation) for a personal collection app where the access pattern is "reorder
+one card among a few hundred," not "insert into a densely-packed list
+millions of times." Swap semantics also mean it works correctly **while
+filtered** — the two visible cards trade positions and nothing hidden moves,
+which wouldn't be true for an insert-at-midpoint scheme where a hidden card
+could sit at the computed midpoint.
+
+The dead fractional-index code (positionBetween/positionBeforeMin/
+needsRenumber) was deleted later once nothing called it — worth mentioning
+as the "don't build for a scale you don't have" half of the story.
+
+- Where: `src/lib/reorder.ts` (`swapReorder`), `src/lib/positions.ts`
+- Commits: `ce33a5f` (swap reorder), `f61de86` (dead-code removal)
+
+### Fixed-column masonry, not shortest-column packing (2026-07-19)
+
+**Picked a slightly "worse" packing algorithm because the better one had a
+UX side effect that mattered more than the packing efficiency.**
+
+Standard masonry (Pinterest-style) places each new item in the *shortest*
+column so far — better visual balance, but it means a card's column
+assignment depends on everything before it. Drag one card to a new position
+and every card after it can shift columns, which reads as unrelated cards
+"jumping" during a reorder that only touched one thing.
+
+This app fixes each flow position to `i % columns` instead — deterministic,
+not balance-optimal, but a drag only ever affects the two cards involved in
+the swap. Given cards are uniform height (not variable, unlike real
+Pinterest content), shortest-column packing wasn't even buying real visual
+balance — the "masonry" look here is closer to a stable grid, so giving up
+shortest-column cost nothing and bought reorder stability.
+
+- Where: `src/components/board/masonry-layout.ts`
+- Commit: `ce33a5f`
+
+### Virtualizing the board while keeping full-board features working (2026-07-19)
+
+**The constraint was "virtualize the DOM without virtualizing the logic" —
+filters, sort, facet counts, and drag all still need the *whole* dataset.**
+
+With a few hundred comics, mounting every card was fine; virtualization
+became worth it once the DOM node count (each card = image + hover menu +
+motion wrappers) started costing more than the data itself. The approach:
+compute the full masonry layout (all positions) as before, but only *mount*
+cards whose computed position intersects a buffered viewport window
+(`placementsInRange`); the container div still reports its full computed
+height so the scrollbar and overall page layout behave exactly as if
+everything were mounted. Filtering, sorting, facet counts, and drag-and-drop
+all still operate on the full in-memory list — only the render step is
+windowed.
+
+The tradeoff being made explicit: this bounds DOM nodes, not memory or
+compute — it's a rendering optimization, not a data-scale one. Worth stating
+that boundary out loud in an interview, since "we virtualized it" invites the
+follow-up "so how do you filter/sort if it's virtualized?"
+
+- Where: `src/components/board/masonry-layout.ts` (`placementsInRange`)
+- Commit: `ce33a5f`
+
+### Globally-shared name tables, deliberately not per-user (2026-07-19, revisit if multi-user)
+
+**A normalization choice that's correct for the shipped product (single
+account per household) and explicitly flagged as wrong for a different one
+(real multi-tenant).**
+
+Publishers, authors, artists, characters, and tags are normalized into their
+own tables with a case-insensitive `nameKey` for dedupe, shared **across all
+users** rather than scoped per-user. That's what makes "rename a publisher"
+a single-row update instead of a per-user fan-out, and what makes facet
+counts cheap. The explicit cost: any user who owns one comic with a given
+publisher can rename that globally-shared row, and if the new name collides
+with an existing one, the merge repoints *every* user's comics with that
+publisher — a real cross-user side effect.
+
+This was a conscious, documented tradeoff (not an oversight) — fine for the
+app's actual use case, called out in review as a blocker specifically for
+the "public shared boards" roadmap item, which would need per-user or
+copy-on-write name tables instead. Good interview material for "how do you
+make a normalization decision, and how do you keep it from becoming a silent
+landmine" — the answer here was: make the tradeoff, then write down exactly
+what would force revisiting it.
+
+- Where: `src/db/queries.ts` (`upsertPublisher`, `renamePublisher`)
+- See: `ROADMAP.md` §5 (sharing prerequisites)
