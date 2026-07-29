@@ -153,32 +153,10 @@ selecting one sets the search term. No view-splitting complexity like 2a —
 
 ## 3. Board interaction
 
-### 3a. Drag tabs to reorder boards — mostly a UI-only build
+**Drag tabs to reorder boards — shipped** (2026-07-29, drag a card onto a
+tab was skipped — not wanted). See `CHANGELOG.md`.
 
-_(Drag a card onto a tab to add it to that board — skipped, decided
-2026-07-29: not wanted. That one would've been real work: `Masonry.tsx`
-owns its own self-contained `DndContext` around just the card grid, and
-`BoardTabs` is a plain sibling with no `dnd-kit` at all — a card literally
-can't be dropped on a tab today. Supporting it would mean lifting the
-`DndContext` up to a shared parent and teaching `onDragEnd` to branch on
-"dropped on a tab" vs. "dropped on a card," a moderate refactor, not a
-bolt-on. `BoardView.tsx`'s own comments already flag this sibling layout as
-a deliberate stopgap — "tabs, upload, and drag are layered on later.")_
-
-The backend for this already fully exists and needs **zero new work**:
-`boards.tabPosition` (`src/db/schema.ts:48`) already drives tab order
-end-to-end — `listBoards` already sorts by it, `createBoard` already
-assigns new tabs via the same `positionAfterMax` helper comics use,
-`PATCH /api/boards/:id` already accepts a `tabPosition` field
-(`boardUpdateSchema`), and `useUpdateBoard()` already sends it. The entire
-gap is that `BoardTabs.tsx` renders tabs as plain static `<button>`s with no
-`dnd-kit` wiring at all. This is realistically: wrap the tab strip in a
-`DndContext`/`SortableContext` the same way `Masonry.tsx` already does for
-cards, reuse the same swap-on-drop semantics (`src/lib/reorder.ts`), and
-call the already-existing `useUpdateBoard({ id, tabPosition })` on drop. No
-schema, API, or query-layer changes.
-
-### 3b. Smart boards — *skipped for now (decided 2026-07-29)*
+### Smart boards — *skipped for now (decided 2026-07-29)*
 
 Would have been a board backed by a stored filter query (e.g. "Publisher =
 DC, Tag = Key Issue") instead of a fixed membership list — its contents
@@ -323,10 +301,11 @@ What's actually active after review (2026-07-29), in order:
    most of it (both endpoints) already exists server-side.
 3. **Multi-select + bulk actions** (2a), **stats page** (2c), **autocomplete
    search** (2e) — by appetite; 2b and 2d were skipped.
-4. **Drag tabs to reorder** (3a) — mostly a UI-only build; 3b was skipped.
-5. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
+4. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
    on anything else here. **Server-side pagination** (4c) only once one of
    its two concrete signals shows up (list view gets janky, or search stops
    feeling instant); **spec-driven behaviors** (4d) whenever process
    overhead is justified. 4b was skipped.
-6. ~~Sharing~~ — skipped.
+5. ~~Sharing~~ — skipped.
+
+Drag tabs to reorder (3) shipped 2026-07-29.

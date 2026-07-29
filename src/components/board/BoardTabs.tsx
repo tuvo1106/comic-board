@@ -1,15 +1,35 @@
 "use client";
 
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  keys,
   useBoards,
   useComics,
   useCreateBoard,
   useDeleteBoard,
   useUpdateBoard,
 } from "@/lib/client-api";
+import { swapReorder } from "@/lib/reorder";
 import type { BoardDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
@@ -21,25 +41,84 @@ interface Props {
 }
 
 export function BoardTabs({ activeBoardId }: Props) {
+  const qc = useQueryClient();
   const { data: boards } = useBoards();
   const { data: comics } = useComics();
   const [createOpen, setCreateOpen] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const updateBoard = useUpdateBoard();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id));
+
+  // Swap-on-drop, same semantics as card reorder (src/lib/reorder.ts): the
+  // dragged tab and its drop target trade exact tabPosition values, every
+  // other tab stays put. swapReorder works on a `position` field, so map
+  // tabPosition in/out of it rather than generalizing the shared helper.
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over || !boards) return;
+    const positioned = boards.map((b) => ({ id: b.id, position: b.tabPosition }));
+    const result = swapReorder(positioned, String(active.id), String(over.id));
+    if (!result) return;
+    const posById = new Map(result.updates.map((u) => [u.id, u.position]));
+    qc.setQueryData<BoardDTO[]>(keys.boards, (old) =>
+      old
+        ?.map((b) => (posById.has(b.id) ? { ...b, tabPosition: posById.get(b.id)! } : b))
+        .sort((a, b) => a.tabPosition - b.tabPosition),
+    );
+    for (const u of result.updates) {
+      updateBoard.mutate({ id: u.id, tabPosition: u.position });
+    }
+  };
+
+  const activeBoard = activeId ? boards?.find((b) => b.id === activeId) ?? null : null;
 
   return (
     <div className="sticky top-[57px] z-30 border-b border-border bg-bg/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1800px] items-center gap-1 overflow-x-auto px-5 py-1.5">
-        <Tab href="/" label="My Comics" active={!activeBoardId} count={comics?.length} />
-        {boards?.map((b) => (
-          <BoardTab key={b.id} board={b} active={activeBoardId === b.id} />
-        ))}
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="ml-1 grid h-7 w-7 flex-shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg"
-          title="New board"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setActiveId(null)}
+      >
+        <div className="mx-auto flex max-w-[1800px] items-center gap-1 overflow-x-auto px-5 py-1.5">
+          <Tab href="/" label="My Comics" active={!activeBoardId} count={comics?.length} />
+          <SortableContext
+            items={boards?.map((b) => b.id) ?? []}
+            strategy={horizontalListSortingStrategy}
+          >
+            {boards?.map((b) => (
+              <BoardTab
+                key={b.id}
+                board={b}
+                active={activeBoardId === b.id}
+                dimmed={activeId === b.id}
+              />
+            ))}
+          </SortableContext>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="ml-1 grid h-7 w-7 flex-shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg"
+            title="New board"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {activeBoard && (
+            <div className="cursor-grabbing rounded-md bg-surface px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border">
+              {activeBoard.name}
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
       <CreateBoardDialog open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
@@ -84,7 +163,15 @@ function Tab({
   );
 }
 
-function BoardTab({ board, active }: { board: BoardDTO; active: boolean }) {
+function BoardTab({
+  board,
+  active,
+  dimmed,
+}: {
+  board: BoardDTO;
+  active: boolean;
+  dimmed: boolean;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const updateBoard = useUpdateBoard();
@@ -92,6 +179,12 @@ function BoardTab({ board, active }: { board: BoardDTO; active: boolean }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState(board.name);
+  // Only setNodeRef/attributes/listeners are used — like card drag
+  // (Masonry.tsx's CardShell), live per-move reflow via dnd-kit's own
+  // transform is intentionally skipped: the tab strip stays static during
+  // drag (DragOverlay tracks the pointer instead) and reflows once, on
+  // drop, via the `layout` animation below.
+  const { setNodeRef, attributes, listeners } = useSortable({ id: board.id });
 
   const doRename = async () => {
     const trimmed = name.trim();
@@ -118,7 +211,15 @@ function BoardTab({ board, active }: { board: BoardDTO; active: boolean }) {
   };
 
   return (
-    <div className="group relative flex flex-shrink-0 items-center">
+    <motion.div
+      ref={setNodeRef}
+      layout
+      animate={{ opacity: dimmed ? 0.4 : 1 }}
+      transition={{ layout: { type: "spring", stiffness: 480, damping: 42 } }}
+      className="group relative flex flex-shrink-0 items-center"
+      {...attributes}
+      {...listeners}
+    >
       <button
         onClick={() => router.push(`/board/${board.id}`)}
         className={`relative flex items-center gap-1.5 rounded-md py-1.5 pl-3 pr-1 text-sm font-medium transition ${
@@ -222,7 +323,7 @@ function BoardTab({ board, active }: { board: BoardDTO; active: boolean }) {
           </div>
         </div>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }
 

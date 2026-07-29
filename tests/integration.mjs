@@ -596,6 +596,52 @@ try {
     await p.setRequestInterception(false);
   }
 
+  // Drag tabs to reorder boards — same swap semantics as card reorder (above),
+  // just on boards.tabPosition instead of comics.position.
+  if (boards[0] && boards[1]) {
+    await p.goto(BASE, { waitUntil: "networkidle0" });
+    await sleep(700);
+    const tabBox = async (name) =>
+      p.evaluate((n) => {
+        const t = [...document.querySelectorAll("div")].find(
+          (d) => d.className.includes("group") && d.textContent.includes(n) && d.querySelector("button svg"),
+        );
+        const r = t.getBoundingClientRect();
+        return { cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+      }, name);
+    const boxA = await tabBox(boards[0].name);
+    const boxB = await tabBox(boards[1].name);
+    const beforeAFirst = boxA.cx < boxB.cx;
+
+    await p.mouse.move(boxA.cx, boxA.cy);
+    await p.mouse.down();
+    for (let i = 1; i <= 14; i++) {
+      await p.mouse.move(boxA.cx + ((boxB.cx - boxA.cx) * i) / 14, boxA.cy + ((boxB.cy - boxA.cy) * i) / 14);
+      await sleep(20);
+    }
+    await sleep(200);
+    const tabPosPersisted = p
+      .waitForResponse(
+        (r) => /\/api\/boards\/[^/]+$/.test(r.url()) && r.request().method() === "PATCH",
+        { timeout: 10000 },
+      )
+      .catch(() => null);
+    await p.mouse.up();
+    await tabPosPersisted;
+    await sleep(400);
+
+    const afterA = await tabBox(boards[0].name);
+    const afterB = await tabBox(boards[1].name);
+    const afterAFirst = afterA.cx < afterB.cx;
+    ck(afterAFirst !== beforeAFirst, "dragging a tab onto another swaps their order");
+
+    await p.goto(BASE, { waitUntil: "networkidle0" });
+    await sleep(700);
+    const reloadA = await tabBox(boards[0].name);
+    const reloadB = await tabBox(boards[1].name);
+    ck((reloadA.cx < reloadB.cx) === afterAFirst, "tab reorder persists across reload");
+  }
+
   // A present-but-invalid session cookie must NOT loop / ⇄ /login (item 21).
   // The middleware gate only checks cookie *presence*; the API validates it. A
   // stale cookie (after a BETTER_AUTH_SECRET rotation, a session revocation, or

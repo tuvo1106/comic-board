@@ -4,13 +4,22 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-29 — Search & detail-modal fixes
+## 2026-07-29 — Search, detail-modal, and board-tabs fixes
 
 - **Click-to-edit in the comic detail modal.** Clicking a display field
   (series, issue #, publisher, cover date, author, cover artists, characters,
   tags) now enters edit mode with that field focused, instead of requiring
   the separate Edit button first. The "Replace cover" control is always
   visible on the cover image rather than only showing once already editing.
+- **Blurred cover backdrop in the detail modal**, replacing the flat black
+  background — reuses the existing tiny `blurDataUrl` placeholder asset
+  (same one the board grid already uses), scaled up with a dark tint for
+  contrast, instead of CSS-blurring the full-res image.
+- **Drag tabs to reorder boards.** The backend (`boards.tabPosition` and its
+  full API/mutation stack) already existed; this wires up `BoardTabs.tsx`
+  with the same swap-on-drop semantics (`src/lib/reorder.ts`) card
+  drag-reorder already uses. Dragging a card onto a tab was considered and
+  not pursued.
 - **Fixed dropped keystrokes when typing fast in the search bar.** A race
   between the 150ms search debounce and its URL echo could let a stale echo
   clobber newer local input; the component now tracks what it last pushed and
