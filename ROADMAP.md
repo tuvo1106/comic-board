@@ -193,11 +193,32 @@ Revisit if boards going stale after creation becomes an actual annoyance.
 
 ## 4. Infrastructure
 
-### 4a. Dockerize the app — ~half a day
+### 4a. Dockerize the app — *deferred (decided 2026-07-29)*, ~half a day when wanted
 
-A multi-stage `Dockerfile` (deps → build → runtime) so the app runs as one
-portable container instead of a local Node install. Specifics this app
-needs:
+Deferred with the plan intact: containerising buys **portable deployment**, and
+there's nowhere it needs to deploy right now. Local dev (`npm run dev` on 3939)
+already works, the integration suite and browser-check already isolate
+themselves via `DATA_DIR`/`DATABASE_PATH`, and nothing currently blocks on this.
+Pick it up when there's an actual host to run on.
+
+Two things learned while scoping it that are worth keeping:
+
+- **Local dev survives Docker untouched** — it's additive, not a replacement.
+  The one real way it could break local dev: `better-sqlite3` and `sharp` are
+  both native, so bind-mounting `node_modules` into the container (or running
+  `npm install` inside a container with the repo bind-mounted) overwrites the
+  host's darwin/arm64 binaries with linux ones and `npm run dev` then dies on
+  `invalid ELF header`. Install deps *inside* the image; never bind-mount
+  `node_modules`. Recovery: `rm -rf node_modules && npm install` on the host.
+- **A `.dockerignore` has to land with the Dockerfile, not after.** There isn't
+  one today, and `data/` is ~67MB of the real collection — without it the build
+  context ships the personal database and covers to the daemon, and they can end
+  up baked into an image layer.
+
+**Exposing the app anywhere beyond localhost is gated on 4g below** — that's the
+part with actual risk, and it's independent of how the app is packaged.
+
+When built, the specifics this app needs:
 
 - Pin the base image to **Node 22** — matches `.nvmrc`; Next 16's in-build
   TypeScript-check worker crashes on Node 25 (see `README.md` "Requirements").
@@ -373,12 +394,62 @@ host — the same config-drift shape as the stale-auth-cookie bug in
 `ENGINEERING_NOTES.md`. Fixed with a distinct `coverError` state and a
 "Couldn't load this cover." message.
 
+### 4g. Prerequisites before the app is reachable beyond localhost — not started
+
+**Nothing here matters while the app only ever answers on `localhost`, and all
+of it matters the moment it doesn't** — a VPS, a tunnel (ngrok/Cloudflare), a
+LAN-exposed dev server, or a published container port. Independent of 4a:
+packaging isn't what creates the exposure, reachability is. Written down because
+this is the kind of thing that gets skipped precisely when it starts to count.
+
+**Must fix first:**
+
+- **No login rate limiting exists anywhere** (`src/lib/auth.ts`,
+  `src/middleware.ts` — nothing). A public `/login` with email+password and no
+  throttle is an open invitation to credential stuffing, and it's the single
+  biggest change in risk on going public. better-auth has rate-limit config;
+  alternatives are a proxy-level limit, Cloudflare Access, or fail2ban.
+
+- **Decide the `/images/**` authorization story.** That route has *no* session
+  check (zero `getUserId`), and `middleware.ts`'s matcher explicitly excludes
+  `images`, so covers are served to anyone with the URL — no session, no expiry.
+  The mitigating factor is that paths are `nanoid(14)` over a 36-char alphabet
+  (~6×10²¹), so they aren't enumerable. But that's **obscurity, not
+  authorization**: URLs leak via browser history, referrers, proxy logs, and
+  anyone a link is ever sent to. Already logged as a prerequisite blocker for
+  public sharing in §5 — the trap is that going remote makes it internet-facing
+  without anyone deciding to.
+
+**Must get right or auth silently breaks:**
+
+- `BETTER_AUTH_URL` must match the public origin exactly — scheme, host *and*
+  port. Mismatch gives `Invalid origin` on sign-in; leaving it unset makes
+  better-auth derive the origin from the request, which behind a reverse proxy
+  is usually wrong (it warns about this on boot).
+- **Behind TLS termination, pass `X-Forwarded-Proto`.** The session cookie's
+  `secure` flag follows the URL scheme, so an `https` `BETTER_AUTH_URL` with the
+  cookie set over internal `http` means login appears to succeed and then
+  bounces back to `/login` forever. Same two-sources-of-truth shape as the
+  stale-cookie loop in `ENGINEERING_NOTES.md`.
+- `BETTER_AUTH_SECRET` must be strong; production already refuses to boot
+  without it. Rotating it later signs everyone out.
+
+**Practical alternative that sidesteps all of it:** for remote *development*,
+SSH port-forward (`ssh -L 3939:localhost:3939`) instead of publishing the port.
+The browser still sees `http://localhost:3939`, so no auth-origin change, no TLS
+or proxy setup, and neither risk above is ever internet-facing.
+
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 
 Would have been public read-only board links. Not wanted. (Its two
 prerequisites — `/images/**` having no session check, and the
 globally-shared publisher/tag namespace having cross-user rename effects —
 are still true of the app as-is; they're just not gating anything anymore.)
+
+Note: the `/images/**` half of that **does** become live again under 4g, i.e. the
+moment the app is reachable from anywhere but localhost — no sharing feature
+required. Skipping sharing removed the *feature* that depended on it, not the
+exposure itself.
 
 ## 6. Account settings — shipped (2026-07-29)
 
@@ -393,15 +464,20 @@ just `src/lib/auth.ts`'s `user.changeEmail` config flag (see `CHANGELOG.md`).
 
 What's actually active after review (2026-07-29), in order:
 
-1. **Stats page** (2c), **autocomplete search** (2e) — by appetite; 2b and 2d
-   were skipped. Grid-view marquee-select (the rest of 2a) is a stretch goal,
-   not actively planned.
-2. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
-   on anything else here. **Server-side pagination** (4c) only once one of
-   its two concrete signals shows up (list view gets janky, or search stops
-   feeling instant). 4b was skipped.
+1. **Stats page** (2c) — the only substantive feature left actively planned.
+   2b and 2d were skipped; grid-view marquee-select (the rest of 2a) is a
+   stretch goal, not actively planned.
+2. Everything else is **waiting on a trigger rather than on appetite**, which is
+   the point — none of it should be built speculatively:
+   - **4a Dockerize** — when there's an actual host to deploy to.
+   - **4g exposure prerequisites** — *before* the app is reachable from
+     anywhere but localhost. Not optional at that point; there's no login rate
+     limiting and `/images/**` has no auth check.
+   - **4c server-side pagination** — only once list view gets janky or search
+     stops feeling instant. 4b was skipped.
 3. ~~Sharing~~ — skipped.
 
-Undo delete (1), drag tabs to reorder (3), account settings (6), list-view
-multi-select + bulk actions (2a), and the spec-driven-behaviors test-coverage
-pass (4d) shipped 2026-07-29.
+Shipped 2026-07-29: undo delete (1), list-view multi-select + bulk actions (2a),
+autocomplete search (2e), drag tabs to reorder (3), the spec-driven-behaviors
+test-coverage pass (4d), the test-harness flakiness fix (4e), the stubbed
+metadata provider (4f), and account settings (6).
