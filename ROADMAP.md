@@ -21,32 +21,19 @@ start via `src/instrumentation.ts`. See `CHANGELOG.md`.
 
 ## 2. Collection features *(independent; pick by taste)*
 
-### 2a. Multi-select + bulk actions — ~1–2 days
+### 2a. Multi-select + bulk actions — list view shipped (2026-07-29)
 
-Select several covers (click-drag or shift-click) → add to board / remove
-from board / tag / set publisher / delete.
+List-view multi-select shipped: a leading checkbox column, shift-click
+range-select, and a bulk action bar (`BulkActionBar.tsx`) for add to board /
+remove from board / set publisher / add tag / delete — each looping an
+existing single-comic mutation, no new API route. Bulk delete reuses the
+undo-delete toast (soft-delete + a single "N comics deleted — Undo" that
+restores all of them). Bulk tag is additive (unions into each comic's
+existing tags), not an overwrite. See `CHANGELOG.md`.
 
-**What's reusable vs. new:** every action maps to a mutation that already
-exists per-comic (`useAddToBoard`, `useRemoveFromBoard`, `useUpdateComic`,
-`useDeleteComic` in `src/lib/client-api.ts`) — no new API route is *required*
-to make this work, a bulk action can loop the existing hook once per selected
-id. The actual net-new work is selection state, which doesn't exist anywhere
-in the app today (no shift-click, no marquee, no checkboxes).
+Grid-view marquee-select was intentionally deferred (see phasing decision
+below, still accurate) — not started.
 
-- **Loop client-side vs. a batch endpoint:** looping is simpler and needs no
-  server work, but is N HTTP round-trips, no atomicity (a mid-loop failure
-  leaves some comics changed and some not), and wants manual cache-batching
-  so it doesn't refetch N times. A real `PATCH /api/comics {ids, patch}`
-  fixes all that but is new route + `db/queries.ts` work. Start with the
-  loop; only build a batch endpoint if it's actually slow at real scale.
-- **Tag/publisher aren't the same shape of edit.** Publisher is single-value
-  per comic, so "bulk set publisher" is a plain overwrite. Tags (and
-  authors/artists/characters) are a list per comic — reusing
-  `useUpdateComic`'s patch naively would *replace* each comic's whole list,
-  wiping existing tags. Bulk tagging needs to be additive: union the new tag
-  into each comic's existing list, not overwrite it. Today's single-comic tag
-  editing always submits the complete list it's showing, never a delta, so
-  this additive path doesn't exist yet and needs its own logic.
 - **Selection UX differs a lot by view.** List view (`ListView.tsx`) is the
   easy case: unvirtualized, every row always mounted, order is array index —
   a leading checkbox column + shift-click range-select is straightforward.
@@ -57,17 +44,13 @@ in the app today (no shift-click, no marquee, no checkboxes).
   every card in the DOM — not the blocker it looks like. The real friction:
   dnd-kit's drag sensor already claims pointerdown+drag on every card (for
   reorder), so a marquee gesture needs to start only from empty canvas, or
-  coexist carefully with the existing reorder gesture.
-- **Suggested phasing:** ship list-view multi-select first (cheap, no
-  gesture conflict); treat grid-view marquee-select as a stretch goal rather
-  than bundling both into one pass.
+  coexist carefully with the existing reorder gesture. Treat grid-view
+  marquee-select as a stretch goal, not bundled with this.
 - **No pagination exists to complicate "select all"** — `GET
   /api/comics?board=<id>` returns the whole board in one response (no
   `limit`/`offset`), and the full set already lives in memory client-side
-  (grid virtualization only bounds the DOM, not the data). So a "select all
-  N filtered comics" action is just operating on the in-memory filtered
-  array — no special casing needed for an unloaded remainder. This would
-  change if server-side pagination (item 4c) ever lands first.
+  (grid virtualization only bounds the DOM, not the data). This would change
+  if server-side pagination (item 4c) ever lands first.
 
 ### 2b. Duplicate detection at upload — *skipped (decided 2026-07-29)*
 
@@ -262,8 +245,9 @@ just `src/lib/auth.ts`'s `user.changeEmail` config flag (see `CHANGELOG.md`).
 
 What's actually active after review (2026-07-29), in order:
 
-1. **Multi-select + bulk actions** (2a), **stats page** (2c), **autocomplete
-   search** (2e) — by appetite; 2b and 2d were skipped.
+1. **Stats page** (2c), **autocomplete search** (2e) — by appetite; 2b and 2d
+   were skipped. Grid-view marquee-select (the rest of 2a) is a stretch goal,
+   not actively planned.
 2. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
    on anything else here. **Server-side pagination** (4c) only once one of
    its two concrete signals shows up (list view gets janky, or search stops
@@ -271,5 +255,5 @@ What's actually active after review (2026-07-29), in order:
    overhead is justified. 4b was skipped.
 3. ~~Sharing~~ — skipped.
 
-Undo delete (1), drag tabs to reorder (3), and account settings (6) shipped
-2026-07-29.
+Undo delete (1), drag tabs to reorder (3), account settings (6), and
+list-view multi-select + bulk actions (2a) shipped 2026-07-29.

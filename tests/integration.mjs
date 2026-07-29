@@ -595,7 +595,7 @@ try {
       const wrap = document.querySelector("main .overflow-x-auto > div");
       return [...wrap.children]
         .slice(1) // drop the header row
-        .map((r) => r.children[1]?.textContent.trim() ?? "");
+        .map((r) => r.children[2]?.textContent.trim() ?? ""); // [checkbox, thumbnail, series]
     });
   const monotonic = (arr, up) =>
     arr.every((s, i) => i === 0 || (up ? arr[i - 1].localeCompare(s) <= 0 : arr[i - 1].localeCompare(s) >= 0));
@@ -606,6 +606,80 @@ try {
   await (await p.$$("button[title='Sort by Series']"))[0].click();
   await sleep(400);
   ck(monotonic(await seriesInDom(), false), "clicking Series header again flips to Z→A");
+
+  // Multi-select + bulk actions (item 2a), list view only. `labels[0]` is the
+  // header "select all"; labels[1..] are each row's checkbox, DOM order.
+  {
+    const labels = await p.$$("main .overflow-x-auto label");
+    await labels[1].click();
+    await p.keyboard.down("Shift");
+    await labels[3].click(); // range-select rows 0-2
+    await p.keyboard.up("Shift");
+    await sleep(300);
+    const selectedText = await p.evaluate(() => document.body.textContent.match(/(\d+) selected/)?.[1]);
+    ck(selectedText === "3", `shift-click range-selects 3 rows (got ${selectedText})`);
+
+    // Aggregate counts, not per-row identity — the seed data has duplicate
+    // series names (e.g. two "Absolute Batman" issues), so matching DOM rows
+    // back to specific API records by name would be ambiguous. Counting a
+    // pre-existing tag before/after is still a real regression check: if the
+    // bulk action overwrote each comic's tags instead of unioning into them
+    // (item 2a's tag-union decision), any selected comic that already had
+    // this tag would lose it, and the count would drop.
+    const countWithTag = (comics, tag) => comics.filter((c) => c.tags.includes(tag)).length;
+    const before = await apiJson("/api/comics");
+    const variantBefore = countWithTag(before, "Variant");
+
+    const [addTagBtn] = await p.$$("xpath/.//button[normalize-space(.)='Add tag']");
+    await addTagBtn.click();
+    await sleep(300);
+    await p.keyboard.type("BulkTagXYZ");
+    await p.keyboard.press("Enter");
+    await sleep(600);
+    const after = await apiJson("/api/comics");
+    ck(countWithTag(after, "BulkTagXYZ") === 3, "bulk 'Add tag' applies the new tag to all 3 selected");
+    ck(
+      countWithTag(after, "Variant") === variantBefore,
+      "bulk 'Add tag' doesn't wipe an existing tag on comics that already had one (union, not overwrite)",
+    );
+
+    // A successful bulk action clears the selection (onDone), so the bar from
+    // "Add tag" above is already gone — re-select before testing Delete.
+    const labels2 = await p.$$("main .overflow-x-auto label");
+    await labels2[1].click();
+    await p.keyboard.down("Shift");
+    await labels2[3].click();
+    await p.keyboard.up("Shift");
+    await sleep(300);
+
+    // Bulk delete (soft) + Undo restores all of them, mirroring single-delete.
+    // The bar's own "Delete" trigger stays mounted behind the confirm dialog,
+    // so a second query for "Delete" matches both — the dialog's button (in
+    // a document.body portal) comes last in document order, so take the last
+    // match rather than the first.
+    const beforeCount = (await apiJson("/api/comics")).length;
+    const [deleteBtn] = await p.$$("xpath/.//button[normalize-space(.)='Delete']");
+    await deleteBtn.click();
+    await sleep(300);
+    const deleteMatches = await p.$$("xpath/.//button[normalize-space(.)='Delete']");
+    await deleteMatches[deleteMatches.length - 1].click();
+    await sleep(600);
+    ck(
+      (await apiJson("/api/comics")).length === beforeCount - 3,
+      "bulk delete removes all 3 selected comics",
+    );
+    const toastHasUndo = await p.evaluate(() =>
+      [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Undo"),
+    );
+    ck(toastHasUndo, "bulk delete shows an actionable 'Undo' toast");
+    const [undoBtn] = await p.$$("xpath/.//button[normalize-space(.)='Undo']");
+    await undoBtn.click();
+    await sleep(600);
+    ck(
+      (await apiJson("/api/comics")).length === beforeCount,
+      "clicking Undo restores all 3 bulk-deleted comics",
+    );
+  }
 
   await (await p.$$("button[aria-label='Grid view']"))[0].click();
   await sleep(400);

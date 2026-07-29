@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMeta, useUpdateComic } from "@/lib/client-api";
 import type { ComicDTO } from "@/lib/types";
 import type { SortDir, SortField } from "@/lib/sort";
 import { Autocomplete } from "@/components/ui/Autocomplete";
 import { StarRating } from "@/components/ui/StarRating";
 import { TagInput } from "@/components/ui/TagInput";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "@/components/ui/icons";
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Minus } from "@/components/ui/icons";
+import { BulkActionBar } from "./BulkActionBar";
 import { ComicCardMenu } from "./ComicCardMenu";
 
 const COLS =
-  "grid-cols-[44px_minmax(150px,1.5fr)_56px_minmax(90px,0.8fr)_128px_minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_140px_36px]";
+  "grid-cols-[28px_44px_minmax(150px,1.5fr)_56px_minmax(90px,0.8fr)_128px_minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_140px_36px]";
 
 interface Props {
   comics: ComicDTO[];
@@ -33,35 +34,168 @@ export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, o
 
   const sortProps = { active: sortField, dir: sortDir, onSort };
 
+  // Multi-select, list-view only for now. A plain Set (not derived from
+  // props) so selection survives a re-render triggered by the row's own
+  // edits; `selected` below prunes ids that fall out of the current
+  // (possibly re-filtered/re-sorted) `comics` list.
+  const [rawSelected, setRawSelected] = useState<Set<string>>(new Set());
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
+  const selected = useMemo(() => {
+    const ids = new Set(comics.map((c) => c.id));
+    return new Set([...rawSelected].filter((id) => ids.has(id)));
+  }, [rawSelected, comics]);
+
+  const toggleOne = (id: string, index: number, extendRange: boolean) => {
+    setRawSelected((prev) => {
+      const next = new Set(prev);
+      if (extendRange && anchorIndex != null) {
+        const [lo, hi] = [Math.min(anchorIndex, index), Math.max(anchorIndex, index)];
+        for (let i = lo; i <= hi; i++) next.add(comics[i].id);
+      } else if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setAnchorIndex(index);
+  };
+
+  const toggleAll = () => {
+    setRawSelected((prev) => (prev.size === comics.length ? new Set() : new Set(comics.map((c) => c.id))));
+  };
+
+  const clearSelection = () => setRawSelected(new Set());
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <div className="min-w-[900px]">
-        {/* Header */}
-        <div
-          className={`grid ${COLS} gap-2 border-b border-border bg-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted`}
-        >
-          <span />
-          <SortHeader field="series" label="Series" {...sortProps} />
-          <SortHeader field="issue" label="#" {...sortProps} />
-          <SortHeader field="publisher" label="Publisher" {...sortProps} />
-          <SortHeader field="coverDate" label="Cover date" {...sortProps} />
-          <span>Author</span>
-          <span>Cover Artist</span>
-          <span>Tags</span>
-          <SortHeader field="rating" label="Rating" {...sortProps} />
-          <span />
+    <div className="space-y-3">
+      {selected.size > 0 && (
+        <BulkActionBar
+          comics={comics}
+          selectedIds={selected}
+          currentBoardId={currentBoardId}
+          suggestions={suggestions}
+          onClear={clearSelection}
+          onDone={clearSelection}
+        />
+      )}
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <div className="min-w-[900px]">
+          {/* Header */}
+          <div
+            className={`grid ${COLS} gap-2 border-b border-border bg-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted`}
+          >
+            <HeaderCheckbox
+              checked={selected.size > 0 && selected.size === comics.length}
+              indeterminate={selected.size > 0 && selected.size < comics.length}
+              onChange={toggleAll}
+            />
+            <span />
+            <SortHeader field="series" label="Series" {...sortProps} />
+            <SortHeader field="issue" label="#" {...sortProps} />
+            <SortHeader field="publisher" label="Publisher" {...sortProps} />
+            <SortHeader field="coverDate" label="Cover date" {...sortProps} />
+            <span>Author</span>
+            <span>Cover Artist</span>
+            <span>Tags</span>
+            <SortHeader field="rating" label="Rating" {...sortProps} />
+            <span />
+          </div>
+          {comics.map((c, i) => (
+            <Row
+              key={c.id}
+              comic={c}
+              currentBoardId={currentBoardId}
+              onOpen={() => onOpen(c)}
+              suggestions={suggestions}
+              selected={selected.has(c.id)}
+              onToggleSelect={(extendRange) => toggleOne(c.id, i, extendRange)}
+            />
+          ))}
         </div>
-        {comics.map((c) => (
-          <Row
-            key={c.id}
-            comic={c}
-            currentBoardId={currentBoardId}
-            onOpen={() => onOpen(c)}
-            suggestions={suggestions}
-          />
-        ))}
       </div>
     </div>
+  );
+}
+
+/** Custom tri-state checkbox (checked/indeterminate/unchecked), matching the
+ *  boxed-check visual used elsewhere (AuthForm, BoardMembershipList). Sets
+ *  `.indeterminate` on the real (visually hidden) input for a11y, since
+ *  that's DOM-property-only — no HTML attribute for it. */
+function HeaderCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <label className="flex cursor-pointer items-center justify-center">
+      <span
+        className={`grid h-4 w-4 place-items-center rounded border transition ${
+          checked || indeterminate ? "border-accent bg-accent text-accent-fg" : "border-border"
+        }`}
+      >
+        {checked && <Check className="h-3 w-3" />}
+        {!checked && indeterminate && <Minus className="h-3 w-3" />}
+      </span>
+      <input
+        ref={ref}
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="sr-only"
+        aria-label="Select all rows"
+      />
+    </label>
+  );
+}
+
+function RowCheckbox({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle: (extendRange: boolean) => void;
+}) {
+  return (
+    <label
+      className="flex cursor-pointer select-none items-center justify-center"
+      onClick={(e) => e.stopPropagation()}
+      // Shift+click near any selectable text (every other cell in the row)
+      // can make the browser start extending a text selection instead of
+      // delivering a normal click — that gesture begins at mousedown, so
+      // preventDefault has to happen here, not (only) in onClick.
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <span
+        className={`grid h-4 w-4 place-items-center rounded border transition ${
+          checked ? "border-accent bg-accent text-accent-fg" : "border-border"
+        }`}
+      >
+        {checked && <Check className="h-3 w-3" />}
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        readOnly
+        onClick={(e) => {
+          // Controlled via state, not native toggling — and onClick (not
+          // onChange) is what reliably carries a real MouseEvent's shiftKey.
+          e.preventDefault();
+          onToggle(e.shiftKey);
+        }}
+        className="sr-only"
+        aria-label="Select row"
+      />
+    </label>
   );
 }
 
@@ -106,11 +240,15 @@ function Row({
   currentBoardId,
   onOpen,
   suggestions,
+  selected,
+  onToggleSelect,
 }: {
   comic: ComicDTO;
   currentBoardId?: string;
   onOpen: () => void;
   suggestions: { authors: string[]; artists: string[]; tags: string[]; publishers: string[] };
+  selected: boolean;
+  onToggleSelect: (extendRange: boolean) => void;
 }) {
   const update = useUpdateComic();
   const save = (patch: Parameters<typeof update.mutate>[0]["patch"]) =>
@@ -118,8 +256,11 @@ function Row({
 
   return (
     <div
-      className={`group/row grid ${COLS} items-center gap-2 border-b border-border px-3 py-1.5 text-sm transition hover:bg-surface/50`}
+      className={`group/row grid ${COLS} items-center gap-2 border-b border-border px-3 py-1.5 text-sm transition hover:bg-surface/50 ${
+        selected ? "bg-accent/5" : ""
+      }`}
     >
+      <RowCheckbox checked={selected} onToggle={onToggleSelect} />
       <button onClick={onOpen} className="group relative h-12 w-9 overflow-hidden rounded ring-1 ring-white/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

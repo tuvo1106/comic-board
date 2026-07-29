@@ -4,8 +4,15 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-29 — Account settings, undo delete, search, detail-modal, and board-tabs fixes
+## 2026-07-29 — Multi-select, account settings, undo delete, search, detail-modal, and board-tabs fixes
 
+- **List-view multi-select + bulk actions.** A leading checkbox column with
+  shift-click range-select, and a bulk action bar for add to board / remove
+  from board / set publisher / add tag / delete — each looping an existing
+  single-comic mutation rather than a new batch endpoint. Bulk delete reuses
+  the undo-delete toast, restoring all of them from one "Undo." Bulk tag is
+  additive (unions into each comic's existing tags, doesn't overwrite them).
+  Grid-view marquee-select was deliberately left for later.
 - **Account settings.** A new "Account settings" dialog off the account menu
   lets you change your email and password — the first settings surface this
   app has had. Both actions were already core better-auth endpoints

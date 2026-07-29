@@ -95,6 +95,12 @@ export const Check = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+export const Minus = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+  </Icon>
+);
+
 export const ChevronLeft = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <path d="m15 18-6-6 6-6" />
