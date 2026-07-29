@@ -43,6 +43,7 @@ import { listViewBasics } from "./integration/features/list-view.mjs";
 import { bulkActions } from "./integration/features/bulk-actions.mjs";
 import { boardTabsAndReorder } from "./integration/features/board-tabs.mjs";
 import { searchAutocomplete } from "./integration/features/search-autocomplete.mjs";
+import { metadataAutofill } from "./integration/features/metadata-autofill.mjs";
 
 await buildAndSeed();
 const server = startServer();
@@ -73,6 +74,7 @@ try {
   await bulkActions(ctx);
   await boardTabsAndReorder(ctx);
   await searchAutocomplete(ctx, { N });
+  await metadataAutofill(ctx);
 
   await staleCookieLoop(ctx);
 

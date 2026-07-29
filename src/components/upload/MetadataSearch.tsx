@@ -65,6 +65,9 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
   const [coverIdx, setCoverIdx] = useState(0);
   const [cover, setCover] = useState<LoadedCover | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
+  // Tracked separately from `coverLoading`: on failure the load is finished but
+  // `cover` stays null, and "still loading" is not a truthful thing to render.
+  const [coverError, setCoverError] = useState(false);
 
   const active = config?.default ?? null;
 
@@ -83,6 +86,7 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
   if (prevSelection.picked !== picked || prevSelection.coverIdx !== coverIdx) {
     setPrevSelection({ picked, coverIdx });
     setCover(null);
+    setCoverError(false);
     setCoverLoading(!!picked && picked.covers.length > 0);
   }
 
@@ -103,7 +107,9 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
         setCover(c);
       })
       .catch((e) => {
-        if (!cancelled) toast((e as Error).message, "error");
+        if (cancelled) return;
+        setCoverError(true);
+        toast((e as Error).message, "error");
       })
       .finally(() => {
         if (!cancelled) setCoverLoading(false);
@@ -165,6 +171,7 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
           coverIdx={coverIdx}
           cover={cover}
           coverLoading={coverLoading}
+          coverError={coverError}
           onSelect={setCoverIdx}
           onBack={() => setPicked(null)}
           onUse={() => cover && onUseCover(cover.file)}
@@ -233,6 +240,7 @@ function PickedCard({
   coverIdx,
   cover,
   coverLoading,
+  coverError,
   onSelect,
   onBack,
   onUse,
@@ -241,6 +249,7 @@ function PickedCard({
   coverIdx: number;
   cover: LoadedCover | null;
   coverLoading: boolean;
+  coverError: boolean;
   onSelect: (idx: number) => void;
   onBack: () => void;
   onUse: () => void;
@@ -274,6 +283,11 @@ function PickedCard({
           {selected && <p className="truncate text-xs text-muted">{selected.label}</p>}
           {covers.length === 0 ? (
             <p className="mt-1 text-xs text-muted">No cover available from this provider.</p>
+          ) : coverError ? (
+            // Must come before the loading branch: on failure the fetch is done
+            // but `cover` is still null, and claiming it's loading would be a
+            // spinner that never resolves.
+            <p className="mt-1 text-xs text-red-400">Couldn&rsquo;t load this cover.</p>
           ) : coverLoading || !cover ? (
             <p className="mt-1 text-xs text-muted">Loading cover…</p>
           ) : null}

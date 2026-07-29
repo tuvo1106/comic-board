@@ -6,6 +6,20 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, detail-modal, and board-tabs fixes
 
+- **Stubbed the metadata provider in the integration suite**, so the Metron
+  autofill flow finally has UI coverage. It structurally couldn't before: the
+  panel self-hides without a configured provider and CI has no
+  `METRON_API_KEY`, so a headline feature was only ever checked by hand against
+  a rate-limited API. Now faked at the network boundary with
+  `page.setRequestInterception` across four routes (config, search, detail,
+  cover proxy) — deterministic, offline, and runnable in CI.
+  **It found a real bug on its first run:** the picked-cover card keyed its
+  status off `coverLoading || !cover`, so a *failed* cover fetch (done loading,
+  but `cover` still null) showed "Loading cover…" forever — the error toast is
+  transient, so the only lasting signal was a spinner that would never resolve.
+  Most likely trigger is the `ALLOWED_COVER_HOSTS` allowlist (currently just
+  `static.metron.cloud`), which would fail every cover the day Metron adds a CDN
+  host. Fixed with a distinct `coverError` state and a persistent message.
 - **Search autocomplete.** The top-bar search now has a typeahead dropdown of
   terms that actually exist in the collection, built entirely from the
   already-cached `/api/meta` payload — no new endpoint. Suggestion sources
