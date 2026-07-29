@@ -101,16 +101,50 @@ product than the one being built — the app is oriented around *seeing*
 covers, not appraising or inventorying them. Revisit only if that framing
 changes.
 
-### 2e. Autocomplete the collection search — ~half a day
+### 2e. Autocomplete the collection search — shipped (2026-07-29)
 
-The top-bar search (`TopBar.tsx`, wired through `BoardView.tsx`'s debounced
-search) is plain free-text. Add a typeahead dropdown suggesting matches from
-the **current collection** — `getMeta` already returns the series /
-publisher / author / artist / character / tag lists (the same source that
-already powers `MetadataForm`'s per-field autocomplete), so this is entirely
-client-side: filter those on input, show a grouped suggestion list, and
-selecting one sets the search term. No view-splitting complexity like 2a —
-`TopBar` is the one shared search input for both grid and list view.
+A typeahead dropdown on the top-bar search, suggesting terms that actually
+exist in the collection. Built from the already-cached `/api/meta` payload, so
+no new endpoint and no server round-trip. See `CHANGELOG.md`.
+
+Shipped as `src/lib/search-suggest.ts` (pure ranking, unit-tested) +
+`src/components/board/SearchBox.tsx` (the input and dropdown), with
+`BoardView` gaining an `onSearchCommit` path so picking a suggestion applies
+immediately instead of waiting out the 150ms typing debounce.
+
+Notes from doing it, beyond what was predicted below:
+
+- **The suggestion sources must mirror `applyFilters`' free-text haystack
+  exactly** (series, publisher, authors, artists, characters, tags) — if they
+  drift, the dropdown either suggests terms that match nothing or misses terms
+  that would. The plan below claimed the haystack includes issue number; it
+  does not, and deliberately so (a substring "3" would hit "13", "23", "30" —
+  see the comment in `filters.ts`). Both now say so in a comment.
+- **Ranking needed more than a substring filter**: prefix matches first, then
+  by how many comics carry the value, then alphabetically for a stable order.
+  Capped at 5.
+- **Values in several fields collapse to one row.** "Batman" is both a series
+  and a character, and under free-text search both rows run the *identical*
+  query — two rows, one outcome, which just wastes the list. The survivor is
+  picked by a stated priority (`KIND_PRIORITY`: character first, then series,
+  publisher, author, artist, tag) rather than by whichever count happened to be
+  higher, so the result is predictable. Tradeoff accepted: a term that's a major
+  series but a minor character shows and ranks by the smaller character count.
+- **Dedupe is what made keeping series viable.** Dropping the series field
+  outright was considered — it's the field that most often duplicates a
+  character name. But after character-priority dedupe, a series row only
+  survives when the title *isn't* also a character, i.e. exactly when it adds
+  information. And series is the best case for typeahead: measured against the
+  seed data, dropping it loses "Something is Killing the Children" (`some`),
+  "Supergirl and the Legion of Super-Heroes" (`legion`), "Batman: The Gargoyle
+  of Gotham" (`gargoyle`), and both `absolute` titles — all long titles worth
+  not typing — while only trimming `bat` from 5 rows to 3.
+- **Everything is case-insensitive**, including the dedupe key: series is a
+  plain column while characters/tags are their own tables, so the same name can
+  differ in case *across* fields even though each field de-dupes internally.
+- The existing `Autocomplete.tsx` has **no keyboard navigation at all** (only
+  Enter/Escape, and only when given an `onCommit`), so arrow-key nav and the
+  `aria` combobox/listbox wiring were new work rather than a reuse.
 
 - **Not a drop-in reuse of `Autocomplete.tsx`.** That component is built for
   a single flat list of same-type strings bound to one field (e.g. just

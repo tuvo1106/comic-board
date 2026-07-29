@@ -42,6 +42,7 @@ import { uploadValidateDeleteUndo } from "./integration/features/comic-lifecycle
 import { listViewBasics } from "./integration/features/list-view.mjs";
 import { bulkActions } from "./integration/features/bulk-actions.mjs";
 import { boardTabsAndReorder } from "./integration/features/board-tabs.mjs";
+import { searchAutocomplete } from "./integration/features/search-autocomplete.mjs";
 
 await buildAndSeed();
 const server = startServer();
@@ -71,6 +72,7 @@ try {
   await listViewBasics(ctx, { N });
   await bulkActions(ctx);
   await boardTabsAndReorder(ctx);
+  await searchAutocomplete(ctx, { N });
 
   await staleCookieLoop(ctx);
 

@@ -35,12 +35,36 @@ checkbox items — work it like this:
   not just the changed file's subset.
 - `npm run test:integration` — browser E2E (puppeteer). Spins up its own
   isolated app on port 3940 with a throwaway sqlite db; safe to run anytime.
+  It refuses to start if something is already listening on 3940 and prints the
+  `lsof`/`kill` commands to clear it — that guard exists because a leftover
+  server silently serving a *deleted* database was the cause of a long-running
+  "flaky suite" mystery (see `ENGINEERING_NOTES.md`).
+- `npm run lint` — ESLint (`eslint .`), config in `eslint.config.mjs`.
+  **Run it on the files you touch before committing.**
 
-**There is no working linter — don't try to run one.** `npm run lint` (and
-`next lint`) is dead: Next.js 16 removed the `lint` command, so it parses
-`lint` as a directory and errors with `no such directory: …/lint`. There's
-also no flat `eslint.config.js`, so bare `npx eslint` fails too. Rely on
-`npx tsc --noEmit` for static checking; don't burn time re-diagnosing lint.
+### About the linter
+
+`npm run lint` works. (An earlier version of this file claimed it was dead —
+that predated `eslint.config.mjs` being added and the `lint` script being
+repointed from the removed `next lint` to plain `eslint .`. The stale note had
+a real cost: it told agents not to lint, so `react-hooks` errors landed on
+`main` unnoticed. If a command here looks broken, verify before believing it.)
+
+Two things to know:
+
+- **CI does not run lint** (`.github/workflows/ci.yml` runs `tsc --noEmit`,
+  `npm test`, `npm run test:integration`). So nothing catches lint errors for
+  you — a clean CI run does not mean clean lint.
+- **Known pre-existing problems**, so you can tell yours from the baseline:
+  1 error in `src/components/upload/MetadataSearch.tsx` (`setState`
+  synchronously inside an effect) and 5 `no-unused-vars` warnings for
+  intentionally `_`-prefixed args. Anything else is probably yours.
+
+The `react-hooks` rules are on and they catch real bugs — refs read during
+render, and `setState` inside an effect where deriving during render would do.
+When one fires, prefer the fix this codebase already uses: adjust state during
+render guarded by a `prev` state value (see `BoardView.tsx`'s search re-sync
+and `SearchBox.tsx`'s highlight reset), not an effect.
 
 ## Database safety — read this
 

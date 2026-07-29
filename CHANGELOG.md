@@ -6,6 +6,28 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, detail-modal, and board-tabs fixes
 
+- **Search autocomplete.** The top-bar search now has a typeahead dropdown of
+  terms that actually exist in the collection, built entirely from the
+  already-cached `/api/meta` payload — no new endpoint. Suggestion sources
+  mirror the free-text haystack exactly (series, publisher, authors, artists,
+  characters, tags; `issueNumber` excluded from both, deliberately). Ranked
+  prefix-matches-first, then by how many comics carry the value, then
+  alphabetically; capped at 5. Values appearing in several fields collapse to
+  one row — "Batman" is both a series and a character, and both would run the
+  identical search — with the survivor chosen by a stated field priority
+  (character first) so the outcome is predictable. Case-insensitive throughout,
+  including the dedupe key. Picking a suggestion fills the box and applies
+  immediately, bypassing the typing debounce; it deliberately does *not* jump to
+  applying the value as a facet filter. Full keyboard support (arrows, Enter,
+  Escape) with `aria` combobox/listbox wiring — new work, since the existing
+  `Autocomplete` component has no keyboard navigation at all.
+- **Fixed two `react-hooks` lint errors** in `BoardView`'s search re-sync: it
+  read a ref during render, which isn't safe under concurrent rendering (the
+  value can come from a render that was thrown away). The "last value I pushed"
+  tracker is now state, written only from event handlers. These had gone
+  unnoticed because `AGENTS.md` wrongly claimed the repo had no working linter —
+  that note is corrected, and it now also records that CI does *not* run lint.
+
 - **Root-caused the "flaky" integration suite (item 4e): it was testing a
   deleted database.** Interrupting a run orphaned the test server (teardown
   lived only in a `finally`, which signals skip); the orphan kept port 3940

@@ -71,25 +71,35 @@ export function BoardView({ boardId }: { boardId?: string }) {
   // below can tell "the URL changed because my own debounced update() finally
   // landed" (ignore — searchInput may already be ahead of it) apart from "the
   // URL changed externally" (back/forward, cleared filters — adopt it).
-  const pushedQ = useRef(filters.q);
+  // State, not a ref: this is read while rendering to decide whether to adopt
+  // the URL's value, and a ref read during render isn't safe under concurrent
+  // rendering (it can be a value from a render that got thrown away). It's only
+  // ever written from an event handler, so it never cascades a render.
+  const [pushedQ, setPushedQ] = useState(filters.q);
   // Re-sync when the URL's `q` changes from elsewhere. Adjusting state during
   // render — rather than in an effect — avoids a wasted render pass. See "You
   // Might Not Need an Effect" (React docs).
   const [prevQ, setPrevQ] = useState(filters.q);
   if (filters.q !== prevQ) {
     setPrevQ(filters.q);
-    if (filters.q !== pushedQ.current) {
-      setSearchInput(filters.q);
-      pushedQ.current = filters.q;
-    }
+    if (filters.q !== pushedQ) setSearchInput(filters.q);
   }
   const onSearch = (value: string) => {
     setSearchInput(value);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      pushedQ.current = value;
+      setPushedQ(value);
       update({ q: value });
     }, 150);
+  };
+  // Picking a search suggestion is deliberate, not mid-typing, so apply it at
+  // once — and drop any in-flight debounce, which would otherwise land after
+  // this and overwrite it with whatever was half-typed.
+  const onSearchCommit = (value: string) => {
+    if (timer.current) clearTimeout(timer.current);
+    setSearchInput(value);
+    setPushedQ(value);
+    update({ q: value });
   };
   // Clear a pending debounce on unmount so a late update() can't fire after the
   // component is gone.
@@ -115,7 +125,12 @@ export function BoardView({ boardId }: { boardId?: string }) {
 
   return (
     <div className="min-h-screen">
-      <TopBar search={searchInput} onSearch={onSearch} onAdd={() => setAddOpen(true)} />
+      <TopBar
+        search={searchInput}
+        onSearch={onSearch}
+        onSearchCommit={onSearchCommit}
+        onAdd={() => setAddOpen(true)}
+      />
       <BoardTabs activeBoardId={boardId} />
       <FilterBar boardComics={comics ?? []} visibleComics={filtered} />
       <UploadModal
