@@ -440,6 +440,59 @@ try {
     notImage.status === 400 && /valid image/i.test(notImage.body.error ?? ""),
     `non-image upload rejected with 400 (got ${notImage.status})`,
   );
+  // Undo delete: deleting via the card menu shows an actionable "Undo" toast
+  // (soft delete, not a hard remove); clicking it restores the comic. Search
+  // down to just this card — it has no coverDate, so under the default sort
+  // it can sink below the virtualization window and never mount.
+  await p.goto(`${BASE}/?q=${encodeURIComponent("Uploaded Test")}`, { waitUntil: "networkidle0" });
+  await sleep(700);
+  const cardLabel = "Uploaded Test #99";
+  await p.evaluate((label) => {
+    const img = [...document.querySelectorAll("main img")].find((i) => i.alt === label);
+    img.closest(".group").querySelector("div.absolute.right-2 button").click();
+  }, cardLabel);
+  await sleep(300);
+  const [deleteMenuItem] = await p.$$("xpath/.//button[normalize-space(.)='Delete comic']");
+  await deleteMenuItem.click();
+  await sleep(300);
+  const deletePersisted = p
+    .waitForResponse(
+      (r) => r.url().endsWith(`/api/comics/${up.body.id}`) && r.request().method() === "DELETE",
+      { timeout: 10000 },
+    )
+    .catch(() => null);
+  const [confirmDeleteBtn] = await p.$$("xpath/.//button[normalize-space(.)='Delete']");
+  await confirmDeleteBtn.click();
+  await deletePersisted;
+  await sleep(400);
+
+  const cardGoneAfterDelete = await p.evaluate(
+    (label) => ![...document.querySelectorAll("main img")].some((i) => i.alt === label),
+    cardLabel,
+  );
+  ck(cardGoneAfterDelete, "deleted comic disappears from the board immediately");
+  const toastHasUndo = await p.evaluate(() =>
+    [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Undo"),
+  );
+  ck(toastHasUndo, "delete shows an actionable 'Undo' toast");
+
+  const restorePersisted = p
+    .waitForResponse(
+      (r) => r.url().endsWith(`/api/comics/${up.body.id}/restore`) && r.request().method() === "POST",
+      { timeout: 10000 },
+    )
+    .catch(() => null);
+  const [undoBtn] = await p.$$("xpath/.//button[normalize-space(.)='Undo']");
+  await undoBtn.click();
+  await restorePersisted;
+  await sleep(500);
+
+  const cardBackAfterUndo = await p.evaluate(
+    (label) => [...document.querySelectorAll("main img")].some((i) => i.alt === label),
+    cardLabel,
+  );
+  ck(cardBackAfterUndo, "clicking Undo restores the comic");
+
   await p.evaluate((id) => fetch(`/api/comics/${id}`, { method: "DELETE" }), up.body.id);
 
   // List view: grid⇄list toggle renders rows; inline editing persists a field

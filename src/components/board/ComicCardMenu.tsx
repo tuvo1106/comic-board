@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useDeleteComic, useRemoveFromBoard } from "@/lib/client-api";
+import { useDeleteComic, useRemoveFromBoard, useRestoreComic } from "@/lib/client-api";
 import type { ComicDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
@@ -18,6 +18,7 @@ interface Props {
 export function ComicCardMenu({ comic, currentBoardId }: Props) {
   const removeFromBoard = useRemoveFromBoard();
   const deleteComic = useDeleteComic();
+  const restoreComic = useRestoreComic();
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -32,7 +33,18 @@ export function ComicCardMenu({ comic, currentBoardId }: Props) {
   const doDelete = async () => {
     try {
       await deleteComic.mutateAsync(comic.id);
-      toast("Cover deleted", "success");
+      const label = `${comic.series}${comic.issueNumber ? ` #${comic.issueNumber}` : ""}`;
+      toast(`${label} deleted`, "success", {
+        duration: 6000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            restoreComic.mutate(comic.id, {
+              onError: (e) => toast((e as Error).message, "error"),
+            });
+          },
+        },
+      });
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -92,8 +104,8 @@ export function ComicCardMenu({ comic, currentBoardId }: Props) {
         <div className="p-5">
           <p className="text-sm text-muted">
             Delete “{comic.series}
-            {comic.issueNumber ? ` #${comic.issueNumber}` : ""}”? This removes it from every board
-            and cannot be undone.
+            {comic.issueNumber ? ` #${comic.issueNumber}` : ""}”? This removes it from every board.
+            You can undo from the toast for a few seconds after.
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button

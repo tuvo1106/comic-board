@@ -4,14 +4,27 @@ import { AnimatePresence, motion } from "motion/react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type ToastKind = "info" | "error" | "success";
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 interface Toast {
   id: number;
   message: string;
   kind: ToastKind;
+  action?: ToastAction;
+  duration: number;
+}
+
+interface ToastOptions {
+  action?: ToastAction;
+  /** Override the default auto-dismiss time (ms) — e.g. longer for an
+   *  actionable toast, so there's time to click before it's gone. */
+  duration?: number;
 }
 
 interface ToastCtx {
-  toast: (message: string, kind?: ToastKind) => void;
+  toast: (message: string, kind?: ToastKind, opts?: ToastOptions) => void;
 }
 
 const Ctx = createContext<ToastCtx | null>(null);
@@ -35,11 +48,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((t) => t.filter((x) => x.id !== id));
   }, []);
 
-  const toast = useCallback((message: string, kind: ToastKind = "info") => {
+  const toast = useCallback((message: string, kind: ToastKind = "info", opts?: ToastOptions) => {
     setToasts((t) => {
-      // Dedupe: an identical message already on screen doesn't stack again.
-      if (t.some((x) => x.message === message && x.kind === kind)) return t;
-      const next = [...t, { id: ++idRef.current, message, kind }];
+      // Dedupe: an identical message already on screen doesn't stack again —
+      // except an actionable toast, since each one targets a specific action
+      // (e.g. undoing one particular delete) and silently dropping it would
+      // silently drop that undo opportunity too.
+      if (!opts?.action && t.some((x) => x.message === message && x.kind === kind)) return t;
+      const next = [
+        ...t,
+        { id: ++idRef.current, message, kind, action: opts?.action, duration: opts?.duration ?? TOAST_MS },
+      ];
       // Cap: keep only the most recent MAX_TOASTS.
       return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
     });
@@ -53,7 +72,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       if (!timers.current.has(t.id)) {
         timers.current.set(
           t.id,
-          setTimeout(() => remove(t.id), TOAST_MS),
+          setTimeout(() => remove(t.id), t.duration),
         );
       }
     }
@@ -87,7 +106,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.9 }}
               transition={{ type: "spring", stiffness: 500, damping: 40 }}
-              className={`pointer-events-auto rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg backdrop-blur ${
+              className={`pointer-events-auto flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg backdrop-blur ${
                 t.kind === "error"
                   ? "bg-danger/90 text-white"
                   : t.kind === "success"
@@ -95,7 +114,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     : "bg-surface-2/95 text-fg ring-1 ring-border"
               }`}
             >
-              {t.message}
+              <span>{t.message}</span>
+              {t.action && (
+                <button
+                  onClick={() => {
+                    t.action?.onClick();
+                    remove(t.id);
+                  }}
+                  className="font-semibold underline underline-offset-2 hover:no-underline"
+                >
+                  {t.action.label}
+                </button>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>

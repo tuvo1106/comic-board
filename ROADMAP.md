@@ -11,16 +11,13 @@ flow) before writing code; don't cold-start one from a bare item description
 
 ---
 
-## 1. Undo delete — ~half a day
+## 1. Undo delete — shipped (2026-07-29)
 
-Delete is confirm-dialog-or-nothing. Replace with soft delete:
-
-- Add `deletedAt` to `comics`; scope every query in `src/db/queries.ts` to
-  `deletedAt IS NULL` (they already all go through a few list/get functions).
-- Toast "Cover deleted — Undo" for ~6s (toast system already exists); undo
-  clears `deletedAt`.
-- Defer file deletion (`storage.delete`) to a sweep of rows deleted >24h ago,
-  run opportunistically at startup.
+Soft delete via `comics.deletedAt`; every read query excludes it. A "Cover
+deleted" toast with an "Undo" action for 6s (`ComicCardMenu.tsx`,
+`ComicDetail.tsx`); undo clears `deletedAt`. Actual row + file removal is
+deferred to `sweepDeletedComics` (rows deleted >24h ago), run once per server
+start via `src/instrumentation.ts`. See `CHANGELOG.md`.
 
 ## 2. Collection features *(independent; pick by taste)*
 
@@ -296,16 +293,15 @@ both as base client methods with no plugin required.
 
 What's actually active after review (2026-07-29), in order:
 
-1. **Undo delete** (1) — the remaining data-safety gap.
-2. **Account settings** (6) — change email/password; a real, basic gap, and
+1. **Account settings** (6) — change email/password; a real, basic gap, and
    most of it (both endpoints) already exists server-side.
-3. **Multi-select + bulk actions** (2a), **stats page** (2c), **autocomplete
+2. **Multi-select + bulk actions** (2a), **stats page** (2c), **autocomplete
    search** (2e) — by appetite; 2b and 2d were skipped.
-4. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
+3. **Dockerize** (4a) whenever portable deployment matters — doesn't depend
    on anything else here. **Server-side pagination** (4c) only once one of
    its two concrete signals shows up (list view gets janky, or search stops
    feeling instant); **spec-driven behaviors** (4d) whenever process
    overhead is justified. 4b was skipped.
-5. ~~Sharing~~ — skipped.
+4. ~~Sharing~~ — skipped.
 
-Drag tabs to reorder (3) shipped 2026-07-29.
+Undo delete (1) and drag tabs to reorder (3) shipped 2026-07-29.

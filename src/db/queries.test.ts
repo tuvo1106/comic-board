@@ -92,11 +92,11 @@ describe("comic ownership scoping", () => {
     expect(q.getComic(userA, c.id)!.series).toBe("Detective Comics");
   });
 
-  it("another user cannot delete someone else's comic", async () => {
+  it("another user cannot delete someone else's comic", () => {
     const c = makeComic(userA);
-    expect(await q.deleteComic(userB, c.id)).toBe(false);
+    expect(q.deleteComic(userB, c.id)).toBe(false);
     expect(q.getComic(userA, c.id)).not.toBeNull();
-    expect(await q.deleteComic(userA, c.id)).toBe(true);
+    expect(q.deleteComic(userA, c.id)).toBe(true);
     expect(q.getComic(userA, c.id)).toBeNull();
   });
 
@@ -104,6 +104,63 @@ describe("comic ownership scoping", () => {
     const c = makeComic(userA);
     expect(q.updateComicPosition(userB, c.id, 5)).toBe(false);
     expect(q.updateComicPosition(userA, c.id, 5)).toBe(true);
+  });
+});
+
+describe("soft delete + undo", () => {
+  it("delete stamps deletedAt instead of removing the row", () => {
+    const c = makeComic(userA);
+    expect(q.deleteComic(userA, c.id)).toBe(true);
+    const row = sqlite.prepare("SELECT deleted_at FROM comics WHERE id = ?").get(c.id) as
+      | { deleted_at: number | null }
+      | undefined;
+    expect(row).toBeDefined();
+    expect(row!.deleted_at).not.toBeNull();
+  });
+
+  it("a soft-deleted comic disappears from listComics/getComic/getMeta", () => {
+    const c = makeComic(userA, { series: "Deleted Series" });
+    expect(q.listComics(userA)).toHaveLength(1);
+    q.deleteComic(userA, c.id);
+    expect(q.listComics(userA)).toHaveLength(0);
+    expect(q.getComic(userA, c.id)).toBeNull();
+    expect(q.getMeta(userA).series.map((s) => s.value)).not.toContain("Deleted Series");
+  });
+
+  it("deleting an already-deleted comic is a no-op", () => {
+    const c = makeComic(userA);
+    expect(q.deleteComic(userA, c.id)).toBe(true);
+    expect(q.deleteComic(userA, c.id)).toBe(false);
+  });
+
+  it("restore clears deletedAt and the comic reappears", () => {
+    const c = makeComic(userA);
+    q.deleteComic(userA, c.id);
+    expect(q.getComic(userA, c.id)).toBeNull();
+    expect(q.restoreComic(userA, c.id)).toBe(true);
+    expect(q.getComic(userA, c.id)).not.toBeNull();
+    expect(q.listComics(userA)).toHaveLength(1);
+  });
+
+  it("restore fails for a comic that isn't deleted, or owned by another user", () => {
+    const c = makeComic(userA);
+    expect(q.restoreComic(userA, c.id)).toBe(false); // not deleted yet
+    q.deleteComic(userA, c.id);
+    expect(q.restoreComic(userB, c.id)).toBe(false); // not owned
+  });
+
+  it("sweep hard-deletes comics past the cutoff, leaves recent ones alone", async () => {
+    const old = makeComic(userA);
+    const recent = makeComic(userA);
+    q.deleteComic(userA, old.id);
+    q.deleteComic(userA, recent.id);
+    // Backdate `old`'s deletedAt well past a 1000ms cutoff; `recent` stays now().
+    sqlite.prepare("UPDATE comics SET deleted_at = ? WHERE id = ?").run(Date.now() - 5000, old.id);
+
+    const swept = await q.sweepDeletedComics(1000);
+    expect(swept).toBe(1);
+    expect(sqlite.prepare("SELECT id FROM comics WHERE id = ?").get(old.id)).toBeUndefined();
+    expect(sqlite.prepare("SELECT id FROM comics WHERE id = ?").get(recent.id)).toBeDefined();
   });
 });
 

@@ -37,6 +37,10 @@ export const comics = sqliteTable("comics", {
   height: integer("height").notNull(),
   position: real("position").notNull(),
   createdAt: integer("created_at").notNull(),
+  // Soft delete: set on delete, cleared on undo. Every read query filters
+  // deletedAt IS NULL; actual row + file removal is deferred to a sweep of
+  // rows deleted more than 24h ago (see sweepDeletedComics in queries.ts).
+  deletedAt: integer("deleted_at"),
 });
 
 /** A user-created board. "My Comics" is virtual and never has a row here. */

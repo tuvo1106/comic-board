@@ -283,6 +283,14 @@ export function useDeleteComic() {
   });
 }
 
+export function useRestoreComic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => jsonFetch(`/api/comics/${id}/restore`, { method: "POST" }),
+    onSuccess: () => invalidateComicWorld(qc),
+  });
+}
+
 export interface PositionArgs {
   id: string;
   position: number;

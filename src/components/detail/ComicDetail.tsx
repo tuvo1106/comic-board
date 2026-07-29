@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBoards, useComic, useDeleteComic, useUpdateComic } from "@/lib/client-api";
+import { useBoards, useComic, useDeleteComic, useRestoreComic, useUpdateComic } from "@/lib/client-api";
 import { navOrder } from "@/lib/nav-order";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import type { ComicDTO } from "@/lib/types";
@@ -48,6 +48,7 @@ export function ComicDetail({ id, asModal }: Props) {
   const { toast } = useToast();
   const { data: comic, isLoading } = useComic(id);
   const deleteComic = useDeleteComic();
+  const restoreComic = useRestoreComic();
   const updateComic = useUpdateComic();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -157,7 +158,16 @@ export function ComicDetail({ id, asModal }: Props) {
   const onDelete = async () => {
     try {
       await deleteComic.mutateAsync(id);
-      toast("Cover deleted", "success");
+      const label = comic ? `${comic.series}${comic.issueNumber ? ` #${comic.issueNumber}` : ""}` : "Cover";
+      toast(`${label} deleted`, "success", {
+        duration: 6000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            restoreComic.mutate(id, { onError: (e) => toast((e as Error).message, "error") });
+          },
+        },
+      });
       close();
     } catch (e) {
       toast((e as Error).message, "error");

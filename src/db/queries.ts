@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
 import { positionAfterMax } from "@/lib/positions";
@@ -31,6 +31,12 @@ type DBOrTx = typeof db | Parameters<Parameters<(typeof db)["transaction"]>[0]>[
 // account to sign up claims it (see auth databaseHooks).
 function ownedBy(col: SQLiteColumn, userId: string | null): SQL {
   return userId == null ? isNull(col) : eq(col, userId);
+}
+
+// Every read of `comics` excludes soft-deleted rows (see `deleteComic`);
+// `sweepDeletedComics` is the sole exception, by design.
+function notDeleted(): SQL {
+  return isNull(comics.deletedAt);
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +209,7 @@ export function listComics(userId: string, boardId?: string | null): ComicDTO[] 
       .select({ comic: comics, pos: boardComics.position })
       .from(boardComics)
       .innerJoin(comics, eq(comics.id, boardComics.comicId))
-      .where(and(eq(boardComics.boardId, boardId), eq(comics.userId, userId)))
+      .where(and(eq(boardComics.boardId, boardId), eq(comics.userId, userId), notDeleted()))
       .orderBy(boardComics.position)
       .all();
     return attachRelations(rows.map((r) => ({ ...r.comic, position: r.pos })));
@@ -211,7 +217,7 @@ export function listComics(userId: string, boardId?: string | null): ComicDTO[] 
   const rows = db
     .select()
     .from(comics)
-    .where(eq(comics.userId, userId))
+    .where(and(eq(comics.userId, userId), notDeleted()))
     .orderBy(comics.position)
     .all();
   return attachRelations(rows);
@@ -221,7 +227,7 @@ export function getComic(userId: string, id: string): ComicDTO | null {
   const row = db
     .select()
     .from(comics)
-    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
     .get();
   if (!row) return null;
   return attachRelations([row])[0];
@@ -250,7 +256,7 @@ export function createComic(input: CreateComicInput): ComicDTO {
     const maxPos = tx
       .select({ m: sql<number>`max(${comics.position})` })
       .from(comics)
-      .where(ownedBy(comics.userId, input.userId))
+      .where(and(ownedBy(comics.userId, input.userId), notDeleted()))
       .get();
     const position = positionAfterMax(maxPos?.m ?? null);
 
@@ -315,7 +321,7 @@ export function updateComic(
   const owned = db
     .select({ id: comics.id })
     .from(comics)
-    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
     .get();
   if (!owned) return null;
 
@@ -354,16 +360,45 @@ export function updateComic(
   });
 }
 
-export async function deleteComic(userId: string, id: string): Promise<boolean> {
-  const row = db
-    .select()
+/** Soft delete: stamps `deletedAt`. Row + files are removed later by the
+ *  sweep (`sweepDeletedComics`), not here — this is what makes undo possible. */
+export function deleteComic(userId: string, id: string): boolean {
+  const res = db
+    .update(comics)
+    .set({ deletedAt: Date.now() })
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
+    .run();
+  return res.changes > 0;
+}
+
+/** Undo: clears `deletedAt`. False if the comic isn't owned or isn't deleted. */
+export function restoreComic(userId: string, id: string): boolean {
+  const res = db
+    .update(comics)
+    .set({ deletedAt: null })
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), isNotNull(comics.deletedAt)))
+    .run();
+  return res.changes > 0;
+}
+
+/**
+ * Hard-delete + clean up cover files for comics soft-deleted more than
+ * `maxAgeMs` ago (default 24h). Not user-scoped — a maintenance sweep across
+ * every account, meant to run opportunistically once per server start (see
+ * `src/instrumentation.ts`), not on a per-request path.
+ */
+export async function sweepDeletedComics(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
+  const cutoff = Date.now() - maxAgeMs;
+  const rows = db
+    .select({ id: comics.id, imagePath: comics.imagePath })
     .from(comics)
-    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
-    .get();
-  if (!row) return false;
-  db.delete(comics).where(eq(comics.id, id)).run(); // cascades join rows
-  await storage.deletePrefix(coverDir(row.imagePath)); // full.webp + thumb.webp + folder
-  return true;
+    .where(and(isNotNull(comics.deletedAt), lt(comics.deletedAt, cutoff)))
+    .all();
+  for (const row of rows) {
+    db.delete(comics).where(eq(comics.id, row.id)).run(); // cascades join rows
+    await storage.deletePrefix(coverDir(row.imagePath)); // full.webp + thumb.webp + folder
+  }
+  return rows.length;
 }
 
 /**
@@ -381,7 +416,7 @@ export async function replaceComicCover(
   const row = db
     .select({ imagePath: comics.imagePath, thumbPath: comics.thumbPath })
     .from(comics)
-    .where(and(eq(comics.id, id), eq(comics.userId, userId)))
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
     .get();
   if (!row) return null;
 
@@ -434,7 +469,7 @@ export function updateComicPosition(
   const res = db
     .update(comics)
     .set({ position })
-    .where(and(eq(comics.id, comicId), eq(comics.userId, userId)))
+    .where(and(eq(comics.id, comicId), eq(comics.userId, userId), notDeleted()))
     .run();
   return res.changes > 0;
 }
@@ -558,7 +593,7 @@ export function addComicToBoard(
   const comic = db
     .select({ id: comics.id })
     .from(comics)
-    .where(and(eq(comics.id, comicId), ownedBy(comics.userId, userId)))
+    .where(and(eq(comics.id, comicId), ownedBy(comics.userId, userId), notDeleted()))
     .get();
   if (!board || !comic) return false;
   addComicToBoardTx(db, boardId, comicId, Date.now());
@@ -587,7 +622,7 @@ export function getMeta(userId: string): MetaDTO {
   const series = db
     .select({ value: comics.series, count: sql<number>`count(*)` })
     .from(comics)
-    .where(eq(comics.userId, userId))
+    .where(and(eq(comics.userId, userId), notDeleted()))
     .groupBy(comics.series)
     .orderBy(comics.series)
     .all();
@@ -596,7 +631,7 @@ export function getMeta(userId: string): MetaDTO {
     .select({ value: publishers.name, count: sql<number>`count(*)` })
     .from(comics)
     .innerJoin(publishers, eq(publishers.id, comics.publisherId))
-    .where(eq(comics.userId, userId))
+    .where(and(eq(comics.userId, userId), notDeleted()))
     .groupBy(publishers.id)
     .orderBy(publishers.name)
     .all();
@@ -605,7 +640,10 @@ export function getMeta(userId: string): MetaDTO {
   const authorRows = db
     .select({ value: authors.name, count: sql<number>`count(*)` })
     .from(comicAuthors)
-    .innerJoin(comics, and(eq(comics.id, comicAuthors.comicId), eq(comics.userId, userId)))
+    .innerJoin(
+      comics,
+      and(eq(comics.id, comicAuthors.comicId), eq(comics.userId, userId), notDeleted()),
+    )
     .innerJoin(authors, eq(authors.id, comicAuthors.authorId))
     .groupBy(authors.id)
     .orderBy(authors.name)
@@ -613,7 +651,10 @@ export function getMeta(userId: string): MetaDTO {
   const artistRows = db
     .select({ value: artists.name, count: sql<number>`count(*)` })
     .from(comicArtists)
-    .innerJoin(comics, and(eq(comics.id, comicArtists.comicId), eq(comics.userId, userId)))
+    .innerJoin(
+      comics,
+      and(eq(comics.id, comicArtists.comicId), eq(comics.userId, userId), notDeleted()),
+    )
     .innerJoin(artists, eq(artists.id, comicArtists.artistId))
     .groupBy(artists.id)
     .orderBy(artists.name)
@@ -621,7 +662,10 @@ export function getMeta(userId: string): MetaDTO {
   const characterRows = db
     .select({ value: characters.name, count: sql<number>`count(*)` })
     .from(comicCharacters)
-    .innerJoin(comics, and(eq(comics.id, comicCharacters.comicId), eq(comics.userId, userId)))
+    .innerJoin(
+      comics,
+      and(eq(comics.id, comicCharacters.comicId), eq(comics.userId, userId), notDeleted()),
+    )
     .innerJoin(characters, eq(characters.id, comicCharacters.characterId))
     .groupBy(characters.id)
     .orderBy(characters.name)
@@ -629,7 +673,10 @@ export function getMeta(userId: string): MetaDTO {
   const tagRows = db
     .select({ value: tags.name, count: sql<number>`count(*)` })
     .from(comicTags)
-    .innerJoin(comics, and(eq(comics.id, comicTags.comicId), eq(comics.userId, userId)))
+    .innerJoin(
+      comics,
+      and(eq(comics.id, comicTags.comicId), eq(comics.userId, userId), notDeleted()),
+    )
     .innerJoin(tags, eq(tags.id, comicTags.tagId))
     .groupBy(tags.id)
     .orderBy(tags.name)

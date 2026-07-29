@@ -33,7 +33,7 @@ export async function DELETE(req: Request, { params }: Params) {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id } = await params;
-    const deleted = await deleteComic(userId, id);
+    const deleted = deleteComic(userId, id);
     return deleted ? ok({ ok: true }) : notFound("Comic not found");
   });
 }

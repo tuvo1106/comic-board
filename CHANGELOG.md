@@ -4,8 +4,14 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-29 — Search, detail-modal, and board-tabs fixes
+## 2026-07-29 — Undo delete, search, detail-modal, and board-tabs fixes
 
+- **Undo delete.** Deleting a comic now soft-deletes it (`comics.deletedAt`) —
+  every read query excludes it, so it disappears immediately, but a "Cover
+  deleted" toast with an "Undo" action (6s) restores it. Actual row + cover
+  file removal is deferred to a sweep of comics deleted more than 24h ago
+  (`sweepDeletedComics`), run once per server start
+  (`src/instrumentation.ts` — new: this app had no prior server-startup hook).
 - **Click-to-edit in the comic detail modal.** Clicking a display field
   (series, issue #, publisher, cover date, author, cover artists, characters,
   tags) now enters edit mode with that field focused, instead of requiring
