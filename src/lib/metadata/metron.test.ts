@@ -58,10 +58,10 @@ describe("mapMetronIssueDetail", () => {
     ],
   };
 
-  it("maps writers (via Script), all cover artists, and the release date", () => {
+  it("maps writers (via Script) and the release date", () => {
     const d = mapMetronIssueDetail(issue);
     expect(d.authors).toEqual(["Stan Lee"]); // "Script" counts as writer
-    expect(d.artists).toEqual(["Jack Kirby", "Steve Ditko"]); // all cover contributors
+    expect(d.artists).toEqual([]); // not autofilled — Metron can't attribute a cover credit to a specific variant
     expect(d).toMatchObject({
       series: "The Amazing Spider-Man",
       issueNumber: "1",
@@ -151,7 +151,7 @@ describe("metronProvider (fetch wiring)", () => {
 
     const d = await metronProvider("tok").detail("326");
     expect(d).toMatchObject({ series: "Batman", publisher: "DC", coverDate: "1940-04-01" });
-    expect(d.artists).toEqual(["Bob Kane"]);
+    expect(d.artists).toEqual([]);
     expect(d.covers[0]).toMatchObject({ label: "Main cover" });
     expect(String(fetchMock.mock.calls[0][0])).toContain("/issue/326/");
   });

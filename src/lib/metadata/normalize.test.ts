@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanNames, isCoverRole, isWriterRole, normalizeCoverDate, toYear } from "./normalize";
+import { cleanNames, isWriterRole, normalizeCoverDate, toYear } from "./normalize";
 
 describe("role classification", () => {
   it("treats writer/script/plot as authors", () => {
@@ -8,13 +8,6 @@ describe("role classification", () => {
     expect(isWriterRole(["Plot"])).toBe(true);
     expect(isWriterRole(["Letterer"])).toBe(false);
     expect(isWriterRole(["artist", "cover"])).toBe(false);
-  });
-
-  it("treats cover as cover artist", () => {
-    expect(isCoverRole(["cover"])).toBe(true);
-    expect(isCoverRole(["artist", "cover"])).toBe(true);
-    expect(isCoverRole(["Cover"])).toBe(true);
-    expect(isCoverRole(["penciler"])).toBe(false);
   });
 });
 

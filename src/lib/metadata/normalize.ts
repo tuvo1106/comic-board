@@ -2,17 +2,15 @@
 // logic (the risky part) is unit-testable against saved fixtures without touching
 // the network. See PROVIDERS.md for the raw shapes these consume.
 
-// A writer-ish role feeds `authors`; a cover role feeds `artists` (cover
-// artists). Metron labels the writer "Script"/"Plot". Compared case-insensitively.
+// A writer-ish role feeds `authors`. Metron labels the writer "Script"/"Plot".
+// Compared case-insensitively.
 const WRITER_ROLES = ["writer", "script", "plot"];
-const COVER_ROLES = ["cover"];
 
 function hasRole(roles: string[], match: string[]): boolean {
   return roles.some((r) => match.includes(r.trim().toLowerCase()));
 }
 
 export const isWriterRole = (roles: string[]) => hasRole(roles, WRITER_ROLES);
-export const isCoverRole = (roles: string[]) => hasRole(roles, COVER_ROLES);
 
 /**
  * Coerce a provider cover date to a strict `yyyy-mm-dd` (what the comic schema

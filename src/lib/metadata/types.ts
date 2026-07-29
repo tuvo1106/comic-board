@@ -37,7 +37,7 @@ export interface MetadataDetail {
   publisher: string | null;
   coverDate: string | null; // yyyy-mm-dd
   authors: string[]; // writer credits
-  artists: string[]; // cover-artist credits (all cover contributors)
+  artists: string[]; // cover-artist credits; not autofilled (see providers)
   /** Available covers, primary first, then any variants. Empty if none. */
   covers: CoverOption[];
 }

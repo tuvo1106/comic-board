@@ -62,9 +62,9 @@ could be added later. Key lives in `.env` (never sent to the client):
   printed cover date runs ahead of release, so release date is what we surface.
 - **Authors** = credits whose role matches `writer | script | plot` (Metron
   labels the writer "Script").
-- **Cover artists** = credits whose role matches `cover` — **all** cover
-  contributors (Metron doesn't attribute covers to specific variants, so a
-  multi-variant issue lists every cover creator; the user prunes).
+- **Cover artists** = intentionally **not** autofilled (Metron doesn't
+  attribute covers to specific variants, so a "Cover"-role credit could
+  belong to any variant, not the one the user is adding).
 - **Characters** = intentionally **not** autofilled.
 - **Covers** = primary `image` first (label "Main cover"), then `variants[]`
   (label = variant `name`, or "Variant N" when unnamed); de-duped by URL.

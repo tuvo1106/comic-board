@@ -1,5 +1,5 @@
 import { fetchJson, readRateLimit } from "./http";
-import { cleanNames, isCoverRole, isWriterRole, normalizeCoverDate, toYear } from "./normalize";
+import { cleanNames, isWriterRole, normalizeCoverDate, toYear } from "./normalize";
 import {
   type CoverOption,
   type MetadataCandidate,
@@ -70,19 +70,16 @@ export function mapMetronIssueDetail(issue: MetronIssueDetail): MetadataDetail {
   const authors = cleanNames(
     credits.filter((c) => isWriterRole(roleNames(c))).map((c) => c.creator),
   );
-  const artists = cleanNames(
-    credits.filter((c) => isCoverRole(roleNames(c))).map((c) => c.creator),
-  );
   return {
     series: issue.series.name,
     issueNumber: issue.number?.trim() || null,
     publisher: issue.publisher?.name?.trim() || null,
     coverDate: releaseDate(issue.store_date, issue.cover_date),
     authors,
-    // All cover contributors — Metron doesn't attribute covers to specific
-    // variants, so this is the full "Cover"-role set. Characters are
-    // intentionally NOT autofilled (unreliable from the source).
-    artists,
+    // Artists and characters are intentionally NOT autofilled: Metron doesn't
+    // attribute covers to specific variants, so a "Cover"-role credit could
+    // belong to any variant, not the one the user is adding.
+    artists: [],
     covers: metronCovers(issue.image, issue.variants),
   };
 }
