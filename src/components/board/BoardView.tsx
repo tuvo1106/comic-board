@@ -67,18 +67,29 @@ export function BoardView({ boardId }: { boardId?: string }) {
   // Debounced search: type into local state, push to the URL after 150ms.
   const [searchInput, setSearchInput] = useState(filters.q);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Re-sync when the URL's `q` changes from elsewhere (back/forward, cleared
-  // filters). Adjusting state during render — rather than in an effect — avoids
-  // a wasted render pass. See "You Might Not Need an Effect" (React docs).
+  // Track the last value *this component* pushed to the URL, so the re-sync
+  // below can tell "the URL changed because my own debounced update() finally
+  // landed" (ignore — searchInput may already be ahead of it) apart from "the
+  // URL changed externally" (back/forward, cleared filters — adopt it).
+  const pushedQ = useRef(filters.q);
+  // Re-sync when the URL's `q` changes from elsewhere. Adjusting state during
+  // render — rather than in an effect — avoids a wasted render pass. See "You
+  // Might Not Need an Effect" (React docs).
   const [prevQ, setPrevQ] = useState(filters.q);
   if (filters.q !== prevQ) {
     setPrevQ(filters.q);
-    setSearchInput(filters.q);
+    if (filters.q !== pushedQ.current) {
+      setSearchInput(filters.q);
+      pushedQ.current = filters.q;
+    }
   }
   const onSearch = (value: string) => {
     setSearchInput(value);
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => update({ q: value }), 150);
+    timer.current = setTimeout(() => {
+      pushedQ.current = value;
+      update({ q: value });
+    }, 150);
   };
   // Clear a pending debounce on unmount so a late update() can't fire after the
   // component is gone.
