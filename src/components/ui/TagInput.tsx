@@ -3,6 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import { X } from "./icons";
 
+// Cap suggestions so the dropdown stays short enough to show without scrolling
+// the form (it opens inside the edit/upload modal's scroll area).
+const MAX_SUGGESTIONS = 3;
+
 interface Props {
   values: string[];
   onChange: (values: string[]) => void;
@@ -21,7 +25,7 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
     return suggestions
       .filter((s) => !values.some((v) => v.toLowerCase() === s.toLowerCase()))
       .filter((s) => (q ? s.toLowerCase().includes(q) : true))
-      .slice(0, 8);
+      .slice(0, MAX_SUGGESTIONS);
   }, [suggestions, values, input]);
 
   const add = (raw: string) => {
@@ -34,6 +38,15 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
   };
 
   const remove = (value: string) => onChange(values.filter((v) => v !== value));
+
+  const onFocus = () => {
+    setFocused(true);
+    // Scroll the field toward the middle of the form's scroll area so its
+    // (now short) suggestions dropdown has room below and is fully visible.
+    requestAnimationFrame(() => {
+      inputRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  };
 
   return (
     <div className="relative">
@@ -63,7 +76,7 @@ export function TagInput({ values, onChange, suggestions, placeholder }: Props) 
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onFocus={() => setFocused(true)}
+          onFocus={onFocus}
           onBlur={() => {
             // Commit whatever was typed but not yet Entered, so "type a name
             // then click Save" works without an explicit Enter first.
