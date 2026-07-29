@@ -259,8 +259,18 @@ determined *not* to be caused by this work, then deliberately not chased
 further.
 
 Splitting `tests/integration.mjs` into per-feature files was considered as a
-followup to this reframing but deferred — a separate decision, not bundled
-with the coverage-gap fill.
+followup to this reframing, deferred at first, then done right after: the
+single ~950-line script is now `tests/integration.mjs` (a thin orchestrator —
+env setup/teardown + run order) plus `tests/integration/{env,lifecycle,
+helpers}.mjs` and one file per feature area under
+`tests/integration/features/` (auth, account settings, export, board view,
+detail modal, board membership, comic lifecycle, list view, bulk actions,
+board tabs). Pure reorganization, not a behavior change — the suite shares
+one Next build, one server, and one browser page across all of it, since
+later features depend on state earlier ones leave behind (the modal's `cid`,
+the board's `N`, list view leaving the page in list mode for bulk-actions to
+continue from); each feature file documents its own preconditions/what it
+returns for the next one rather than pretending to be fully isolated.
 
 ### 4e. Investigate integration-test-harness flakiness — not started
 
