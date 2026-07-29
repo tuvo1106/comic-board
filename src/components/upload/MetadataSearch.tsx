@@ -70,18 +70,29 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
 
   const search = useMetadataSearch({ provider: active, q: query ?? "", enabled: query != null });
 
+  // Clear the previously-loaded cover the moment the selection changes, during
+  // render rather than inside the effect below. Doing it in the effect renders
+  // once with the stale cover still on screen and then again after clearing it —
+  // the cascade `react-hooks/set-state-in-effect` flags. The object URL is still
+  // revoked by the effect's cleanup, which is what owns it.
+  //
+  // This also fixes a stuck spinner: the old code's early-return branch cleared
+  // `cover` but not `coverLoading`, so deselecting mid-load left it true forever
+  // (the in-flight `.finally` is suppressed by `cancelled`).
+  const [prevSelection, setPrevSelection] = useState({ picked, coverIdx });
+  if (prevSelection.picked !== picked || prevSelection.coverIdx !== coverIdx) {
+    setPrevSelection({ picked, coverIdx });
+    setCover(null);
+    setCoverLoading(!!picked && picked.covers.length > 0);
+  }
+
   // Load the selected cover (fetch bytes + read dimensions) whenever the picked
   // record or the chosen cover index changes. Revokes the previous object URL.
   useEffect(() => {
-    if (!picked || picked.covers.length === 0) {
-      setCover(null);
-      return;
-    }
+    if (!picked || picked.covers.length === 0) return;
     const opt = picked.covers[coverIdx] ?? picked.covers[0];
     let cancelled = false;
     let created: string | null = null;
-    setCover(null);
-    setCoverLoading(true);
     loadCover(opt, picked.series, picked.issueNumber)
       .then((c) => {
         if (cancelled) {

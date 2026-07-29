@@ -26,6 +26,12 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # The react-hooks rules here catch real bugs that tsc can't (refs read
+      # during render, setState cascades in effects). Two such errors sat on main
+      # unnoticed precisely because nothing ran this.
+      - name: Lint
+        run: npm run lint
+
       - name: Unit tests
         run: npm test
 

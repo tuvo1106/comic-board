@@ -339,6 +339,33 @@ orphan and no leftover dirs; the full suite still reports the same 74 passes.
 See `ENGINEERING_NOTES.md` for the forensics (an `lsof` showing six open fds
 to a database directory that `ls` said didn't exist).
 
+### 4f. Stub the metadata provider in the integration suite — not started
+
+The Metron autofill flow (`MetadataSearch.tsx` — search, pick a match, choose
+among cover variants, apply to the form) has **no UI test coverage at all**, and
+structurally can't get any as things stand: the panel self-hides unless a
+provider is configured, and CI has no `METRON_API_KEY`. So a headline feature is
+only ever verified by hand, against a rate-limited third-party API.
+
+Stubbing is the fix, and it's *better* than testing against the real provider —
+deterministic, offline, no quota, and able to drive states (cover-load failure,
+a record with no covers, many variants) that are awkward to reproduce on demand.
+
+The mechanism already exists in the suite: `board-tabs.mjs` uses
+`page.setRequestInterception` to fake a 500 on the board PATCH. Four routes to
+intercept:
+
+- `GET /api/metadata` → a config naming one provider, so the panel renders
+- `GET /api/metadata/search?…` → canned `MetadataCandidate[]`
+- `GET /api/metadata/detail?…` → a `MetadataDetail` with 2+ `CoverOption`s
+- the cover proxy → a 1×1 PNG, so `loadCover` resolves without a network hop
+
+Worth covering once stubbed: prefill lands in the form, switching variants
+reloads the cover, a record with no covers doesn't wedge the loading state (a
+real bug found and fixed here on 2026-07-29 by reading — the early-return branch
+cleared `cover` but not `coverLoading`), and a failed cover fetch toasts instead
+of hanging.
+
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 
 Would have been public read-only board links. Not wanted. (Its two

@@ -50,21 +50,20 @@ repointed from the removed `next lint` to plain `eslint .`. The stale note had
 a real cost: it told agents not to lint, so `react-hooks` errors landed on
 `main` unnoticed. If a command here looks broken, verify before believing it.)
 
-Two things to know:
-
-- **CI does not run lint** (`.github/workflows/ci.yml` runs `tsc --noEmit`,
-  `npm test`, `npm run test:integration`). So nothing catches lint errors for
-  you — a clean CI run does not mean clean lint.
-- **Known pre-existing problems**, so you can tell yours from the baseline:
-  1 error in `src/components/upload/MetadataSearch.tsx` (`setState`
-  synchronously inside an effect) and 5 `no-unused-vars` warnings for
-  intentionally `_`-prefixed args. Anything else is probably yours.
+**CI runs it** (`.github/workflows/ci.yml`, in the `build` job alongside
+`tsc --noEmit`), and the repo is currently **completely clean — zero errors,
+zero warnings**. So any problem you see is yours; don't hunt for a baseline.
 
 The `react-hooks` rules are on and they catch real bugs — refs read during
 render, and `setState` inside an effect where deriving during render would do.
 When one fires, prefer the fix this codebase already uses: adjust state during
-render guarded by a `prev` state value (see `BoardView.tsx`'s search re-sync
-and `SearchBox.tsx`'s highlight reset), not an effect.
+render guarded by a `prev` state value, not an effect. Three worked examples:
+`BoardView.tsx`'s search re-sync, `SearchBox.tsx`'s highlight reset, and
+`MetadataSearch.tsx`'s cover reset.
+
+`no-unused-vars` is configured to ignore `_`-prefixed names (args, vars, caught
+errors) — that's the repo's signal for "deliberately unused", so prefix rather
+than disabling the rule.
 
 ## Database safety — read this
 
