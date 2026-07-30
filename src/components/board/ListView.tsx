@@ -23,6 +23,11 @@ interface Props {
   onSort: (field: SortField) => void;
 }
 
+/**
+ * The list/table view of a board — every field editable in place, sortable
+ * column headers, and (unlike the virtualized grid) every row always mounted,
+ * which is what makes shift-click range-select straightforward here.
+ */
 export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, onSort }: Props) {
   const { data: meta } = useMeta();
   const suggestions = {

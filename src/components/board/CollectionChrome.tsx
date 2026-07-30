@@ -8,21 +8,13 @@ import { BoardTabs } from "./BoardTabs";
 import { UploadModal } from "@/components/upload/UploadModal";
 
 /**
- * Persistent chrome for every collection view — the board, a custom board, and
- * the stats page.
+ * Persistent header, tab strip and upload modal for every collection view —
+ * the board, a custom board, and stats.
  *
- * This lives in a layout rather than inside each page because it used to be the
- * other way round: `BoardView` and `StatsView` each rendered their own `TopBar`
- * and `BoardTabs`, so navigating between them tore the entire header and tab
- * strip down and built a fresh copy. Measured, the DOM node never survived a
- * transition — which is why moving between views looked like a full page
- * reload even though it was a client-side navigation the whole time (the JS
- * globals survived and no new navigation entry was created).
- *
- * Hoisting it also fixes the tab underline. `layoutId="active-tab"` animates
- * between two states only if both exist in one continuous Motion tree, and that
- * tree was being destroyed mid-navigation — so the underline popped instead of
- * sliding. Now only `<main>` swaps.
+ * **Must stay in the layout, not in each page.** Rendering it per-page rebuilds
+ * the whole header on every navigation (which reads as a full page reload) and
+ * destroys the Motion tree `layoutId="active-tab"` needs, so the tab underline
+ * pops instead of sliding. See `ENGINEERING_NOTES.md`.
  */
 export function CollectionChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -35,22 +27,17 @@ export function CollectionChrome({ children }: { children: React.ReactNode }) {
   const [addOpen, setAddOpen] = useState(false);
 
   // Debounced search: type into local state, push to the URL after 150ms.
-  // Moved here wholesale from BoardView, so it now survives navigating between
-  // boards instead of resetting.
   const [searchInput, setSearchInput] = useState(filters.q);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track the last value *this component* pushed to the URL, so the re-sync
-  // below can tell "the URL changed because my own debounced update() finally
-  // landed" (ignore — searchInput may already be ahead of it) apart from "the
-  // URL changed externally" (back/forward, cleared filters — adopt it).
-  // State, not a ref: this is read while rendering to decide whether to adopt
-  // the URL's value, and a ref read during render isn't safe under concurrent
-  // rendering (it can be a value from a render that got thrown away). It's only
-  // ever written from an event handler, so it never cascades a render.
+  // The last value *this* component pushed, so the re-sync below can tell its
+  // own debounced update() landing (ignore — searchInput is already ahead) from
+  // the URL changing externally (back/forward, cleared filters — adopt it).
+  // State rather than a ref because it's read during render, which a ref isn't
+  // safe for under concurrent rendering; only ever written from a handler, so
+  // it never cascades a render.
   const [pushedQ, setPushedQ] = useState(filters.q);
-  // Re-sync when the URL's `q` changes from elsewhere. Adjusting state during
-  // render — rather than in an effect — avoids a wasted render pass. See "You
-  // Might Not Need an Effect" (React docs).
+  // Adjusted during render rather than in an effect, which would cost a wasted
+  // pass ("You Might Not Need an Effect", React docs).
   const [prevQ, setPrevQ] = useState(filters.q);
   if (filters.q !== prevQ) {
     setPrevQ(filters.q);

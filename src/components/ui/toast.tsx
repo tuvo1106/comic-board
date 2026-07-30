@@ -39,6 +39,7 @@ export function useToast(): ToastCtx {
   return ctx;
 }
 
+/** Mounts the toast stack and context; wrap the app once near the root. */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const idRef = useRef(0);

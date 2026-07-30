@@ -1,21 +1,16 @@
-import type { ComicDTO } from "./types";
-
 /**
  * Collection statistics, computed client-side over the full comics list.
  *
- * Why no new SQL: "My Comics" already fetches the user's entire collection in
- * one shot (no pagination), and every other derived view — filters, sort, facet
- * counts (`computeFacets`) — is computed in-memory off that same list. These are
- * cheap array reduces over data the board has already loaded, so the stats page
- * needs no API route of its own and stays consistent with the rest of the app.
+ * No new SQL: the board already fetches the whole collection unpaginated, and
+ * every other derived view (filters, sort, `computeFacets`) reduces over that
+ * same in-memory list.
  *
- * One invariant runs through every breakdown here: **the buckets always sum to
- * the number of comics.** A comic with no publisher, no cover date, or no
- * rating still lands somewhere ("No publisher", "Unknown", "Unrated"), and a
- * truncated top-N list carries the remainder in an "Other" bucket. Charts whose
- * bars silently don't add up are worse than no charts — you can't tell a small
- * collection from a lot of missing metadata.
+ * **Invariant: every breakdown's buckets sum to the comic count.** Anything
+ * without a publisher, cover date or rating lands in its own bucket, and a
+ * truncated top-N carries the rest in "Other" — bars that don't add up can't
+ * distinguish a small collection from missing metadata.
  */
+import type { ComicDTO } from "./types";
 
 /** A labelled count. `value` is the raw facet value for filter links; null = synthetic bucket. */
 export interface CountBucket {
@@ -195,13 +190,9 @@ function ratingBreakdown(comics: ComicDTO[]): RatingBucket[] {
 /**
  * Covers per release year, gap-filled across the whole span.
  *
- * Keyed off `coverDate` — when the comic came out — not `createdAt`. When you
- * happened to upload a scan is an artifact of data entry; the release year is a
- * property of the collection itself, and it's what makes a run of issues or a
- * gap in an era visible.
- *
- * Deliberately not cumulative: a running total of release years would only ever
- * restate the collection size. The per-year count is the shape worth seeing.
+ * Keyed off `coverDate`, not `createdAt`: when you uploaded a scan is an
+ * artifact of data entry. Not cumulative either — a running total of release
+ * years would only restate the collection size.
  */
 function releaseYears(comics: ComicDTO[]): YearPoint[] {
   const counts = new Map<number, number>();
@@ -236,6 +227,7 @@ function totals(comics: ComicDTO[]): Totals {
   };
 }
 
+/** Entry point: every stats-page breakdown from one pass over `comics`. */
 export function computeStats(comics: ComicDTO[]): Stats {
   return {
     totals: totals(comics),

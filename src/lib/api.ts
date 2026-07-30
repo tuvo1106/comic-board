@@ -19,6 +19,13 @@ export function unauthorized(message = "Not signed in") {
 }
 
 /** Wrap a route body so thrown ZodErrors become 400s and others become 500s. */
+/**
+ * Wraps a route handler body, turning thrown errors into the right client-safe
+ * response: Zod validation errors become 400s with field detail, `MetadataError`
+ * passes its status and message through (an upstream provider's own message,
+ * never the API key), and anything else is logged server-side and reduced to a
+ * bare 500 — no internal message or stack hint reaches the client.
+ */
 export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
   try {
     return await fn();
