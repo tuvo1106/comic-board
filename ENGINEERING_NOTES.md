@@ -129,6 +129,75 @@ width) was three lines; noticing was the whole job.
 
 ## Bugs
 
+### A dead end, then a false affordance: two wrong fixes before the right one (2026-07-29)
+
+**I shipped a stats page you couldn't get out of, "fixed" it in a way that was
+arguably worse, and only got there after asking for an outside review of my own
+change.** Worth keeping because the failure mode is a specific one: reasoning
+about what a control *means* instead of what it *signals*.
+
+The app navigates between boards with a tab strip — `My Comics 25 | Vintage
+Vault 6 | All In 4 | +`. I built `/stats` without it, on the argument that tabs
+are boards you can rename, reorder and delete, and stats is none of those. The
+argument is true and irrelevant: the effect was to strip the app's primary
+navigation off the page. The only exits left were a wordmark that doesn't read
+as clickable, and a "Stats" button that silently retargeted to `/` once you were
+already on stats — a fixed label with a changing destination, which is worse
+than no back button because you have to guess.
+
+Fix attempt one: render the strip on `/stats` with nothing highlighted. This
+felt principled — none of those tabs *is* the current view, so highlighting one
+would be a lie. An impartial reviewer took it apart in two moves. First, **every
+tab carries a count, and the stats page is made entirely of counts**, so a row
+of counts directly above the charts reads as a scope selector; clicking "Vintage
+Vault" expecting stats for those 6 covers instead throws you out of stats
+altogether. A dead end is annoying, but a mis-signalled control loses your place
+— strictly worse. Second, **zero-selection is a state no tab control has**, so
+it reads as broken rather than as "none of these", and it strands the
+`layoutId="active-tab"` shared-layout underline, which then pops instead of
+sliding on the way back.
+
+The right answer was the one my original framing had ruled out: make Stats a
+*peer item inside the strip*, after the `+`, behind a divider, taking the normal
+highlight. Exactly one item is always current, the underline animates both ways,
+and "My Comics" is where it always is. My objection — stats isn't a board — was
+already answered by the `+` button, a non-board member of that strip that had
+been sitting there the whole time.
+
+The lesson I'd actually give: **a control's affordance is set by what it looks
+like next to its neighbours, not by the category you've assigned it in your
+head.** And when you're the author of the thing under review, you are the worst
+available reviewer of it — the argument that justified the original design is
+exactly what keeps you from seeing the alternative.
+
+**Postscript, and the better debugging story.** With the tab fixed, the report
+became "the first time I switch to Stats, it looks like the whole page
+reloaded." Two plausible causes, wanting opposite fixes, so I measured instead
+of guessing — a JS global plus a `data-` marker on the header node, checked
+after each transition:
+
+```
+                 time    JS global   header node   navigation entries
+first  → Stats   503ms   survived    REBUILT       1
+second → Stats    52ms   survived    REBUILT       1
+```
+
+The global surviving and the single navigation entry prove it was never a
+reload. But two real effects were hiding behind one symptom. The 503ms→52ms drop
+on the *same route* is Next compiling on demand — dev-only, gone in production,
+and the reason it was "the first time" specifically. The header node being
+rebuilt on *every* transition was the actual bug, and mine: `BoardView` and
+`StatsView` each rendered their own `TopBar` and `BoardTabs`, so navigating
+between them destroyed the whole chrome and built a new one. Hoisting it into a
+shared route-group layout flipped `headerNodeSurvived` to true everywhere.
+
+It also explains something I'd wrongly attributed to the tab layout: the
+underline couldn't animate because `layoutId` needs both states in one
+continuous Motion tree, and the tree was being destroyed mid-navigation. Two
+symptoms, one cause, and neither would have been found by reasoning — "looks
+like a reload" is a feeling, and the only way through it was to define exactly
+what a reload *would* do and test for each part separately.
+
 ### Two bugs a green test suite couldn't see, and why (2026-07-29)
 
 **Both were reported by a user against a suite of 198 unit tests and 144

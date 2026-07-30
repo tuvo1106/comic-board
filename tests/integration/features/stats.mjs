@@ -14,15 +14,45 @@ export async function statsPage({ p, ck, sleep, apiJson, coverCount }) {
   await p.goto(BASE, { waitUntil: "networkidle0" });
   await sleep(600);
 
-  // Reachable from the board, without hunting for it in a menu.
-  const navHref = await p.evaluate(
-    () => document.querySelector("header a[href='/stats']")?.getAttribute("href") ?? null,
-  );
-  ck(navHref === "/stats", "the board's top bar links to the stats page");
+  // Stats is a peer view in the tab strip, not a header action — so it's found
+  // in the same place as every other view, and highlights itself like one.
+  const entry = await p.evaluate(() => {
+    const strip = document.querySelector("div.sticky");
+    return {
+      inStrip: !!strip?.querySelector("a[href='/stats']"),
+      inHeader: !!document.querySelector("header a[href='/stats']"),
+      // A count here would re-imply the stats are scoped to a subset.
+      hasCount: /\d/.test(strip?.querySelector("a[href='/stats']")?.textContent ?? ""),
+    };
+  });
+  ck(entry.inStrip, "Stats sits in the tab strip alongside the boards");
+  ck(!entry.inHeader, "and isn't duplicated as a header button");
+  ck(!entry.hasCount, "it carries no count, unlike the board tabs");
 
-  await p.evaluate(() => document.querySelector("header a[href='/stats']").click());
+  // Tag the live chrome so the navigation below can prove it was *kept*, not
+  // rebuilt. TopBar and BoardTabs used to be rendered inside each page, so
+  // moving between views tore the whole header down and mounted a fresh copy —
+  // a client-side navigation that looked exactly like a full page reload. They
+  // now live in the (collection) group's layout, so only <main> swaps.
+  await p.evaluate(() => {
+    window.__chromeProbe = "alive";
+    document.querySelector("header").dataset.probe = "same-node";
+  });
+
+  await p.evaluate(() => document.querySelector("div.sticky a[href='/stats']").click());
   await sleep(1200);
-  ck(new URL(p.url()).pathname === "/stats", `the Stats link navigates there (at ${p.url()})`);
+  ck(new URL(p.url()).pathname === "/stats", `the Stats tab navigates there (at ${p.url()})`);
+
+  const persisted = await p.evaluate(() => ({
+    header: document.querySelector("header")?.dataset.probe === "same-node",
+    js: window.__chromeProbe === "alive",
+    navEntries: performance.getEntriesByType("navigation").length,
+  }));
+  ck(persisted.js && persisted.navEntries === 1, "navigating to stats is a client-side transition");
+  ck(
+    persisted.header,
+    "and the header survives it rather than being rebuilt (no reload flash)",
+  );
 
   const read = () =>
     p.evaluate(() => {
@@ -128,7 +158,58 @@ export async function statsPage({ p, ck, sleep, apiJson, coverCount }) {
   });
   ck(ratingLinks === 0, `the rating histogram has no drill-through links (${ratingLinks})`);
 
-  // The wordmark is the way back out.
+  // Getting back to the covers must be obvious, and the strip must never be in
+  // a zero-selection state. Two earlier attempts failed here: no strip at all
+  // (a dead end), then a strip with nothing highlighted — which reads as broken
+  // and, because every board tab carries a count, looks like a scope selector
+  // for a page that is entirely counts.
+  const backNav = await p.evaluate(() => {
+    const strip = document.querySelector("div.sticky");
+    const items = [...(strip?.querySelectorAll("a, button") ?? [])]
+      .map((el) => el.textContent.trim())
+      .filter(Boolean);
+    const current = strip?.querySelector("[aria-current='page']");
+    return {
+      items,
+      currentLabel: current?.textContent.trim() ?? null,
+      // Exactly one item may claim to be the current view.
+      currentCount: strip?.querySelectorAll("[aria-current='page']").length ?? -1,
+      myComicsHref: [...(strip?.querySelectorAll("a") ?? [])]
+        .find((a) => a.textContent.includes("My Comics"))
+        ?.getAttribute("href"),
+    };
+  });
+  ck(
+    backNav.items.some((t) => t.startsWith("My Comics")),
+    `the board tabs stay available on the stats page (${backNav.items.join(", ")})`,
+  );
+  ck(
+    backNav.currentCount === 1 && backNav.currentLabel === "Stats",
+    `exactly one item is highlighted, and it's Stats (${backNav.currentCount}: ${backNav.currentLabel})`,
+  );
+  ck(
+    backNav.myComicsHref === "/",
+    "My Comics is a real link, so it middle-clicks and reads as a destination",
+  );
+
+  await p.evaluate(() => {
+    [...document.querySelectorAll("div.sticky a")]
+      .find((a) => a.textContent.includes("My Comics"))
+      ?.click();
+  });
+  await sleep(1400);
+  ck(new URL(p.url()).pathname === "/", "clicking My Comics returns to the covers");
+  const backHighlight = await p.evaluate(
+    () => document.querySelector("div.sticky [aria-current='page']")?.textContent.trim() ?? null,
+  );
+  ck(
+    backHighlight?.startsWith("My Comics") === true,
+    `and the highlight moves back to My Comics (got ${backHighlight})`,
+  );
+
+  // The wordmark still works as a secondary way out.
+  await p.goto(`${BASE}/stats`, { waitUntil: "networkidle0" });
+  await sleep(900);
   await p.evaluate(() => document.querySelector("header a[href='/']").click());
   await sleep(1200);
   ck(new URL(p.url()).pathname === "/", "the wordmark navigates back to the board");

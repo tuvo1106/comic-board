@@ -6,6 +6,37 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, stats, detail-modal, and board-tabs fixes
 
+- **Fixed: no obvious way back from the stats page.** `/stats` was built without
+  the board tab strip, reasoning that tabs are board chrome and stats isn't a
+  board. That reasoning was about what the tabs *mean*; the effect was to strip
+  the app's primary navigation off the page, leaving only the wordmark (which
+  doesn't read as clickable) and a **Stats** header button that silently changed
+  its destination to `/` once you were there — a fixed label meaning two
+  different things.
+  **Stats is now a trailing item in the tab strip itself**, after the `+` and
+  behind a divider, taking the normal active highlight; the header button is
+  gone, so there's one entry point rather than two. An intermediate fix — render
+  the strip on `/stats` with nothing highlighted — was rejected on review: zero
+  selection is a state no tab control has and reads as broken, and because every
+  board tab carries a count, a row of counts above a page made entirely of counts
+  reads as a *scope selector*, so clicking one looked like it would filter the
+  stats when it actually navigated away from them. As a peer item, exactly one
+  thing is always current and the underline animates in both directions.
+  The non-draggable tabs (My Comics, Stats) are now real links rather than
+  buttons calling `router.push`, so middle-click and open-in-new-tab work.
+- **The header and tab strip persist across navigation.** Switching to Stats
+  looked like a full page reload. It never was one — the JS globals survived and
+  no second navigation entry was created — but `BoardView` and `StatsView` each
+  rendered their *own* `TopBar` and `BoardTabs`, so every transition tore the
+  entire chrome down and mounted a fresh copy (measured: the header DOM node
+  never survived a navigation). They now live in a `(collection)` route-group
+  layout shared by `/`, `/board/[id]` and `/stats`, so only `<main>` swaps —
+  header node survives every transition, and the tab underline can finally
+  animate, since `layoutId="active-tab"` needs both states in one continuous
+  Motion tree and that tree was being destroyed mid-navigation. The search box
+  and its debounce moved into the layout too, so what you've typed survives
+  switching views. URLs are unchanged (route groups don't affect paths) and the
+  `@modal` interceptor is untouched.
 - **Import provider details without the provider's cover.** Metron's variant
   coverage is community-contributed and patchy, so the edition you own is often
   missing even when the record is right. The picker's only exit was "Use this

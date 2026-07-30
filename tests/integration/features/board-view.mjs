@@ -10,10 +10,12 @@ export async function boardCountsAndVirtualization({ p, ck, sleep, apiJson, cove
   ck((await coverCount()) === N, `board reports all ${N} covers`);
   // The "My Comics" tab shows a count badge like custom board tabs (item 23).
   const myComicsTabCount = await p.evaluate(() => {
-    const btn = [...document.querySelectorAll("button")].find((b) =>
-      b.textContent.trim().startsWith("My Comics"),
+    // `a, button`: the non-draggable tabs (My Comics, Stats) are real links so
+    // they middle-click; only the draggable board tabs are still buttons.
+    const tab = [...document.querySelectorAll("a, button")].find((el) =>
+      el.textContent.trim().startsWith("My Comics"),
     );
-    const m = btn && btn.textContent.trim().match(/My Comics\s*(\d+)/);
+    const m = tab && tab.textContent.trim().match(/My Comics\s*(\d+)/);
     return m ? Number(m[1]) : null;
   });
   ck(myComicsTabCount === N, `My Comics tab shows the collection count (${myComicsTabCount})`);

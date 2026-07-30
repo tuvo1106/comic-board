@@ -1,12 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useComics } from "@/lib/client-api";
 import { EMPTY_FILTERS, filtersToParams, type Filters } from "@/lib/filters";
 import { computeStats, type CountBucket, type YearPoint } from "@/lib/stats";
-import { TopBar } from "@/components/board/TopBar";
-import { UploadModal } from "@/components/upload/UploadModal";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import { BarList, Histogram, Panel, StatCard, YearChart, type BarRow } from "./charts";
 
@@ -23,31 +20,15 @@ import { BarList, Histogram, Panel, StatCard, YearChart, type BarRow } from "./c
  * `filtersToParams`, so they can't drift from the URL contract the board reads.
  */
 export function StatsView() {
-  const router = useRouter();
   const { data: comics, isLoading, isError, error } = useComics(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [search, setSearch] = useState("");
 
   const stats = useMemo(() => computeStats(comics ?? []), [comics]);
 
-  // Searching from here means "go find these" — there's nothing on this page to
-  // filter, so a committed search hands off to the board.
-  const goSearch = (value: string) => {
-    const q = value.trim();
-    router.push(q ? `/?q=${encodeURIComponent(q)}` : "/");
-  };
-
   return (
-    <div className="min-h-screen">
-      <TopBar
-        search={search}
-        onSearch={setSearch}
-        onSearchCommit={goSearch}
-        onSearchSubmit={goSearch}
-        onAdd={() => setAddOpen(true)}
-      />
-      <UploadModal open={addOpen} onClose={() => setAddOpen(false)} />
-
+    <>
+      {/* Header, tab strip and upload modal are the group layout's
+          (CollectionChrome) — including the search box, which hands off to the
+          board when committed from here. */}
       <main className="mx-auto max-w-[1800px] px-5 py-6">
         <h1 className="text-xl font-bold tracking-tight">Stats</h1>
         <p className="mt-0.5 text-sm text-muted">
@@ -150,7 +131,7 @@ export function StatsView() {
           </div>
         )}
       </main>
-    </div>
+    </>
   );
 }
 

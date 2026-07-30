@@ -147,9 +147,17 @@ the `board` param scopes the list server-side.
 
 ## 5. UI & interaction (built)
 
-- **Board tabs** — pinned "My Comics" + custom boards + "+"; sliding active
-  indicator (`layoutId`); per-tab "…" menu (Rename/Delete) rendered in a portal so
-  the scrollable/blurred tab strip can't clip it. Routes: `/`, `/board/[id]`.
+- **Board tabs** — pinned "My Comics" + custom boards + "+", then a divider and
+  **Stats** as a trailing peer; sliding active indicator (`layoutId`); per-tab
+  "…" menu (Rename/Delete) rendered in a portal so the scrollable/blurred tab
+  strip can't clip it. Routes: `/`, `/board/[id]`, `/stats`.
+- **Persistent chrome** — the header, tab strip and upload modal live in a
+  `(collection)` **route-group layout** (`CollectionChrome`), not inside each
+  page, so navigating between the board, a custom board and stats swaps only
+  `<main>`. Rendering them per-page rebuilt the entire header on every
+  transition, which read as a full page reload and — by destroying the Motion
+  tree mid-navigation — stopped the tab underline animating at all. Route groups
+  don't affect URLs, and the `@modal` interceptor stays at the root level.
 - **Masonry** — **fixed-column** layout (`i % columns`), not shortest-column, so
   reordering never reshuffles unrelated cards. Cards are a **uniform height**
   (standard comic ratio, object-cover) for aligned rows; positions animate via
@@ -204,8 +212,16 @@ the `board` param scopes the list server-side.
   add up. Bars are `<a>`s built via `filtersToParams`, so drill-through can't
   drift from the board's URL contract; the rating histogram is unlinked because
   no rating filter exists. Charts are hand-rolled divs + one inline SVG — no
-  charting dependency. Reached from the top bar, not the tab strip (tabs are
-  boards you can rename/reorder/delete).
+  charting dependency. Reached from **a trailing item in the board tab strip**,
+  after the `+` and behind a divider, which takes the normal active highlight —
+  so exactly one item in the strip is always current and getting back to the
+  covers is "My Comics", where it is on every page. It deliberately carries no
+  count: a number would imply the stats are scoped to a subset, when they're
+  always the whole collection. Two earlier arrangements were worse and are
+  recorded in `ENGINEERING_NOTES.md`: no strip at all (a dead end), then the
+  strip with nothing highlighted (a zero-selection state that reads as broken,
+  and — since every board tab carries a count — as a scope selector for a page
+  made entirely of counts).
 - **Overlays** — `Dialog` and `Menu` render through React portals to `document.body`
   so ancestor `overflow`/`backdrop-filter` never clips or mis-positions them.
 
