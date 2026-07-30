@@ -6,6 +6,34 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, stats, detail-modal, and board-tabs fixes
 
+- **Import provider details without the provider's cover.** Metron's variant
+  coverage is community-contributed and patchy, so the edition you own is often
+  missing even when the record is right. The picker's only exit was "Use this
+  cover", making the choice a wrong image or nothing — so the workflow degraded
+  into "upload a cover, then hunt the comic down later to edit and replace it".
+  "Use details only" now sits beside it, offered whether or not covers exist
+  (the common case isn't "no covers", it's "the main cover loads fine and is
+  still the wrong edition"); on a coverless record it becomes the primary action
+  instead of a dead end.
+  **The reason manual re-entry was unavoidable was a bug:** `addFiles` reset the
+  form unconditionally, so even the workaround — pick the record, switch to the
+  upload tab, drop your own scan — silently destroyed everything the provider
+  had just filled in. `UploadModal` also gained an explicit `step` machine,
+  since the step had been derived from `files.length > 0` and "has an image" is
+  no longer the same question as "past the picking step".
+- **Fixed: the detail-modal cover sat behind its own blurred backdrop.** The
+  backdrop and scrim are `absolute` while the cover was statically positioned,
+  and static content paints *below* positioned siblings — so the cover rendered
+  under a blur and a 50% black scrim and read as not rendering at all. It looked
+  right while opening, which is why it shipped: Motion applies a transform during
+  the layout animation, promoting the image, and only once the animation settled
+  did the cover drop behind the scrim. Fixed with `relative z-10` — which then
+  pushed it above the unlayered "Replace cover" button and broke *that*, caught
+  by the existing replace-cover test failing to find its file input.
+  The backdrop was also reworked: painted from the ~300-byte, ~16px
+  `blurDataUrl`, it had no detail to reveal at any blur radius, so it now layers
+  the real thumbnail (already fetched for the cover) at a lighter blur over that
+  instant placeholder, with the scrim softened to `black/30`.
 - **Stats page** (`/stats`) — headline totals, bars by publisher and decade, a
   rating histogram, a release-year timeline, and leaderboards for series, cover
   artists, authors and characters. No new API route: the maths is a pure module
