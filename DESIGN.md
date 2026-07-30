@@ -204,8 +204,12 @@ the `board` param scopes the list server-side.
   add up. Bars are `<a>`s built via `filtersToParams`, so drill-through can't
   drift from the board's URL contract; the rating histogram is unlinked because
   no rating filter exists. Charts are hand-rolled divs + one inline SVG — no
-  charting dependency. Reached from the top bar, not the tab strip (tabs are
-  boards you can rename/reorder/delete).
+  charting dependency. **Entered** from the top bar rather than the tab strip
+  (tabs are boards you can rename/reorder/delete; stats is none of those), but
+  the tab strip still **renders** here with nothing highlighted — omitting it
+  stripped the app's primary navigation and made the page a dead end. The Stats
+  control always points at `/stats` and shows as current; it does not flip into
+  a back button, which would make a fixed label mean two different things.
 - **Overlays** — `Dialog` and `Menu` render through React portals to `document.body`
   so ancestor `overflow`/`backdrop-filter` never clips or mis-positions them.
 

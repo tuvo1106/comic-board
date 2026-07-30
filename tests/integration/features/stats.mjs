@@ -128,7 +128,47 @@ export async function statsPage({ p, ck, sleep, apiJson, coverCount }) {
   });
   ck(ratingLinks === 0, `the rating histogram has no drill-through links (${ratingLinks})`);
 
-  // The wordmark is the way back out.
+  // Getting back to the covers must be obvious. The page originally rendered
+  // without the board tab strip — on the reasoning that tabs are board chrome
+  // and stats isn't a board — which stripped the app's primary navigation and
+  // left only the wordmark (which doesn't read as clickable) and a "Stats"
+  // button that silently pointed home once you were already there.
+  const backNav = await p.evaluate(() => {
+    const strip = document.querySelector("div.sticky");
+    const tabs = [...(strip?.querySelectorAll("button") ?? [])]
+      .map((b) => b.textContent.trim())
+      .filter(Boolean);
+    return {
+      tabs,
+      // Nothing in the strip should claim to be the view you're looking at.
+      activeIndicators: strip ? strip.querySelectorAll(".bg-accent").length : -1,
+      statsHref: document.querySelector("header a[href='/stats']")?.getAttribute("href") ?? null,
+    };
+  });
+  ck(
+    backNav.tabs.some((t) => t.startsWith("My Comics")),
+    `the board tabs stay available on the stats page (${backNav.tabs.join(", ")})`,
+  );
+  ck(
+    backNav.activeIndicators === 0,
+    `but no tab is highlighted, since none of them is the current view (${backNav.activeIndicators})`,
+  );
+  ck(
+    backNav.statsHref === "/stats",
+    "the Stats control keeps pointing at /stats instead of flipping to a back button",
+  );
+
+  await p.evaluate(() => {
+    [...document.querySelectorAll("div.sticky button")]
+      .find((b) => b.textContent.includes("My Comics"))
+      ?.click();
+  });
+  await sleep(1400);
+  ck(new URL(p.url()).pathname === "/", "clicking My Comics returns to the covers");
+
+  // The wordmark still works as a secondary way out.
+  await p.goto(`${BASE}/stats`, { waitUntil: "networkidle0" });
+  await sleep(900);
   await p.evaluate(() => document.querySelector("header a[href='/']").click());
   await sleep(1200);
   ck(new URL(p.url()).pathname === "/", "the wordmark navigates back to the board");

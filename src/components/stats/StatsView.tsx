@@ -6,6 +6,7 @@ import { useComics } from "@/lib/client-api";
 import { EMPTY_FILTERS, filtersToParams, type Filters } from "@/lib/filters";
 import { computeStats, type CountBucket, type YearPoint } from "@/lib/stats";
 import { TopBar } from "@/components/board/TopBar";
+import { BoardTabs } from "@/components/board/BoardTabs";
 import { UploadModal } from "@/components/upload/UploadModal";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import { BarList, Histogram, Panel, StatCard, YearChart, type BarRow } from "./charts";
@@ -46,6 +47,15 @@ export function StatsView() {
         onSearchSubmit={goSearch}
         onAdd={() => setAddOpen(true)}
       />
+      {/*
+        The tab strip renders here too, with nothing highlighted. Leaving it out
+        (on the reasoning that tabs are board chrome and stats isn't a board)
+        stripped the app's primary navigation from the page, so the only ways
+        back to the covers were the wordmark — which doesn't read as clickable —
+        and the Stats button itself. Showing the familiar strip puts "My Comics"
+        and every board exactly where they already are on every other page.
+      */}
+      <BoardTabs showActive={false} />
       <UploadModal open={addOpen} onClose={() => setAddOpen(false)} />
 
       <main className="mx-auto max-w-[1800px] px-5 py-6">

@@ -38,9 +38,16 @@ import { MoreHorizontal, Pencil, Plus, Trash } from "@/components/ui/icons";
 
 interface Props {
   activeBoardId?: string; // undefined = My Comics
+  /**
+   * False on pages that aren't a board at all (the stats page). The strip still
+   * renders — it's the app's primary navigation, and leaving it out made
+   * /stats a dead end with no visible way back to the covers — but nothing is
+   * highlighted, since none of these tabs is what you're looking at.
+   */
+  showActive?: boolean;
 }
 
-export function BoardTabs({ activeBoardId }: Props) {
+export function BoardTabs({ activeBoardId, showActive = true }: Props) {
   const qc = useQueryClient();
   const { data: boards } = useBoards();
   const { data: comics } = useComics();
@@ -89,7 +96,12 @@ export function BoardTabs({ activeBoardId }: Props) {
         onDragCancel={() => setActiveId(null)}
       >
         <div className="mx-auto flex max-w-[1800px] items-center gap-1 overflow-x-auto px-5 py-1.5">
-          <Tab href="/" label="My Comics" active={!activeBoardId} count={comics?.length} />
+          <Tab
+            href="/"
+            label="My Comics"
+            active={showActive && !activeBoardId}
+            count={comics?.length}
+          />
           <SortableContext
             items={boards?.map((b) => b.id) ?? []}
             strategy={horizontalListSortingStrategy}
@@ -98,7 +110,7 @@ export function BoardTabs({ activeBoardId }: Props) {
               <BoardTab
                 key={b.id}
                 board={b}
-                active={activeBoardId === b.id}
+                active={showActive && activeBoardId === b.id}
                 dimmed={activeId === b.id}
               />
             ))}

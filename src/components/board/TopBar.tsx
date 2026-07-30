@@ -47,11 +47,17 @@ export function TopBar({ search, onSearch, onSearchCommit, onSearchSubmit, onAdd
           Stats lives here rather than in the board tab strip: the tabs are
           boards you can rename, reorder and delete, and stats is none of those
           — it's a different view of the same collection.
+
+          It always points AT /stats. It used to flip to "/" once you were
+          there, so a control still labelled "Stats" quietly became a back
+          button — the destination changing under a fixed label is exactly the
+          kind of thing that makes a page feel like it has no way out. Getting
+          back is the tab strip's job, where it always was.
         */}
         <Link
-          href={onStats ? "/" : "/stats"}
+          href="/stats"
           aria-current={onStats ? "page" : undefined}
-          title={onStats ? "Back to the board" : "Collection stats"}
+          title="Collection stats"
           className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition hover:bg-surface-2 ${
             onStats ? "bg-surface-2 text-fg" : "text-muted hover:text-fg"
           }`}

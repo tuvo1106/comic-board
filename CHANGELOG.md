@@ -6,6 +6,15 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, stats, detail-modal, and board-tabs fixes
 
+- **Fixed: no obvious way back from the stats page.** `/stats` was built without
+  the board tab strip, reasoning that tabs are board chrome and stats isn't a
+  board. The effect was to strip the app's primary navigation from the page,
+  leaving only the wordmark (which doesn't read as clickable) and a **Stats**
+  control that silently changed its destination to `/` once you were already
+  there — a fixed label meaning two different things, which is worse than no
+  back button at all. The tab strip now renders on `/stats` with nothing
+  highlighted, so "My Comics" and every board sit exactly where they do on every
+  other page, and the Stats control always means "go to stats".
 - **Import provider details without the provider's cover.** Metron's variant
   coverage is community-contributed and patchy, so the edition you own is often
   missing even when the record is right. The picker's only exit was "Use this
