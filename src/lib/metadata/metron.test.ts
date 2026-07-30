@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mapMetronIssue, mapMetronIssueDetail, metronProvider } from "./metron";
 
 // Fixtures trimmed from real Metron responses (issue 7406 — The Amazing
-// Spider-Man #1, 1963). See PROVIDERS.md.
+// Spider-Man #1, 1963). See DESIGN.md §4.1.
 
 describe("mapMetronIssue", () => {
   it("maps an issue-grain search hit to a candidate, preferring the release date", () => {

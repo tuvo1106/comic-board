@@ -1,7 +1,7 @@
 import { MetadataError } from "./types";
 
 // SSRF guard: the cover proxy will only fetch from this exact host — the image
-// origin Metron returns (see PROVIDERS.md). A URL from anywhere else is rejected
+// origin Metron returns (see DESIGN.md §4.1). A URL from anywhere else is rejected
 // before any network call.
 const ALLOWED_COVER_HOSTS = new Set(["static.metron.cloud"]);
 
