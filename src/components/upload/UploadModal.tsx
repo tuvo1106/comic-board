@@ -8,7 +8,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { MetadataForm, EMPTY_FORM, type ComicFormValue } from "@/components/forms/MetadataForm";
 import { MetadataSearch } from "@/components/upload/MetadataSearch";
 import type { MetadataDetail } from "@/lib/metadata/types";
-import { Check, ImageIcon, Search, Upload } from "@/components/ui/icons";
+import { Check, Search, Upload } from "@/components/ui/icons";
 
 interface Props {
   open: boolean;
@@ -18,6 +18,13 @@ interface Props {
 }
 
 type Mode = "search" | "upload";
+/**
+ * Which half of the modal is showing. Previously derived from `files.length > 0`
+ * — which worked only while "has an image" and "past the picking step" were the
+ * same question. They aren't: importing a record's details without its cover
+ * lands on the details step with no file yet.
+ */
+type Step = "choose" | "details";
 
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 15 * 1024 * 1024;
@@ -28,17 +35,23 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   const { toast } = useToast();
 
   const [mode, setMode] = useState<Mode>("search");
+  const [step, setStep] = useState<Step>("choose");
   const [files, setFiles] = useState<File[]>([]);
   const [index, setIndex] = useState(0);
   const [form, setForm] = useState<ComicFormValue>(EMPTY_FORM);
+  // Whether a provider record has been applied to the form. Guards the reset in
+  // `addFiles` — see there for why.
+  const [fromProvider, setFromProvider] = useState(false);
   const [selectedBoards, setSelectedBoards] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
 
   const reset = useCallback(() => {
     setMode("search");
+    setStep("choose");
     setFiles([]);
     setIndex(0);
     setForm(EMPTY_FORM);
+    setFromProvider(false);
     setSelectedBoards(defaultBoardId ? [defaultBoardId] : []);
   }, [defaultBoardId]);
 
@@ -78,7 +91,13 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     if (incoming.length === 0) return;
     setFiles(incoming);
     setIndex(0);
-    setForm(EMPTY_FORM);
+    // Only clear the form for a genuinely fresh batch. This used to reset
+    // unconditionally, which silently destroyed everything a provider record had
+    // just filled in — so "pick the right record, then supply my own scan" threw
+    // the metadata away and left the fields blank, exactly the manual re-entry
+    // this feature exists to remove.
+    if (!fromProvider) setForm(EMPTY_FORM);
+    setStep("details");
   };
 
   const close = () => {
@@ -89,7 +108,8 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   // Merge a chosen metadata record into the form. Overwrites the fields the
   // provider supplies; keeps tags + characters (not autofilled) and untouched
   // values when a field is absent.
-  const applyMetadata = (d: MetadataDetail) =>
+  const applyMetadata = (d: MetadataDetail) => {
+    setFromProvider(true);
     setForm((f) => ({
       ...f,
       series: d.series || f.series,
@@ -99,12 +119,19 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
       authors: d.authors.length ? d.authors : f.authors,
       artists: d.artists.length ? d.artists : f.artists,
     }));
+  };
 
   // Commit a provider cover as the image. When starting from search (no file
   // yet) it becomes the sole upload; in the details step it replaces the current
   // one. Moves the modal into the details step.
-  const applyCover = (file: File) =>
+  const applyCover = (file: File) => {
     setFiles((fs) => (fs.length === 0 ? [file] : fs.map((f, i) => (i === index ? file : f))));
+    setStep("details");
+  };
+
+  // Take the record's details and go on without its image — the user supplies
+  // their own in the details step's dropzone.
+  const useDetailsOnly = () => setStep("details");
 
   const saveCurrent = async () => {
     const file = files[index];
@@ -145,70 +172,50 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     }
   };
 
-  const hasFiles = files.length > 0;
+  const file = files[index] ?? null;
+
+  const dropzoneProps = {
+    dragOver,
+    setDragOver,
+    onFiles: addFiles,
+  };
 
   return (
     <Dialog
       open={open}
       onClose={close}
-      title={hasFiles ? "Add cover details" : "Add a comic"}
+      title={step === "details" ? "Add cover details" : "Add a comic"}
       widthClass="max-w-3xl"
     >
-      {!hasFiles ? (
+      {step === "choose" ? (
         <div className="p-5">
           <ModeToggle mode={mode} onChange={setMode} />
           {mode === "search" ? (
             <div className="mt-4">
-              <MetadataSearch value={form} onApply={applyMetadata} onUseCover={applyCover} />
+              <MetadataSearch
+                value={form}
+                onApply={applyMetadata}
+                onUseCover={applyCover}
+                onUseDetails={useDetailsOnly}
+              />
             </div>
           ) : (
-            <label
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                addFiles(e.dataTransfer.files);
-              }}
-              className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-16 text-center transition ${
-                dragOver ? "border-accent bg-accent/10" : "border-border hover:border-muted"
-              }`}
-            >
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 text-muted">
-                <Upload className="h-7 w-7" />
-              </div>
-              <div>
-                <p className="font-medium">Drop cover images here</p>
-                <p className="mt-1 text-sm text-muted">or click to browse — JPG, PNG, WebP up to 15MB</p>
-              </div>
-              <input
-                type="file"
-                accept={ACCEPT.join(",")}
-                multiple
-                className="hidden"
-                onChange={(e) => e.target.files && addFiles(e.target.files)}
-              />
-            </label>
+            <Dropzone {...dropzoneProps} className="mt-4" />
           )}
         </div>
       ) : (
         <div className="flex max-h-[80vh] flex-col">
           <div className="grid flex-1 gap-5 overflow-y-auto p-5 sm:grid-cols-[240px_1fr]">
-            {/* Preview */}
+            {/* Preview — or the dropzone, when details arrived without an image */}
             <div className="space-y-3">
-              <div className="overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border">
-                {previewSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+              {previewSrc ? (
+                <div className="overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={previewSrc} alt="Preview" className="h-auto w-full object-contain" />
-                ) : (
-                  <div className="grid aspect-[2/3] place-items-center text-muted">
-                    <ImageIcon className="h-8 w-8" />
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <Dropzone {...dropzoneProps} compact />
+              )}
               {files.length > 1 && (
                 <p className="text-center text-sm text-muted">
                   {index + 1} of {files.length}
@@ -218,7 +225,12 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
 
             {/* Form */}
             <div className="space-y-4">
-              <MetadataSearch value={form} onApply={applyMetadata} onUseCover={applyCover} />
+              <MetadataSearch
+                value={form}
+                onApply={applyMetadata}
+                onUseCover={applyCover}
+                onUseDetails={useDetailsOnly}
+              />
               <MetadataForm value={form} onChange={setForm} />
               {boards && boards.length > 0 && (
                 <div>
@@ -263,20 +275,25 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
             </button>
             <div className="flex items-center gap-2">
               <AnimatePresence>
-                {!form.series.trim() && (
+                {/*
+                  An image is now missable — details-only lands here with none —
+                  so say which requirement is outstanding rather than leaving a
+                  disabled button with no explanation.
+                */}
+                {(!form.series.trim() || !file) && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="text-sm text-muted"
                   >
-                    Series is required
+                    {!file ? "Add a cover image" : "Series is required"}
                   </motion.span>
                 )}
               </AnimatePresence>
               <button
                 onClick={saveCurrent}
-                disabled={!form.series.trim() || upload.isPending}
+                disabled={!form.series.trim() || !file || upload.isPending}
                 className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:brightness-110 disabled:opacity-50"
               >
                 {upload.isPending
@@ -290,6 +307,66 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
         </div>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * File picker + drag target. Two sizes: the full-height panel on the choose
+ * step, and a `compact` one that stands in for the preview image in the details
+ * step when the details came from a provider without a usable cover.
+ */
+function Dropzone({
+  dragOver,
+  setDragOver,
+  onFiles,
+  compact = false,
+  className = "",
+}: {
+  dragOver: boolean;
+  setDragOver: (v: boolean) => void;
+  onFiles: (list: FileList | File[]) => void;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <label
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        onFiles(e.dataTransfer.files);
+      }}
+      className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed text-center transition ${
+        compact ? "aspect-[2/3] gap-2 px-3" : "py-16"
+      } ${dragOver ? "border-accent bg-accent/10" : "border-border hover:border-muted"} ${className}`}
+    >
+      <div
+        className={`grid place-items-center rounded-2xl bg-surface-2 text-muted ${
+          compact ? "h-10 w-10" : "h-14 w-14"
+        }`}
+      >
+        <Upload className={compact ? "h-5 w-5" : "h-7 w-7"} />
+      </div>
+      <div>
+        <p className={compact ? "text-sm font-medium" : "font-medium"}>
+          {compact ? "Add your cover" : "Drop cover images here"}
+        </p>
+        <p className={`mt-1 text-muted ${compact ? "text-xs" : "text-sm"}`}>
+          {compact ? "Drop an image or click" : "or click to browse — JPG, PNG, WebP up to 15MB"}
+        </p>
+      </div>
+      <input
+        type="file"
+        accept={ACCEPT.join(",")}
+        multiple={!compact}
+        className="hidden"
+        onChange={(e) => e.target.files && onFiles(e.target.files)}
+      />
+    </label>
   );
 }
 

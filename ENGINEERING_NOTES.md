@@ -102,6 +102,8 @@ one.** Worth saying because "write more tests" is the wrong lesson.
 | a stubbed provider | the failed-cover spinner — I had read that function twice and missed it |
 | a screenshot | the dropdown clipped by the dialog; every DOM assertion passed, because `getBoundingClientRect` can't see overflow clipping |
 | a screenshot, again | a chart that *implied* something false — valid SVG, unit-tested data, and it still drew a trend the data never had |
+| a user, days later | the cover painting *behind* its own backdrop — the element existed, had the right src and size and full opacity; only its compositing was wrong, and it looked correct for the ~300ms the animation was running |
+| a user, days later | metadata silently wiped by combining two individually-correct features — each path was covered, their intersection wasn't |
 
 The middle two are the sharpest pair: in *the same component*, careful reading
 found one stuck-spinner bug and walked straight past a second one four lines
@@ -126,6 +128,59 @@ width) was three lines; noticing was the whole job.
 ---
 
 ## Bugs
+
+### Two bugs a green test suite couldn't see, and why (2026-07-29)
+
+**Both were reported by a user against a suite of 198 unit tests and 144
+integration assertions that was passing. Neither was a missing assertion of the
+kind "we forgot to test that" — each sat in a category the tests structurally
+could not express.**
+
+**1. The cover painted behind its own blurred backdrop.** The modal's backdrop
+and scrim are `absolute`; the cover image was statically positioned. Static
+content paints below positioned siblings in the same stacking context, so the
+cover rendered under a blur and a 50% black scrim.
+
+Why the suite was green: it asserted the cover *exists* — `img[src*='full.webp']`
+resolves — which it did, at the right size, at full opacity, with the right src.
+Every property the DOM exposes was correct. Only compositing was wrong, and
+"exists" is not "is perceivable".
+
+The nastier part is that it was **timing-masked**. Motion applies a `transform`
+during the layout animation, and a transformed element is promoted above static
+siblings — so for the ~300ms the modal was opening, the cover was on top and
+looked perfect. It only fell behind once the animation settled and the transform
+returned to `none`. A screenshot taken at the moment most tests would take one
+shows the correct image. The fix is one class (`relative z-10`); noticing it
+requires deliberately waiting for the animation to *end* before looking.
+
+Paint order is, unlike overflow clipping, observable from the DOM —
+`document.elementFromPoint(centre)` answers "what would the user actually touch
+here?". That's the regression assertion now.
+
+**2. Metadata silently wiped by combining two correct features.** Picking a
+provider record fills the form; `addFiles` reset the form on every file add, to
+clear leftovers from a previous batch. Both behaviours were right in isolation
+and both were covered. The bug lived only where they crossed — import a record's
+details, then supply your own image — and no test crossed them, because the
+autofill test always took the provider's cover and the upload test never had
+provider metadata to lose.
+
+This is the combinatorial gap, and it's the one that scales badly: coverage of
+every feature individually says nothing about the paths *between* them, and
+there are quadratically many of those. The mitigation isn't more coverage, it's
+noticing which pairs of features write to the same state — here, both wrote
+`form` — and testing that seam specifically.
+
+**The postscript is the best part.** Fixing #1 with `z-10` pushed the cover above
+the "Replace cover" button, which is `absolute` with no explicit layer, making it
+unclickable. That regression *was* caught immediately — by a test that knows
+nothing about z-index and simply tries to open the replace dialog and use its
+file input. It failed with `Cannot read properties of null (reading
+'uploadFile')`. Assertions written against user-visible outcomes keep catching
+causes their author never imagined; assertions written against implementation
+details only catch what you already thought of.
+
 
 ### The flaky test suite was testing a deleted database (2026-07-29)
 

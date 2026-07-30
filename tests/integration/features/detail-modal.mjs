@@ -41,6 +41,51 @@ export async function detailModalAndCoverFlows({ p, ck, sleep, apiJson }) {
     .then(() => true)
     .catch(() => false);
   ck(gotFull, "modal shows full-size cover");
+
+  // Regression: the cover must be the topmost thing at its own centre.
+  //
+  // The blurred backdrop and its scrim are `absolute`; the cover was
+  // statically positioned, and static content paints BELOW positioned siblings
+  // in the same stacking context — so the cover sat behind both layers and read
+  // as not rendering at all. It looked right while opening only because Motion
+  // applies a transform during the layout animation, which promotes the image;
+  // once settled the transform returned to `none` and the cover dropped behind
+  // the scrim. Hence the wait: asserting too early passes on the animation.
+  //
+  // Unlike a clipped dropdown, paint order IS observable from the DOM —
+  // `elementFromPoint` answers "what would the user actually touch here?".
+  await sleep(900);
+  const coverStack = await p.evaluate(() => {
+    // Locate the pair whose paint order is actually in question — the blurred
+    // backdrop and the cover that must sit above it — rather than by image src.
+    // A plain `querySelector("img")` picks up a board card still mounted behind
+    // the modal, which is always `static` and always fails.
+    const backdrop = [...document.querySelectorAll("div[aria-hidden]")].find((d) =>
+      String(d.className).includes("blur-2xl"),
+    );
+    const host = backdrop?.parentElement;
+    const img = host?.querySelector("img");
+    if (!img || !host) return null;
+    const r = img.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      Math.round(r.left + r.width / 2),
+      Math.round(r.top + r.height / 2),
+    );
+    return {
+      topmostIsCover: hit === img,
+      topmost: hit ? `${hit.tagName.toLowerCase()}.${String(hit.className || "").slice(0, 40)}` : null,
+      position: getComputedStyle(img).position,
+    };
+  });
+  ck(
+    coverStack?.topmostIsCover === true,
+    `the cover paints above its blurred backdrop (topmost is ${coverStack?.topmost})`,
+  );
+  ck(
+    coverStack?.position !== "static",
+    `and stays positioned so it can't fall behind again (position: ${coverStack?.position})`,
+  );
+
   const cid = p.url().split("/comic/")[1].split("?")[0];
 
   // Edit persists + modal reflects it immediately.
