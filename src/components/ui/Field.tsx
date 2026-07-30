@@ -16,7 +16,10 @@ export function Field({
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+      {/* mb-2 (8px) against the 16px that separates one field group from the
+          next: enough that the label still visibly belongs to its own input,
+          without the 6px-above / 20px-below lopsidedness it had before. */}
+      <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
       </span>
       <div className="relative">
