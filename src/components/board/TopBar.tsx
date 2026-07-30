@@ -1,11 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { AccountSettingsDialog } from "@/components/auth/AccountSettingsDialog";
 import { Menu, MenuItem } from "@/components/ui/Menu";
-import { Download, Plus, Settings } from "@/components/ui/icons";
+import { BarChart, Download, Plus, Settings } from "@/components/ui/icons";
 import { SearchBox } from "./SearchBox";
 
 interface Props {
@@ -13,23 +14,51 @@ interface Props {
   onSearch: (value: string) => void;
   /** Apply a search term immediately, bypassing the debounce (suggestion picks). */
   onSearchCommit: (value: string) => void;
+  /** Plain Enter — only the stats page needs it (see SearchBox). */
+  onSearchSubmit?: (value: string) => void;
   onAdd: () => void;
 }
 
-export function TopBar({ search, onSearch, onSearchCommit, onAdd }: Props) {
+export function TopBar({ search, onSearch, onSearchCommit, onSearchSubmit, onAdd }: Props) {
+  const pathname = usePathname();
+  const onStats = pathname === "/stats";
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] items-center gap-4 px-5 py-3">
-        <div className="flex items-center gap-2">
+        {/* The wordmark is the way back to the board from any page that isn't one. */}
+        <Link href="/" className="flex items-center gap-2 rounded-lg">
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-accent-fg font-black">
             C
           </div>
           <h1 className="text-lg font-bold tracking-tight">Comic Board</h1>
-        </div>
+        </Link>
 
-        <SearchBox value={search} onChange={onSearch} onCommit={onSearchCommit} />
+        <SearchBox
+          value={search}
+          onChange={onSearch}
+          onCommit={onSearchCommit}
+          onSubmit={onSearchSubmit}
+        />
 
         <div className="flex-1" />
+
+        {/*
+          Stats lives here rather than in the board tab strip: the tabs are
+          boards you can rename, reorder and delete, and stats is none of those
+          — it's a different view of the same collection.
+        */}
+        <Link
+          href={onStats ? "/" : "/stats"}
+          aria-current={onStats ? "page" : undefined}
+          title={onStats ? "Back to the board" : "Collection stats"}
+          className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition hover:bg-surface-2 ${
+            onStats ? "bg-surface-2 text-fg" : "text-muted hover:text-fg"
+          }`}
+        >
+          <BarChart className="h-4 w-4" />
+          <span className="hidden sm:inline">Stats</span>
+        </Link>
 
         <button
           onClick={onAdd}

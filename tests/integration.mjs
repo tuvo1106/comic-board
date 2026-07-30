@@ -44,6 +44,7 @@ import { bulkActions } from "./integration/features/bulk-actions.mjs";
 import { boardTabsAndReorder } from "./integration/features/board-tabs.mjs";
 import { searchAutocomplete } from "./integration/features/search-autocomplete.mjs";
 import { metadataAutofill } from "./integration/features/metadata-autofill.mjs";
+import { statsPage } from "./integration/features/stats.mjs";
 
 await buildAndSeed();
 const server = startServer();
@@ -75,6 +76,10 @@ try {
   await boardTabsAndReorder(ctx);
   await searchAutocomplete(ctx, { N });
   await metadataAutofill(ctx);
+  // Late on purpose: by here the collection has been added to, deleted from and
+  // renamed, so "the numbers match /api/comics" is a real check rather than a
+  // restatement of the seed.
+  await statsPage(ctx);
 
   await staleCookieLoop(ctx);
 

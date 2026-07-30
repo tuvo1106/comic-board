@@ -101,6 +101,7 @@ one.** Worth saying because "write more tests" is the wrong lesson.
 | `lsof` forensics | the orphaned server holding six fds to a database directory `ls` said didn't exist |
 | a stubbed provider | the failed-cover spinner — I had read that function twice and missed it |
 | a screenshot | the dropdown clipped by the dialog; every DOM assertion passed, because `getBoundingClientRect` can't see overflow clipping |
+| a screenshot, again | a chart that *implied* something false — valid SVG, unit-tested data, and it still drew a trend the data never had |
 
 The middle two are the sharpest pair: in *the same component*, careful reading
 found one stuck-spinner bug and walked straight past a second one four lines
@@ -108,6 +109,19 @@ away — and the stub that caught the second was itself structurally incapable o
 seeing the clipped dropdown, because assertions on the DOM can't observe
 overflow clipping at all. Each layer is blind to a whole class the next one
 sees; knowing which layer to reach for is the actual skill.
+
+The stats page then produced a *new* flavour of the screenshot case, and it's
+the one I'd actually tell. The clipped dropdown was at least a broken-looking
+picture. This one looked perfect: a collection uploaded in a single day rendered
+as a smooth diagonal ramp, because interpolating a line across a single data
+point has to start it somewhere and zero is the obvious somewhere. The path was
+valid, the component rendered, the bucketing had 28 passing unit tests — and the
+chart told a story of gradual accumulation that never happened. There was no
+assertion to write, because nothing was *wrong* in any layer I could query;
+"this chart implies something the data doesn't say" only exists at the level of
+a person looking at it. Charts fail in a way most UI doesn't: they can be
+entirely correct and still lie. The fix (draw a lone point level across the
+width) was three lines; noticing was the whole job.
 
 ---
 

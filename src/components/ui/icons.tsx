@@ -182,6 +182,15 @@ export const Columns = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+export const BarChart = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M3 3v18h18" />
+    <path d="M8 17v-5" />
+    <path d="M13 17V8" />
+    <path d="M18 17v-9" />
+  </Icon>
+);
+
 export const Settings = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="3" />
