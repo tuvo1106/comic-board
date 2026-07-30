@@ -1,4 +1,6 @@
-import { BASE } from "../env.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { BASE, DATA_DIR } from "../env.mjs";
 
 /**
  * Metron autofill panel (`MetadataSearch.tsx`) against a **stubbed** provider.
@@ -341,6 +343,120 @@ export async function metadataAutofill({ p, ck, sleep }) {
     ck(
       await bodyHas("Couldn’t load this cover."),
       "a failed cover fetch says so persistently, not just via the toast",
+    );
+    await p.keyboard.press("Escape");
+    await sleep(400);
+
+    // --- Import the details WITHOUT the provider's image -------------------
+    // Metron's variant coverage is community-contributed and patchy, so the
+    // edition you actually own is often missing even when the record is right.
+    // Before this the only way on was "Use this cover", so the choice was a
+    // wrong image or nothing.
+    await openAutofill();
+    await clickContaining("Stub Detective Comics");
+    await sleep(1200);
+    ck(
+      (await p.$("xpath/.//button[normalize-space(.)='Use this cover']")) !== null,
+      "a record WITH covers still offers 'Use this cover'",
+    );
+    await clickContaining("Use details only");
+    await sleep(700);
+
+    const afterDetailsOnly = await p.evaluate(() => {
+      const val = (label) => {
+        const el = [...document.querySelectorAll("label")].find((l) =>
+          l.textContent.trim().startsWith(label),
+        );
+        return el?.parentElement.querySelector("input")?.value ?? null;
+      };
+      const save = [...document.querySelectorAll("button")].find((b) =>
+        /^Save cover$/.test(b.textContent.trim()),
+      );
+      return {
+        series: val("Series"),
+        issue: val("Issue"),
+        publisher: val("Publisher"),
+        // No provider image was taken, so nothing should be previewed yet.
+        hasPreview: !!document.querySelector("img[alt='Preview']"),
+        dropzone: document.body.textContent.includes("Add your cover"),
+        saveDisabled: save ? save.disabled : null,
+        hint: document.body.textContent.includes("Add a cover image"),
+      };
+    });
+    ck(
+      afterDetailsOnly.series === "Stub Detective Comics" && afterDetailsOnly.issue === "27",
+      `details-only still prefills the form (series "${afterDetailsOnly.series}", issue "${afterDetailsOnly.issue}")`,
+    );
+    ck(
+      afterDetailsOnly.publisher === "Stub Comics",
+      `and the publisher too (got "${afterDetailsOnly.publisher}")`,
+    );
+    ck(!afterDetailsOnly.hasPreview, "no provider image was imported");
+    ck(afterDetailsOnly.dropzone, "the details step offers a dropzone for your own image");
+    ck(afterDetailsOnly.saveDisabled === true, "saving is blocked until an image is supplied");
+    ck(afterDetailsOnly.hint, "and it says which requirement is outstanding");
+
+    // The regression that made this feature necessary: `addFiles` used to reset
+    // the form unconditionally, so supplying your own scan silently wiped every
+    // field the provider had just filled in — which is precisely the manual
+    // re-entry this is meant to remove.
+    const tmpPng = path.join(DATA_DIR, "details-only-cover.png");
+    fs.writeFileSync(
+      tmpPng,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    const dropInput = await p.$("input[type='file']");
+    await dropInput.uploadFile(tmpPng);
+    await sleep(900);
+
+    const afterOwnImage = await p.evaluate(() => {
+      const val = (label) => {
+        const el = [...document.querySelectorAll("label")].find((l) =>
+          l.textContent.trim().startsWith(label),
+        );
+        return el?.parentElement.querySelector("input")?.value ?? null;
+      };
+      const save = [...document.querySelectorAll("button")].find((b) =>
+        /^Save cover$/.test(b.textContent.trim()),
+      );
+      return {
+        series: val("Series"),
+        issue: val("Issue"),
+        hasPreview: !!document.querySelector("img[alt='Preview']"),
+        saveDisabled: save ? save.disabled : null,
+      };
+    });
+    ck(
+      afterOwnImage.series === "Stub Detective Comics" && afterOwnImage.issue === "27",
+      `adding your own image KEEPS the imported metadata (series "${afterOwnImage.series}")`,
+    );
+    ck(afterOwnImage.hasPreview, "your own image previews once added");
+    ck(afterOwnImage.saveDisabled === false, "and saving unblocks");
+    await p.keyboard.press("Escape");
+    await sleep(500);
+
+    // On a record with no covers at all, details-only is the only way forward,
+    // so it takes over as the primary action instead of leaving a dead end.
+    await openAutofill();
+    await clickContaining("Stub Coverless");
+    await sleep(900);
+    await clickContaining("Use details, add my own image");
+    await sleep(700);
+    ck(
+      await bodyHas("Add your cover"),
+      "a coverless record can still be imported, straight to the dropzone",
+    );
+    ck(
+      (await p.evaluate(() => {
+        const el = [...document.querySelectorAll("label")].find((l) =>
+          l.textContent.trim().startsWith("Series"),
+        );
+        return el?.parentElement.querySelector("input")?.value ?? null;
+      })) === "Stub Coverless",
+      "with its details carried through",
     );
     await p.keyboard.press("Escape");
     await sleep(400);

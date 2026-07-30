@@ -27,6 +27,17 @@ interface Props {
   onApply: (detail: MetadataDetail) => void;
   /** Commit a provider cover as the comic image. */
   onUseCover: (file: File) => void;
+  /**
+   * Take the record's details and move on without a provider image, so the user
+   * can supply their own. Metron's variant coverage is community-contributed and
+   * patchy, so the cover you actually own is often missing even when the record
+   * is right — and before this, picking such a record was a dead end.
+   *
+   * Optional because it's meaningless in `ReplaceCoverDialog`, whose entire job
+   * is choosing an image; omitting it hides the action rather than offering one
+   * that couldn't do anything.
+   */
+  onUseDetails?: () => void;
 }
 
 function slug(s: string): string {
@@ -54,7 +65,7 @@ async function loadCover(cover: CoverOption, series: string, issue: string | nul
  * — each with a size/quality indicator. Self-hides when no provider is
  * configured; a toggle A/Bs providers.
  */
-export function MetadataSearch({ value, onApply, onUseCover }: Props) {
+export function MetadataSearch({ value, onApply, onUseCover, onUseDetails }: Props) {
   const { data: config } = useMetadataConfig();
   const { toast } = useToast();
   const detail = useMetadataDetail();
@@ -211,6 +222,7 @@ export function MetadataSearch({ value, onApply, onUseCover }: Props) {
           onSelect={setCoverIdx}
           onBack={() => setPicked(null)}
           onUse={() => cover && onUseCover(cover.file)}
+          onUseDetails={onUseDetails}
         />
       ) : (
         query != null && (
@@ -280,6 +292,7 @@ function PickedCard({
   onSelect,
   onBack,
   onUse,
+  onUseDetails,
 }: {
   detail: MetadataDetail;
   coverIdx: number;
@@ -289,6 +302,7 @@ function PickedCard({
   onSelect: (idx: number) => void;
   onBack: () => void;
   onUse: () => void;
+  onUseDetails?: () => void;
 }) {
   const covers = d.covers ?? [];
   const selected = covers[coverIdx];
@@ -364,6 +378,30 @@ function PickedCard({
           className="mt-2 w-full rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg transition hover:brightness-110 disabled:opacity-50"
         >
           Use this cover
+        </button>
+      )}
+
+      {/*
+        Always offered, not just when the provider has no cover. The common case
+        isn't "no covers at all" — it's "the record is right, but the variant I
+        own isn't among the ones Metron has", where the main cover loads fine and
+        is still the wrong image. With covers present this is the quiet
+        alternative; with none it's the only way forward, so it takes over as the
+        primary action rather than leaving a dead end.
+      */}
+      {onUseDetails && (
+        <button
+          type="button"
+          onClick={onUseDetails}
+          className={
+            covers.length > 0
+              ? "mt-1.5 w-full rounded-lg px-3 py-1.5 text-xs text-muted transition hover:bg-surface-2 hover:text-fg"
+              : "mt-2 w-full rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg transition hover:brightness-110"
+          }
+        >
+          {covers.length > 0
+            ? "Use details only — I’ll add my own image"
+            : "Use details, add my own image"}
         </button>
       )}
     </div>
