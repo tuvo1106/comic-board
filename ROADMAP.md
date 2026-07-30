@@ -446,6 +446,47 @@ SSH port-forward (`ssh -L 3939:localhost:3939`) instead of publishing the port.
 The browser still sees `http://localhost:3939`, so no auth-origin change, no TLS
 or proxy setup, and neither risk above is ever internet-facing.
 
+### 4h. Provider observability — not started, trigger-driven
+
+**Triggered by a real question the codebase couldn't answer.** Asked "a lot of
+variant covers aren't coming back recently, can we check the logs?", there were
+no logs to check: the entire metadata layer contains exactly one `console.*`
+(`metron.ts:118`, a rate-limit budget warning). Answering it required live calls
+to a rate-limited third-party API, which is precisely what 4f exists to avoid.
+
+**What the investigation found** (2026-07-29), recorded so it isn't repeated:
+
+- Metron returns `variants: []` for the recently-added books — verified on
+  *Absolute Batman* #1 and #5, *Action Comics* #1083, *Ultimate Wolverine* #3,
+  *The Incredible Hulk* #23.
+- **Our integration is correct.** Metron's OpenAPI schema defines
+  `IssueRead.variants` as an array of `VariantsIssue { name, image }` — exactly
+  the fields `metronCovers` reads — and *Something Is Killing the Children* #1
+  (2019) returns 5 variants that render fine. So the pipeline works end to end;
+  the data is missing upstream.
+- Metron's variant records are community-contributed, so coverage lags new
+  releases. A 2019 book has had six years for someone to fill it in; a 2026 book
+  has had days. Expect this to keep happening on new comics.
+- The response cache is **not** implicated: `cached()` short-circuits entirely
+  when `NODE_ENV === "development"` (`cache.ts:22`), so a dev server never caches
+  provider responses.
+
+**What to build when it recurs:**
+
+- Log what the provider actually returned — issue ref, cover count, variant
+  count, and the rate-limit budget — so this becomes a `grep` rather than an
+  investigation. Keep it server-side; the URL carries the API key, which
+  `http.ts` already takes care never to leak into error messages.
+- Say it in the UI. A record with only a main cover currently looks identical to
+  one where variants failed to load. A line like *"Metron lists no variants for
+  this issue"* turns a suspected bug into a known limitation — and there's now a
+  sanctioned way forward, since **Use details only** (shipped 2026-07-29) lets
+  you take the metadata and supply your own scan.
+
+**Not urgent** because the workaround now exists and the cause is upstream. Worth
+doing the next time the question is asked, rather than re-running the same
+investigation.
+
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 
 Would have been public read-only board links. Not wanted. (Its two
@@ -481,6 +522,10 @@ speculatively:
   `/images/**` has no auth check.
 - **4c server-side pagination** — only once list view gets janky or search stops
   feeling instant. 4b was skipped.
+- **4h provider observability** — the next time "why didn't the provider return
+  X?" gets asked. It was asked once already and cost live API calls to answer,
+  because the metadata layer logs nothing; that finding is written up in 4h so
+  the investigation isn't repeated.
 - **Grid-view marquee-select** (the rest of 2a) — a stretch goal, not actively
   planned.
 - ~~Sharing~~, ~~2b duplicate detection~~, ~~2d collector fields~~ — skipped,
@@ -495,3 +540,12 @@ Shipped 2026-07-29: undo delete (1), list-view multi-select + bulk actions (2a),
 stats page (2c), autocomplete search (2e), drag tabs to reorder (3), the
 spec-driven-behaviors test-coverage pass (4d), the test-harness flakiness fix
 (4e), the stubbed metadata provider (4f), and account settings (6).
+
+Also shipped the same day, all from using the app rather than from this list —
+which is why none of them were on it: **import provider details without the
+cover** (Metron's variant coverage is patchy, so the picker's only exit was a
+wrong image or nothing; the metadata was also being silently wiped when you
+supplied your own scan), the **detail-modal cover painting behind its own
+backdrop**, the **stats page's missing way back** (two attempts — see
+`ENGINEERING_NOTES.md`), the **chrome rebuilding on every navigation**, and
+**account-settings spacing**. See `CHANGELOG.md` for the detail.
