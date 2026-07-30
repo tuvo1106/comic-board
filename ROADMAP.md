@@ -13,26 +13,16 @@ flow) before writing code; don't cold-start one from a bare item description
 
 ## 1. Undo delete — shipped (2026-07-29)
 
-Soft delete via `comics.deletedAt`; every read query excludes it. A "Cover
-deleted" toast with an "Undo" action for 6s (`ComicCardMenu.tsx`,
-`ComicDetail.tsx`); undo clears `deletedAt`. Actual row + file removal is
-deferred to `sweepDeletedComics` (rows deleted >24h ago), run once per server
-start via `src/instrumentation.ts`. See `CHANGELOG.md`.
+Soft delete + a 6s undo toast, swept after 24h. → `CHANGELOG.md`
 
 ## 2. Collection features *(independent; pick by taste)*
 
 ### 2a. Multi-select + bulk actions — list view shipped (2026-07-29)
 
-List-view multi-select shipped: a leading checkbox column, shift-click
-range-select, and a bulk action bar (`BulkActionBar.tsx`) for add to board /
-remove from board / set publisher / add tag / delete — each looping an
-existing single-comic mutation, no new API route. Bulk delete reuses the
-undo-delete toast (soft-delete + a single "N comics deleted — Undo" that
-restores all of them). Bulk tag is additive (unions into each comic's
-existing tags), not an overwrite. See `CHANGELOG.md`.
+List-view multi-select and the bulk action bar shipped. → `CHANGELOG.md`
 
-Grid-view marquee-select was intentionally deferred (see phasing decision
-below, still accurate) — not started.
+**Grid-view marquee-select — still open**, deliberately deferred rather than
+bundled. The reasoning is unchanged and worth keeping:
 
 - **Selection UX differs a lot by view.** List view (`ListView.tsx`) is the
   easy case: unvirtualized, every row always mounted, order is array index —
@@ -66,37 +56,9 @@ turn out to be an actual recurring problem.
 
 ### 2c. Stats page — *shipped 2026-07-29*
 
-`/stats`: headline totals, bars by publisher and decade, a rating histogram, a
-release-year timeline, and four leaderboards (series / cover artists / authors /
-characters).
-
-Shipped as predicted — **a new page and charts, no new API route**. The maths is
-a pure module (`src/lib/stats.ts`, 28 unit tests) reducing over the comics list
-`useComics()` has already cached, so arriving from the board is instant and an
-upload refreshes the numbers through the same invalidation as everything else.
-What actually got built, versus the plan above:
-
-- **Release year, not `createdAt`.** The plan said "growth over time" off when a
-  comic was *added*. That's an artifact of data entry — uploading a 1965 issue
-  today is a 1965 data point, not a 2026 one — so the time axis is `coverDate`.
-  It's per-year counts rather than a cumulative line: a running total of release
-  years would only ever restate the collection size.
-- **Every breakdown sums to the collection.** Comics with no publisher, no cover
-  date or no rating land in their own bucket, and a truncated top-N carries the
-  remainder in "Other". Bars that silently don't add up can't distinguish a small
-  collection from missing metadata. Asserted as an invariant in the unit tests.
-- **Bars are drill-through links**, built through `filtersToParams` so they can't
-  drift from the URL contract the board parses — clicking a publisher or decade
-  lands on the filtered board. The rating histogram is deliberately *not*
-  linked: there's no rating filter to send anyone to, and a bar that looks
-  clickable but isn't is worse than a plain one.
-- **No charting dependency.** Recharts was measured at 117 KB gzipped and would
-  have earned it on exactly one card — the other three visuals are label + bar +
-  count rows, where hand-rolled markup is strictly better because each row is a
-  real `<a>` (middle-click, tab order, status-bar preview). See
-  `src/components/stats/charts.tsx`.
-- **Stats sits in the top bar, not the board tab strip** — tabs are boards you
-  can rename, reorder and delete; stats is none of those.
+`/stats`: headline totals, publisher and decade bars, a rating histogram, a
+release-year timeline, and four leaderboards. Shipped as predicted — a new page
+and charts, no new API route. → `CHANGELOG.md`
 
 ### 2d. Collector fields — *skipped (decided 2026-07-29)*
 
@@ -110,75 +72,12 @@ changes.
 
 ### 2e. Autocomplete the collection search — shipped (2026-07-29)
 
-A typeahead dropdown on the top-bar search, suggesting terms that actually
-exist in the collection. Built from the already-cached `/api/meta` payload, so
-no new endpoint and no server round-trip. See `CHANGELOG.md`.
-
-Shipped as `src/lib/search-suggest.ts` (pure ranking, unit-tested) +
-`src/components/board/SearchBox.tsx` (the input and dropdown), with
-`BoardView` gaining an `onSearchCommit` path so picking a suggestion applies
-immediately instead of waiting out the 150ms typing debounce.
-
-Notes from doing it, beyond what was predicted below:
-
-- **The suggestion sources must mirror `applyFilters`' free-text haystack
-  exactly** (series, publisher, authors, artists, characters, tags) — if they
-  drift, the dropdown either suggests terms that match nothing or misses terms
-  that would. The plan below claimed the haystack includes issue number; it
-  does not, and deliberately so (a substring "3" would hit "13", "23", "30" —
-  see the comment in `filters.ts`). Both now say so in a comment.
-- **Ranking needed more than a substring filter**: prefix matches first, then
-  by how many comics carry the value, then alphabetically for a stable order.
-  Capped at 5.
-- **Values in several fields collapse to one row.** "Batman" is both a series
-  and a character, and under free-text search both rows run the *identical*
-  query — two rows, one outcome, which just wastes the list. The survivor is
-  picked by a stated priority (`KIND_PRIORITY`: character first, then series,
-  publisher, author, artist, tag) rather than by whichever count happened to be
-  higher, so the result is predictable. Tradeoff accepted: a term that's a major
-  series but a minor character shows and ranks by the smaller character count.
-- **Dedupe is what made keeping series viable.** Dropping the series field
-  outright was considered — it's the field that most often duplicates a
-  character name. But after character-priority dedupe, a series row only
-  survives when the title *isn't* also a character, i.e. exactly when it adds
-  information. And series is the best case for typeahead: measured against the
-  seed data, dropping it loses "Something is Killing the Children" (`some`),
-  "Supergirl and the Legion of Super-Heroes" (`legion`), "Batman: The Gargoyle
-  of Gotham" (`gargoyle`), and both `absolute` titles — all long titles worth
-  not typing — while only trimming `bat` from 5 rows to 3.
-- **Everything is case-insensitive**, including the dedupe key: series is a
-  plain column while characters/tags are their own tables, so the same name can
-  differ in case *across* fields even though each field de-dupes internally.
-- **Extended to the provider-search box** (`MetadataSearch.tsx`), series-only,
-  via `suggestSearch`'s `kinds` option. Shared behaviour lives in
-  `src/components/ui/Typeahead.tsx` — headless (`useTypeahead`) plus a
-  `SuggestionList`, since the two call sites have very different layouts. Two
-  bugs surfaced only by putting it inside a dialog: the list has to be
-  **portalled** (rendered in place, `Dialog`'s required `overflow-hidden` clipped
-  it mid-row), and Escape must `stopPropagation` or dismissing the list also
-  closes the modal via its document-level key handler. Both now asserted.
-- The existing `Autocomplete.tsx` has **no keyboard navigation at all** (only
-  Enter/Escape, and only when given an `onCommit`), so arrow-key nav and the
-  `aria` combobox/listbox wiring were new work rather than a reuse.
-
-- **Not a drop-in reuse of `Autocomplete.tsx`.** That component is built for
-  a single flat list of same-type strings bound to one field (e.g. just
-  series names). This wants a dropdown that searches *across* five or six
-  categories at once and shows them grouped ("Series: Batman", "Author: Bill
-  Finger") — a different shape of dropdown. What's reusable is the
-  underlying pattern (filtered-list-of-8, `onMouseDown preventDefault` so a
-  click doesn't lose to the input's blur, keyboard nav), not the component
-  itself as-is — this is realistically a new component built the same way.
-- **Picking a suggestion should just fill the search box**, running the same
-  free-text search as if typed — not jump straight to applying that facet
-  as a filter. The facet-jump alternative is more powerful but is exactly
-  the "one control, two different behaviors depending on what you clicked"
-  ambiguity that was already flagged and fixed once (list-view chips vs.
-  modal chips).
-- **Include tags in the suggestion set.** Free-text search already matches
-  tags and issue number; if the dropdown only suggests from
-  series/publisher/author/artist/character, it under-suggests relative to
-  what search actually matches. Keep the two in sync.
+A typeahead on the top-bar search built from the already-cached `/api/meta`
+payload — no new endpoint. Later extended to the provider-search box
+(series-only) via the shared headless `Typeahead`. The ranking, dedupe and
+keep-series decisions, with the measurements behind them, are in
+`CHANGELOG.md`; the two dialog bugs it surfaced (clipped dropdown, Escape
+closing the modal) are in `ENGINEERING_NOTES.md`.
 
 ## 3. Board interaction
 
@@ -290,116 +189,27 @@ needs it (maybe only list view, maybe only facet counts, maybe search but
 not sort), and building ahead of that risks solving the wrong piece. Wait
 for one of the two signals above.
 
-### 4d. Spec-driven behaviors — reframed as a test-coverage pass (shipped 2026-07-29)
+### 4d. Spec-driven behaviors — shipped as a test-coverage pass (2026-07-29)
 
-Originally scoped as a separate markdown spec file the test suites would map
-onto. Reframed: a spec file that just restates what the tests already check
-is redundant with the tests themselves — the integration/unit suites *are*
-the executable spec (each `ck(...)` and `it(...)` names a behavior in plain
-language). So instead of writing a spec doc, this became a coverage audit —
-find behaviors with no test at all, not behaviors with an undocumented test —
-which surfaced 13 real gaps. The 6 high-priority ones were filled:
-
-- `navOrder`'s `neighbors()` (`src/lib/nav-order.test.ts`, new unit tests) —
-  middle/first/last/not-found/empty/single-item cases.
-- Detail-modal click-to-edit-per-field (integration): clicking a display
-  field focuses that field in edit mode.
-- Modal arrow-key prev/next navigation (integration): `ArrowRight`/
-  `ArrowLeft` move between comics and the URL reflects it.
-- Add-to-board / remove-from-board, single and bulk (integration).
-- Cover-replace flow (integration): uploading a new file changes the comic's
-  `imageUrl` and shows a toast.
-- `GET /api/export` (integration): tested the route directly via `fetch`
-  rather than the real UI control, since clicking the account menu's export
-  button does a real `window.location.href` navigation to a binary response —
-  headless Chrome has no download behavior configured, and that navigation
-  crashed the whole Puppeteer session. The actual gap was route coverage
-  (auth + headers + content), not proving the click fires.
-- Sign-up flow (integration): a brand-new account lands on an empty board,
-  not the seed data.
-
-Along the way, found and fixed one real bug: a bulk "remove from board" test
-emptied a board a later, unrelated test depended on being non-empty
-(`BoardView.tsx` swaps to a no-toolbar empty state at 0 members) — state
-pollution between tests, fixed by restoring the board's original membership
-after the test. See `ENGINEERING_NOTES.md` for the fuller story, including a
-separate, pre-existing flakiness issue (an unrelated facet-count assertion
-varying across repeated full-suite runs) that was investigated and
-determined *not* to be caused by this work, then deliberately not chased
-further.
-
-Splitting `tests/integration.mjs` into per-feature files was considered as a
-followup to this reframing, deferred at first, then done right after: the
-single ~950-line script is now `tests/integration.mjs` (a thin orchestrator —
-env setup/teardown + run order) plus `tests/integration/{env,lifecycle,
-helpers}.mjs` and one file per feature area under
-`tests/integration/features/` (auth, account settings, export, board view,
-detail modal, board membership, comic lifecycle, list view, bulk actions,
-board tabs). Pure reorganization, not a behavior change — the suite shares
-one Next build, one server, and one browser page across all of it, since
-later features depend on state earlier ones leave behind (the modal's `cid`,
-the board's `N`, list view leaving the page in list mode for bulk-actions to
-continue from); each feature file documents its own preconditions/what it
-returns for the next one rather than pretending to be fully isolated.
+Reframed on contact: a written spec doc would have restated behaviour the tests
+already encode and then drifted from it. Filled the actual coverage gaps
+instead, so the assertions *are* the spec. → `CHANGELOG.md`
 
 ### 4e. Integration-test-harness flakiness — root-caused and fixed (2026-07-29)
 
-The suite wasn't flaky; it was intermittently testing **a different server
-serving an already-deleted database**. Interrupting a run (Ctrl-C on a failing
-test) orphaned the `next-server`, because teardown lived only in a `finally`
-block that signals skip. The orphan kept port 3940 *and* its open
-`better-sqlite3` file descriptors, so it went on serving the previous run's
-database even after the next run deleted `data/test` and re-seeded — POSIX
-keeps an unlinked inode alive while an fd references it. The next run's own
-server then failed with `EADDRINUSE` into an undrained stdio pipe (invisible),
-and `waitForServer()` — which only checked "does the port answer 200?" —
-happily accepted the orphan. Mutations accumulated across runs in a deleted
-database, and assertion counts drifted.
-
-Fixed in `tests/integration/lifecycle.mjs`:
-
-- `assertPortFree()` pre-flights the port *before* the build and fails in
-  ~0.1s with the `lsof` command to fix it, rather than burning a full build
-  cycle to produce wrong answers.
-- `startServer()` drains stdout/stderr into a bounded tail (the previous
-  unread `stdio: 'pipe'` was also a latent deadlock at ~64KB) and runs
-  `detached` so teardown can signal the whole `npx` → `npm exec` →
-  `next-server` group instead of just the direct child.
-- `waitForServer()` bails immediately with the server's output if it exited,
-  instead of looping 60s and reporting a bare "did not become ready".
-- `installSignalTeardown()` handles `SIGINT`/`SIGTERM`/`SIGHUP`, so
-  interrupting a run — the thing that created every orphan — cleans up.
-
-Verified: the port guard fires in 0.1s; a mid-run SIGINT now leaves no
-orphan and no leftover dirs; the full suite still reports the same 74 passes.
-See `ENGINEERING_NOTES.md` for the forensics (an `lsof` showing six open fds
-to a database directory that `ls` said didn't exist).
+The suite was never flaky: an orphaned server from an interrupted run kept the
+port *and* its open file descriptors, so it served an already-deleted database
+while the freshly-seeded one sat unused. Fixed with a port pre-flight and
+crash-safe teardown. Full write-up in `ENGINEERING_NOTES.md`.
 
 ### 4f. Stub the metadata provider in the integration suite — shipped (2026-07-29)
 
-The Metron autofill flow (`MetadataSearch.tsx` — search, pick a match, choose
-among cover variants, apply to the form) had **no UI test coverage at all**, and
-structurally couldn't get any: the panel self-hides unless a provider is
-configured, and CI has no `METRON_API_KEY`. So a headline feature was only ever
-verified by hand, against a rate-limited third-party API.
-
-Now covered by `tests/integration/features/metadata-autofill.mjs`, which fakes
-the provider at the network boundary with `page.setRequestInterception` (the same
-mechanism `board-tabs.mjs` uses to force a 500). Four routes intercepted: the
-provider config, search, detail, and the cover byte proxy. Stubbing turned out to
-be *better* than the real API, not a compromise — deterministic, offline, no
-quota, runs in CI, and able to drive states that are awkward to find on demand.
-
-It found a real bug on its first run. `PickedCard` keyed its status message off
-`coverLoading || !cover`, so a **failed** cover fetch — done loading, but `cover`
-still null — rendered "Loading cover…" indefinitely. The error toast is
-transient, so the lasting signal was a spinner that would never resolve, and
-there's no retry affordance. Reachable via any of `fetchCover`'s eight throw
-paths; the likeliest is the `ALLOWED_COVER_HOSTS` allowlist (currently exactly
-`static.metron.cloud`), which would fail *every* cover the day Metron adds a CDN
-host — the same config-drift shape as the stale-auth-cookie bug in
-`ENGINEERING_NOTES.md`. Fixed with a distinct `coverError` state and a
-"Couldn't load this cover." message.
+The Metron autofill flow had no UI coverage and structurally couldn't: the panel
+self-hides without a configured provider, and CI has no `METRON_API_KEY`. Now
+faked at the network boundary. Stubbing turned out to be *better* than the real
+API rather than a compromise — deterministic, offline, no quota, and able to
+drive states that are awkward to find on demand. It found a real bug on its
+first run. → `CHANGELOG.md`
 
 ### 4g. Prerequisites before the app is reachable beyond localhost — not started
 
@@ -501,10 +311,8 @@ exposure itself.
 
 ## 6. Account settings — shipped (2026-07-29)
 
-Change email/password via a new "Account settings" dialog off the account
-menu (`AccountSettingsDialog.tsx`), backed by better-auth's built-in
-`changeEmail`/`changePassword` endpoints — no new API route was needed,
-just `src/lib/auth.ts`'s `user.changeEmail` config flag (see `CHANGELOG.md`).
+Change email/password from an account-menu dialog, on better-auth's built-in
+endpoints — no new API route. → `CHANGELOG.md`
 
 ---
 

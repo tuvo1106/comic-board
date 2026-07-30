@@ -10,14 +10,10 @@ import { BarList, Histogram, Panel, StatCard, YearChart, type BarRow } from "./c
 /**
  * The stats page: one screen of charts over the whole collection.
  *
- * It reuses `useComics(null)` rather than adding an API route, so arriving from
- * the board is instant (the list is already in the React Query cache) and an
- * upload here refreshes the numbers through the same invalidation everything
- * else uses. See `src/lib/stats.ts` for why the maths is client-side.
- *
- * Bars drill through to the board: clicking a publisher, decade or leaderboard
- * row lands on the filtered collection. Those links are built through
- * `filtersToParams`, so they can't drift from the URL contract the board reads.
+ * Reuses `useComics(null)` rather than adding an API route, so arriving from
+ * the board is instant and an upload here refreshes the numbers through the
+ * existing invalidation. Bars drill through to the filtered board via
+ * `filtersToParams`, so they can't drift from the URL contract it parses.
  */
 export function StatsView() {
   const { data: comics, isLoading, isError, error } = useComics(null);

@@ -129,15 +129,12 @@ interface ListProps {
 }
 
 /**
- * The dropdown itself, rendered in a **portal** and fixed-positioned under the
- * input.
+ * The dropdown, rendered in a **portal** and fixed-positioned under the input.
  *
- * Not absolutely positioned in place: `Dialog`'s panel is `overflow-hidden` (it
- * has to be, to clip its own rounded corners), which silently cut the list off
- * at the panel edge when this is used inside the upload modal — the details step
- * also scrolls internally. Same reason the tab "…" menu portals itself, and the
- * same fix (`Menu.tsx`): measure the anchor, render to `document.body`. `z-[90]`
- * clears `Dialog`'s `z-[80]`.
+ * It must portal: `Dialog`'s panel is `overflow-hidden` (needed to clip its own
+ * rounded corners) and silently cut the list off mid-row when this was rendered
+ * in place. Same fix as the tab "…" menu (`Menu.tsx`) — measure the anchor,
+ * render to `document.body`. `z-[90]` clears `Dialog`'s `z-[80]`.
  */
 export function SuggestionList({
   id,

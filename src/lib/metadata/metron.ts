@@ -9,7 +9,7 @@ import {
 
 const BASE = "https://metron.cloud/api";
 
-// --- raw response shapes (only the fields we read; see PROVIDERS.md) ----------
+// --- raw response shapes (only the fields we read; see DESIGN.md §4.1) --------
 
 interface MetronSeriesRef {
   name: string;

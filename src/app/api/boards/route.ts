@@ -5,6 +5,7 @@ import { getUserId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
+/** GET /api/boards — every board owned by the caller. */
 export async function GET(req: Request) {
   return handle(async () => {
     const userId = await getUserId(req);

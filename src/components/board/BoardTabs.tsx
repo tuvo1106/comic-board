@@ -44,20 +44,10 @@ interface Props {
 /**
  * The view switcher: boards, plus Stats as a trailing peer.
  *
- * Stats lives *in* the strip rather than being a header button that leaves the
- * strip behind. Two earlier attempts were worse. Rendering no strip on /stats
- * stripped the app's primary navigation and made the page a dead end; rendering
- * the strip with nothing highlighted replaced that with a false affordance —
- * every tab carries a count, so a row of counts above a page *of* counts reads
- * as a scope selector, and clicking one silently leaves stats instead of
- * scoping it. Zero-selection is also a state no tab control has: it reads as
- * broken, and it strands `layoutId="active-tab"` so the underline pops back
- * instead of sliding.
- *
- * As a peer item, exactly one thing is always highlighted, the underline
- * animates both ways, and getting back to the covers is "My Comics" — right
- * where it is on every other page. Stats deliberately carries no count: it
- * isn't a subset of anything, and a number here would re-imply scoping.
+ * Keep exactly one item highlighted at all times. A strip with nothing selected
+ * reads as broken, and — since every board tab carries a count — as a scope
+ * selector for whatever page it sits above. Stats carries no count for the same
+ * reason. Two earlier arrangements failed on this; see `ENGINEERING_NOTES.md`.
  */
 export function BoardTabs({ activeBoardId }: Props) {
   // Read from the route rather than a prop: the strip is rendered by both the

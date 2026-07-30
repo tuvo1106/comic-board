@@ -27,14 +27,10 @@ const KIND_LABEL: Record<SuggestionKind, string> = {
 };
 
 /**
- * The six `MetaDTO` lists, in the order they're preferred on a tie.
- *
- * These deliberately mirror `applyFilters`' free-text haystack exactly (series,
- * publisher, authors, artists, characters, tags) — if the two drift apart the
- * dropdown starts either suggesting terms that match nothing or missing terms
- * that would. Note `issueNumber` is absent from both on purpose: it's a short
- * numeric token, so substring-matching "3" would hit "13", "23", "30" (see the
- * comment in `filters.ts`).
+ * Fields to suggest from. **Must mirror `applyFilters`' free-text haystack
+ * exactly** — drift makes the dropdown suggest terms that match nothing, or
+ * miss terms that would. `issueNumber` is absent from both deliberately (see
+ * `filters.ts`).
  */
 const SOURCES: [keyof MetaDTO, SuggestionKind][] = [
   ["series", "series"],
@@ -46,20 +42,12 @@ const SOURCES: [keyof MetaDTO, SuggestionKind][] = [
 ];
 
 /**
- * Which field wins when the *same* value exists in more than one of them —
- * "Batman" is both a series and a character, and under free-text search both
- * rows would run the identical query, so only one is shown.
- *
- * Character first, deliberately: in a comic collection the character reading is
- * the more natural one for a name that's also a series title. The rest is a
- * fixed (if somewhat arbitrary) order — the point is that it's *stated*, so the
- * outcome is predictable rather than depending on which field happened to have
- * a higher count that day.
- *
- * Consequence worth knowing: the surviving row shows the preferred field's
- * label and count, and is ranked by that count — so a term that's a major
- * series but a minor character ranks by the smaller character count. Predictable
- * beats clever here.
+ * Which field wins when one value exists in several ("Batman" is both a series
+ * and a character, and either row would run the identical search). The order is
+ * arbitrary but *stated*, so the outcome can't depend on which field happened
+ * to have the higher count. The winner's label and count are what's shown, so a
+ * major series that's a minor character ranks by the smaller count — see
+ * `CHANGELOG.md` for why that tradeoff was accepted.
  */
 const KIND_PRIORITY: SuggestionKind[] = [
   "character",
@@ -73,20 +61,17 @@ const KIND_PRIORITY: SuggestionKind[] = [
 const TOTAL = 5;
 
 /**
- * Typeahead suggestions for the collection search box, built entirely from the
- * already-cached `/api/meta` payload — no new endpoint, no server round-trip.
+ * Typeahead suggestions for a search box, built from the cached `/api/meta`
+ * payload — no endpoint, no round-trip.
  *
- * Ranking: prefix matches first (typing "bat" should surface "Batman" above
- * "Absolute Batman"), then by how many comics carry the value, then
- * alphabetically so the order is stable rather than dependent on the API's
- * iteration order.
+ * Ranked prefix-matches-first, then by how many comics carry the value, then
+ * alphabetically so the order is stable rather than following the API's
+ * iteration order. Case-insensitive throughout, including the dedupe key.
+ * Capped at `opts.total` (default 5); `opts.kinds` narrows which fields are
+ * offered at all.
  *
- * Everything is case-insensitive: matching, the "already typed it in full"
- * check, de-duplication, and the alphabetical tie-break.
- *
- * Values appearing in several fields collapse to a single row (see
- * `KIND_PRIORITY`) — picking either would run the identical free-text search,
- * so two rows for one outcome is just noise.
+ * @param meta `/api/meta` payload, or undefined before it loads (yields none).
+ * @param query raw input text; blank yields none.
  */
 export function suggestSearch(
   meta: MetaDTO | undefined,
@@ -94,14 +79,12 @@ export function suggestSearch(
   opts: { total?: number; kinds?: SuggestionKind[] } = {},
 ): Suggestion[] {
   const total = opts.total ?? TOTAL;
-  // `kinds` narrows which fields are offered at all — the provider-search box
-  // only wants series names, since that's the grain the external API searches.
   const allowed = opts.kinds ? new Set(opts.kinds) : null;
   const q = query.trim().toLowerCase();
   if (!meta || !q) return [];
 
-  // Keyed by lower-cased value: series is a plain column while characters, tags
-  // etc. are their own tables, so the same name can differ in case *across*
+  // Keyed by lower-cased value: series is a plain column while characters and
+  // tags are their own tables, so the same name can differ in case *across*
   // fields even though each field de-dupes internally.
   const groups = new Map<string, Suggestion & { prefix: number }>();
   for (const [key, kind] of SOURCES) {

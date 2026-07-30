@@ -124,3 +124,42 @@ Then, in the browser, authenticate **before** loading the board.
   with a click-outside/Escape hook and an active-count badge; match it for new
   facet controls.
 - Match the surrounding code's naming, comment density, and idiom.
+
+### Where a piece of documentation belongs
+
+Four places, each with a different lifespan. Writing something in the wrong one
+is how `ROADMAP.md` grew to 551 lines (225 of them duplicating `CHANGELOG.md`)
+and why individual files drifted to a 36%-comment density before the 2026-07-30
+cleanup — not from any single bad call, but from nobody having a rule to check
+against. Before adding a comment or a doc, ask which of these it actually is:
+
+1. **Inline comment, at the line it constrains.** Only for a *durable* fact
+   about the code as it stands: a non-obvious invariant, a workaround for a
+   specific constraint, something a future edit could silently break. Test it
+   with "would removing this comment make someone reading the code get it
+   wrong?" — if yes, keep it; if it just restates what the code already says,
+   cut it. A comment should tell an editor what breaks if they change this, not
+   how the feature came to be built this way — that's the next item.
+   Compare `src/lib/api.ts`'s `handle()` doc (a durable contract: which errors
+   map to which status) against what `CollectionChrome.tsx`'s doc used to be
+   before trimming (a multi-paragraph debugging story) — the story moved to
+   ENGINEERING_NOTES, and what's left is one sentence: *why this must stay in
+   the layout*.
+2. **`CHANGELOG.md`**, for *what shipped and why*, once it has. This is where
+   the narrative goes: the alternatives considered, the measurements taken
+   (bundle sizes, before/after timings), the tradeoffs accepted. If you're
+   about to write two paragraphs above a function explaining a decision that's
+   already made and shipped, it likely belongs here instead.
+3. **`ENGINEERING_NOTES.md`**, for *root causes and durable lessons* — bugs
+   whose cause wasn't obvious, patterns that recur across several bugs, design
+   decisions with a real tradeoff. Personal and narrative on purpose (see its
+   own header); doesn't need to read as project documentation.
+4. **`ROADMAP.md`**, for *what's still open* — not what shipped. A finished
+   item collapses to one line plus a pointer (`→ CHANGELOG.md`), not a
+   write-up. If you're editing a "shipped" section and it's growing rather
+   than shrinking, that content is drifting into CHANGELOG's job.
+
+**No CI checks any of this** — it's a norm to self-police, not a lint rule.
+When a PR touches several files' worth of comments or crosses into the
+project-doc files, take one pass afterward and ask whether anything landed in
+the wrong tier before committing.

@@ -1,6 +1,6 @@
 // Pure helpers shared by both providers. Kept side-effect-free so the mapping
 // logic (the risky part) is unit-testable against saved fixtures without touching
-// the network. See PROVIDERS.md for the raw shapes these consume.
+// the network. See DESIGN.md §4.1 for the raw shapes these consume.
 
 // A writer-ish role feeds `authors`. Metron labels the writer "Script"/"Plot".
 // Compared case-insensitively.

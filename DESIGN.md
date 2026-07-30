@@ -143,6 +143,63 @@ what's on screen; `/api/meta` supplies the **global** suggestion list for the
 upload/edit form. Filtering/sorting run client-side for instant animated reflow;
 the `board` param scopes the list server-side.
 
+### 4.1 Metadata provider reference
+
+Captured from live API responses so recalling a shape doesn't cost rate limit.
+The provider sits behind `MetadataProvider` (`types.ts`) and is normalized to
+`MetadataCandidate` / `MetadataDetail`.
+
+The app uses **Metron exclusively** (Comic Vine was evaluated and dropped — its
+search results were weaker). The abstraction remains so another source could be
+added. Key lives in `.env`, never sent to the client: `METRON_API_KEY`.
+
+**Metron — https://metron.cloud/api**
+
+- **Auth:** `Authorization: Bearer <token>`. Tokens don't expire; managed and
+  revocable at metron.cloud. (Older docs mention HTTP Basic — we use Bearer.)
+- **Grain:** search is **issue**-level, so candidates are concrete issues.
+  Detail fills in credits / covers / publisher.
+- **Rate limit:** two token buckets, on **every** response as headers.
+  `x-ratelimit-burst-limit: 20` (+ `-burst-remaining`, `-burst-reset` in epoch
+  seconds) is a short-term burst; `x-ratelimit-sustained-limit: 5000` (+
+  `-sustained-remaining`, `-sustained-reset`) is 5000/day. Read them live and
+  back off when burst-remaining is low; a 429 carries `Retry-After`.
+- Paginated: `{ count, next, previous, results: [...] }`.
+
+Endpoints used:
+
+1. **Issue search** — `/issue/?series_name=<series>&number=<n>`, returning
+   `{ id, series: { id, name, volume, year_began }, number, issue, cover_date,
+   store_date, image }`.
+2. **Issue detail** — `/issue/<id>/`:
+   - `series: { name, year_began }`, `number`, `publisher: { name }`.
+   - **Dates:** `cover_date` (printed) *and* `store_date` (on-sale). The printed
+     date runs ~2 months ahead of release.
+   - `credits[]`: `{ creator: "Stan Lee", role: [{ name: "Script" }, …] }` —
+     role is an **array of objects**.
+   - `image`: primary cover URL, on `static.metron.cloud`.
+   - `variants[]`: `{ name, image, price, sku, upc }` — labeled variant covers
+     with **no creator attribution**, so a cover artist can't be tied to a
+     specific variant. Coverage is community-contributed and **lags new
+     releases**; `[]` on a recent issue is normal, not a bug (see ROADMAP 4h).
+   - `characters[]`: present but **unused** — unreliable.
+- Cover images are on `static.metron.cloud`, the only host allowlisted in the
+  cover proxy (`covers.ts`).
+
+**Normalization** (`normalize.ts` + `metron.ts`):
+
+- **Date** = `store_date` when present, else `cover_date` — release is what we
+  surface, since the printed date runs ahead.
+- **Authors** = credits whose role matches `writer | script | plot` (Metron
+  labels the writer "Script").
+- **Cover artists** and **characters** are deliberately **not** autofilled — see
+  the variant-attribution and reliability notes above.
+- **Covers** = primary `image` first (labeled "Main cover"), then `variants[]`
+  (label = variant `name`, else "Variant N"); de-duped by URL.
+- **Cover date** → strict `yyyy-mm-dd`: `"1963-03-00"` → `-01`; year-month or
+  year-only pad to `-01`; anything else → `null`.
+- Name lists are trimmed and de-duplicated case-insensitively, order preserved.
+
 ---
 
 ## 5. UI & interaction (built)

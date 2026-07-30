@@ -136,6 +136,15 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   applying the value as a facet filter. Full keyboard support (arrows, Enter,
   Escape) with `aria` combobox/listbox wiring — new work, since the existing
   `Autocomplete` component has no keyboard navigation at all.
+  Dropping the series field entirely was considered, since it's the field that
+  most often duplicates a character name — but character-priority dedupe already
+  means a series row only survives when the title *isn't* also a character, i.e.
+  exactly when it adds information. Measured against the seed data, dropping it
+  would lose "Something is Killing the Children" (`some`), "Supergirl and the
+  Legion of Super-Heroes" (`legion`), "Batman: The Gargoyle of Gotham"
+  (`gargoyle`) and both `absolute` titles — all long names worth not typing —
+  while only trimming `bat` from 5 rows to 3. Accepted tradeoff: a term that's a
+  major series but a minor character ranks by the smaller character count.
 - **Fixed two `react-hooks` lint errors** in `BoardView`'s search re-sync: it
   read a ref during render, which isn't safe under concurrent rendering (the
   value can come from a render that was thrown away). The "last value I pushed"

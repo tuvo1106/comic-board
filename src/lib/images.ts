@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { newId } from "./ids";
 import { storage } from "./storage";
 
+/** Output of running an uploaded cover through the resize/blur/store pipeline. */
 export interface ProcessedImage {
   id: string;
   imagePath: string; // storage key for the full-size webp

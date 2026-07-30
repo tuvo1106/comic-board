@@ -5,16 +5,11 @@ import type { YearPoint } from "@/lib/stats";
 
 /**
  * Chart primitives for the stats page — plain divs and one inline SVG, no chart
- * library.
- *
- * The shapes here are bar rows, a histogram and a single area line; a charting
- * dependency would cost more bundle than the whole page and still need to be
- * re-themed onto these tokens. Same call as the hand-rolled masonry, typeahead
- * and dialogs elsewhere in the app.
+ * library (see `CHANGELOG.md` for the measured reasoning).
  *
  * Buckets that aren't a real category ("Other", "No publisher", "Unknown",
- * "Unrated") render `muted` — dimmer and never linked — so a bar you can't act
- * on is visibly different from one you can.
+ * "Unrated") render `muted`: dimmer and never linked, so a bar you can't act on
+ * looks different from one you can.
  */
 
 export function Panel({
