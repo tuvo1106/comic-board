@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * server-side (SSRF guard in `fetchCover`). Streams the raw image bytes.
  */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
 

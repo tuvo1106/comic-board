@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** PATCH /api/boards/:id — { name?, tabPosition? }. */
 export async function PATCH(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id } = await params;
@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
 /** DELETE /api/boards/:id — deletes the board; its comics are untouched. */
 export async function DELETE(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id } = await params;

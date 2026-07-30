@@ -256,7 +256,7 @@ SSH port-forward (`ssh -L 3939:localhost:3939`) instead of publishing the port.
 The browser still sees `http://localhost:3939`, so no auth-origin change, no TLS
 or proxy setup, and neither risk above is ever internet-facing.
 
-### 4h. Provider observability — not started, trigger-driven
+### 4h. Provider observability — *logging shipped 2026-07-30, UI message still open*
 
 **Triggered by a real question the codebase couldn't answer.** Asked "a lot of
 variant covers aren't coming back recently, can we check the logs?", there were
@@ -281,21 +281,32 @@ to a rate-limited third-party API, which is precisely what 4f exists to avoid.
   when `NODE_ENV === "development"` (`cache.ts:22`), so a dev server never caches
   provider responses.
 
-**What to build when it recurs:**
+**Shipped 2026-07-30, in two pieces:**
 
-- Log what the provider actually returned — issue ref, cover count, variant
-  count, and the rate-limit budget — so this becomes a `grep` rather than an
-  investigation. Keep it server-side; the URL carries the API key, which
-  `http.ts` already takes care never to leak into error messages.
-- Say it in the UI. A record with only a main cover currently looks identical to
-  one where variants failed to load. A line like *"Metron lists no variants for
-  this issue"* turns a suspected bug into a known limitation — and there's now a
-  sanctioned way forward, since **Use details only** (shipped 2026-07-29) lets
-  you take the metadata and supply your own scan.
+- The Metron-specific diagnosis: every `detail()` call now logs one JSON line
+  — issue ref, whether a main cover came back, the variant count, and the
+  remaining rate-limit budget. `grep '"tag":"metron.detail"'` answers the
+  original question directly. → `CHANGELOG.md`
+- Scope grew mid-implementation, from "log this one provider call" to "log
+  every API route, written to disk" — a genuinely different ask (comic
+  create, login/out, everything), confirmed with the user before touching 21
+  route files. Every route that goes through `src/lib/api.ts`'s `handle()`
+  wrapper (all but the auth catch-all, which better-auth owns end-to-end and
+  gets its own thin wrapper) now logs method/path/status/duration/userId as
+  one JSON line to `DATA_DIR/logs/<date>.log`, one file per day, 7 days kept.
+  `winston` + `winston-daily-rotate-file` — the first logging *library* in
+  this repo; the Metron line and every other existing `console.*` call stay
+  plain, on the reasoning that a persisted historical record earns a real
+  rotation/retention story where a live diagnostic doesn't. → `CHANGELOG.md`
 
-**Not urgent** because the workaround now exists and the cause is upstream. Worth
-doing the next time the question is asked, rather than re-running the same
-investigation.
+**Still open — the UI half.** A record with only a main cover still looks
+identical, on screen, to one where variants failed to load. The fix (a line
+like *"No variants listed for this issue"*, shown once loading finishes with
+exactly one cover) was written and then explicitly deferred: the user's ask
+that turned into this item was scoped to "the logging epic," and the UI
+change wasn't part of that once said plainly. Diff isn't kept anywhere —
+whoever picks this up writes it fresh, in `MetadataSearch.tsx`'s `PickedCard`,
+the same place `covers.length === 0` and `coverError` already branch.
 
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 

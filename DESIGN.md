@@ -133,6 +133,18 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 All non-auth routes resolve the session (`getUserId`) and **401 when absent**;
 every query is scoped to that user id.
 
+**Request logging:** every route above except the auth catch-all goes through
+`src/lib/api.ts`'s `handle()` wrapper, which — beyond mapping thrown errors to
+the right status — logs one JSON line (`method`, `path`, `status`, `ms`,
+`userId`) per request to `DATA_DIR/logs/<date>.log`, one file per calendar day,
+7 days kept (`winston` + `winston-daily-rotate-file`, `src/lib/logger.ts`). The
+auth catch-all owns its own request/response cycle end-to-end, so it gets a
+thin equivalent wrapper instead, POST-only (this app's only GET traffic there
+is `get-session` polling, logged nowhere near as usefully as an actual
+sign-in). The Metron metadata provider (§4.1) logs separately and stays plain
+`console.log` — a live diagnostic checked during development, not a persisted
+historical record, so it doesn't need the rotation/retention story.
+
 Restoring a backup is a CLI, not a route — `npm run db:import <zip> --
 --replace` recreates comics/boards via the normal upload pipeline
 (`src/db/import.ts`); see `README.md` for the full recipe.
@@ -297,7 +309,10 @@ for movement, durations for fades.
   fractional positions, no-op drops), normalized-publisher queries (dedupe/rename/
   merge), search-suggestion ranking, **`computeStats`** (bucketing, gap-filled
   decades and release years, defensive rating snapping, and the invariant that
-  every breakdown sums to the collection), id/name helpers.
+  every breakdown sums to the collection), id/name helpers, **`handle()`'s
+  request logging** (spies `logger.info`, since it would otherwise write a real
+  line to `data/logs` on every test run — a logging failure must never break
+  the actual response, asserted directly).
 - **Integration (`npm run test:integration`, puppeteer):** drives the real app in
   a headless browser against an **isolated** db (`./data/test`), port 3940, and
   build dir (`.next-itest`), all torn down after — never touches dev data. Covers

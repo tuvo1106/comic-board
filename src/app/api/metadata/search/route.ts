@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  * the issue. Auth-gated; keys stay server-side; results are cached.
  */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
 

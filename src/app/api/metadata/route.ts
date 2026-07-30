@@ -9,7 +9,7 @@ export const runtime = "nodejs";
  * upload UI show the autofill panel (and provider toggle) only when usable.
  */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     return ok({ providers: configuredProviders(), default: defaultProvider() });

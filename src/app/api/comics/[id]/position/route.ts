@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** PATCH /api/comics/:id/position — { position, boardId? } */
 export async function PATCH(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id } = await params;

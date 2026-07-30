@@ -14,7 +14,7 @@ type Params = { params: Promise<{ id: string }> };
  * repoints the comic, deleting the old image (see `replaceComicCover`).
  */
 export async function PUT(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id } = await params;

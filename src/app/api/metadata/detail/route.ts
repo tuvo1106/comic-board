@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * candidate; `issue` is optional (unused by the issue-grain Metron provider).
  */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
 

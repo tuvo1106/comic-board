@@ -4,6 +4,66 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-30 — Provider observability, and a repo-wide docs cleanup ahead of 1.0
+
+- **Every API route now logs to a daily-rotating file.** Started as "log the
+  Metron provider" and grew, mid-implementation, into "log everything —
+  comic create, login/out" once the actual ask became clear; confirmed before
+  touching the 21 call sites it required. `src/lib/api.ts`'s `handle()`
+  wrapper — already the one place all but one route funnels through — now
+  logs `{tag:"api", method, path, status, ms, userId}` after every response,
+  success or error. `userId` costs one extra session lookup per request (most
+  handlers already do one for authorization); negligible at this app's scale,
+  and it keeps every route's diff to "pass `req` in" rather than restructuring
+  what each handler returns.
+  The one route that doesn't go through `handle()` — better-auth's
+  `/api/auth/[...all]` catch-all, which owns its whole request/response cycle
+  — gets a thin equivalent wrapper, POST-only: every meaningful auth action
+  (sign-in, sign-up, sign-out, change-email, change-password) is a POST, and
+  this app has no OAuth, so the only GET traffic is `get-session` polling on
+  nearly every page load — logging that would drown every real event in noise
+  for zero diagnostic value.
+  **First logging library in the repo:** `winston` + `winston-daily-rotate-file`,
+  chosen over hand-rolling after the ask grew a real "write to disk, roll over
+  daily" requirement — exactly the part a maintained library gets right
+  (midnight-boundary writes, retention cleanup) that a first attempt often
+  doesn't. Files land under `DATA_DIR/logs/<date>.log`, matching the app's
+  existing convention for local runtime state (the sqlite db and stored
+  covers both already live under `DATA_DIR`); 7 days kept. Verified against a
+  real signed-in session, not just unit tests — `data/logs/2026-07-30.log`
+  after a real sign-in + two authenticated requests:
+  ```
+  {"tag":"auth","method":"POST","path":"/api/auth/sign-in/email","status":200,"ms":54}
+  {"tag":"api","method":"GET","path":"/api/comics","status":200,"ms":8,"userId":"…"}
+  ```
+- **Metron `detail()` calls log their own diagnosis.** Separately from the
+  above (and shipped first): every call now logs issue ref, whether a main
+  cover came back, the variant count, and the remaining rate-limit budget —
+  `grep '"tag":"metron.detail"'` answers "why didn't variants come back"
+  directly, instead of costing live API calls the way it did the first time
+  the question came up (see roadmap 4h). Plain JSON via `console.log`, no
+  library — a live diagnostic checked during development doesn't need the
+  rotation/retention story a persisted historical log does. Also extended the
+  existing low-budget warning from `search()`-only to `detail()` too, since
+  both draw on the same 20-call burst bucket.
+  **Deliberately not shipped here:** the UI half of 4h (distinguishing "no
+  variants exist" from "variants failed to load" in the picker) was written,
+  then reverted — the session's ask had narrowed to logging specifically, and
+  bundling an unscoped UI change into it wasn't the right call once that was
+  plain. Left for whoever picks up the rest of 4h.
+- **Repo-wide documentation cleanup**, ahead of 1.0: `ROADMAP.md`'s shipped
+  write-ups (225 of 551 lines were duplicating `CHANGELOG.md`) collapsed to a
+  one-line summary + pointer each; `PROVIDERS.md` folded into `DESIGN.md` §4.1
+  as the only doc that had been living under `src/`; docstrings added to
+  API route handlers and other bare exports that actually needed one (most of
+  an initial 169-export survey turned out already documented or self-evident
+  — icon components, type guards, one-line query hooks — once a detector bug
+  that missed single-line `/** */` comments was fixed); narrative comments
+  written earlier in the week trimmed to their load-bearing constraint, with
+  the story moved to this file or `ENGINEERING_NOTES.md`. The convention this
+  enforced is now written down in `AGENTS.md`, so it's a rule to check a
+  change against rather than precedent to infer by reading examples.
+
 ## 2026-07-29 — Multi-select, account settings, undo delete, search, stats, detail-modal, and board-tabs fixes
 
 - **Fixed: no obvious way back from the stats page.** `/stats` was built without

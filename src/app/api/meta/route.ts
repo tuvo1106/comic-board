@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 /** GET /api/meta — distinct field values + counts, scoped to the caller; powers form autocomplete. */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     return ok(getMeta(userId));

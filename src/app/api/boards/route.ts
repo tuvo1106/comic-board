@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 /** GET /api/boards — every board owned by the caller. */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     return ok(listBoards(userId));
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
 
 /** POST /api/boards — { name, comicIds? } (comicIds = save-view-as-board). */
 export async function POST(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { name, comicIds } = boardCreateSchema.parse(await req.json());
