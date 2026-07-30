@@ -4,8 +4,34 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-29 — Multi-select, account settings, undo delete, search, detail-modal, and board-tabs fixes
+## 2026-07-29 — Multi-select, account settings, undo delete, search, stats, detail-modal, and board-tabs fixes
 
+- **Stats page** (`/stats`) — headline totals, bars by publisher and decade, a
+  rating histogram, a release-year timeline, and leaderboards for series, cover
+  artists, authors and characters. No new API route: the maths is a pure module
+  (`src/lib/stats.ts`) reducing over the comics list `useComics()` has already
+  cached, so arriving from the board is instant and an upload refreshes the
+  numbers through the same invalidation as everything else.
+  **The time axis is `coverDate`, not `createdAt`** — when a comic was uploaded
+  is an artifact of data entry; uploading a 1965 issue today is a 1965 data
+  point. Per-year counts rather than a cumulative line, since a running total of
+  release years would only restate the collection size.
+  **Every breakdown sums to the collection**: comics with no publisher, cover
+  date or rating land in their own bucket and a truncated top-N carries the rest
+  in "Other", because bars that silently don't add up can't distinguish a small
+  collection from missing metadata. Asserted as an invariant in the unit tests.
+  Bars are drill-through links built through `filtersToParams`, so they can't
+  drift from the URL contract the board parses; the rating histogram is
+  deliberately unlinked, as there's no rating filter to send anyone to.
+  No charting dependency — Recharts measured at 117 KB gzipped and would have
+  earned it on one card, while the other three visuals are label+bar+count rows
+  where hand-rolled markup is *better*, each row being a real `<a>`.
+  **Two bugs the screenshots caught that the DOM assertions couldn't:** a
+  single-point timeline drew a diagonal ramp from zero — inventing a growth
+  story the data never told, where the honest render is a flat line — and muted
+  buckets used `bg-border`, so "Unrated: 25" rendered as an invisible outline on
+  the surface colour. Same lesson as the clipped typeahead dropdown: structural
+  assertions can't see what a chart *implies*.
 - **Stubbed the metadata provider in the integration suite**, so the Metron
   autofill flow finally has UI coverage. It structurally couldn't before: the
   panel self-hides without a configured provider and CI has no

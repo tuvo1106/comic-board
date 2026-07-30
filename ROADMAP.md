@@ -64,32 +64,39 @@ upgrade case already has a dedicated path (**Replace cover**, shipped
 rather than catch real duplicates. Revisit only if accidental re-uploads
 turn out to be an actual recurring problem.
 
-### 2c. Stats page — ~1 day
+### 2c. Stats page — *shipped 2026-07-29*
 
-Counts by publisher / decade / artist, rating distribution, growth over time.
-One page of charts; makes the collection browsable in a new way.
+`/stats`: headline totals, bars by publisher and decade, a rating histogram, a
+release-year timeline, and four leaderboards (series / cover artists / authors /
+characters).
 
-**What's reusable vs. new:** `getMeta` (`src/db/queries.ts:586`) already runs
-real `GROUP BY … count(*)` queries for series/publisher/author/artist/
-character/tag, scoped to the user — publisher- and artist-count charts are
-close to just rendering that existing output instead of a filter dropdown.
-Not computed anywhere yet: rating distribution, cover-date decades, and
-growth-over-time (`createdAt`) — none of those group by a date or the
-numeric `rating` field today.
+Shipped as predicted — **a new page and charts, no new API route**. The maths is
+a pure module (`src/lib/stats.ts`, 28 unit tests) reducing over the comics list
+`useComics()` has already cached, so arriving from the board is instant and an
+upload refreshes the numbers through the same invalidation as everything else.
+What actually got built, versus the plan above:
 
-- **Client-side bucketing, not new SQL.** The app already computes
-  everything view-related (filters, sort, facet counts) client-side against
-  the full in-memory comics list, because "My Comics" fetches the user's
-  entire collection in one shot with no pagination (see 2a's notes on this).
-  Decade-bucketing (`Math.floor(year/10)*10` off `coverDate`, with an
-  "unknown date" bucket for comics missing one) and a rating histogram (10
-  half-star buckets + an "unrated" bucket) are both cheap array reduces over
-  data that's already loaded — consistent with that pattern, and needing no
-  new API route. Growth-over-time (comics added per month/year, off
-  `createdAt`) is the same shape.
-- **Net result:** this can plausibly ship as "new page + charts" only —
-  `getMeta` covers the name-valued counts as-is, and the date/rating buckets
-  are pure client-side logic off data the board already fetches.
+- **Release year, not `createdAt`.** The plan said "growth over time" off when a
+  comic was *added*. That's an artifact of data entry — uploading a 1965 issue
+  today is a 1965 data point, not a 2026 one — so the time axis is `coverDate`.
+  It's per-year counts rather than a cumulative line: a running total of release
+  years would only ever restate the collection size.
+- **Every breakdown sums to the collection.** Comics with no publisher, no cover
+  date or no rating land in their own bucket, and a truncated top-N carries the
+  remainder in "Other". Bars that silently don't add up can't distinguish a small
+  collection from missing metadata. Asserted as an invariant in the unit tests.
+- **Bars are drill-through links**, built through `filtersToParams` so they can't
+  drift from the URL contract the board parses — clicking a publisher or decade
+  lands on the filtered board. The rating histogram is deliberately *not*
+  linked: there's no rating filter to send anyone to, and a bar that looks
+  clickable but isn't is worse than a plain one.
+- **No charting dependency.** Recharts was measured at 117 KB gzipped and would
+  have earned it on exactly one card — the other three visuals are label + bar +
+  count rows, where hand-rolled markup is strictly better because each row is a
+  real `<a>` (middle-click, tab order, status-bar preview). See
+  `src/components/stats/charts.tsx`.
+- **Stats sits in the top bar, not the board tab strip** — tabs are boards you
+  can rename, reorder and delete; stats is none of those.
 
 ### 2d. Collector fields — *skipped (decided 2026-07-29)*
 
@@ -462,22 +469,29 @@ just `src/lib/auth.ts`'s `user.changeEmail` config flag (see `CHANGELOG.md`).
 
 ## Suggested order
 
-What's actually active after review (2026-07-29), in order:
+What's actually active after review (2026-07-29):
 
-1. **Stats page** (2c) — the only substantive feature left actively planned.
-   2b and 2d were skipped; grid-view marquee-select (the rest of 2a) is a
-   stretch goal, not actively planned.
-2. Everything else is **waiting on a trigger rather than on appetite**, which is
-   the point — none of it should be built speculatively:
-   - **4a Dockerize** — when there's an actual host to deploy to.
-   - **4g exposure prerequisites** — *before* the app is reachable from
-     anywhere but localhost. Not optional at that point; there's no login rate
-     limiting and `/images/**` has no auth check.
-   - **4c server-side pagination** — only once list view gets janky or search
-     stops feeling instant. 4b was skipped.
-3. ~~Sharing~~ — skipped.
+**Nothing is queued on appetite.** With the stats page shipped, every remaining
+item is **waiting on a trigger** — which is the point; none of it should be built
+speculatively:
+
+- **4a Dockerize** — when there's an actual host to deploy to.
+- **4g exposure prerequisites** — *before* the app is reachable from anywhere
+  but localhost. Not optional at that point; there's no login rate limiting and
+  `/images/**` has no auth check.
+- **4c server-side pagination** — only once list view gets janky or search stops
+  feeling instant. 4b was skipped.
+- **Grid-view marquee-select** (the rest of 2a) — a stretch goal, not actively
+  planned.
+- ~~Sharing~~, ~~2b duplicate detection~~, ~~2d collector fields~~ — skipped,
+  each with its reasoning recorded above.
+
+Known and deliberately unfixed: the top bar overflows a ~390px viewport (the
+avatar), on every page and predating the stats work. The app is desktop-first
+and dark-only by design; fixing it is a header-responsiveness pass, not a
+one-liner.
 
 Shipped 2026-07-29: undo delete (1), list-view multi-select + bulk actions (2a),
-autocomplete search (2e), drag tabs to reorder (3), the spec-driven-behaviors
-test-coverage pass (4d), the test-harness flakiness fix (4e), the stubbed
-metadata provider (4f), and account settings (6).
+stats page (2c), autocomplete search (2e), drag tabs to reorder (3), the
+spec-driven-behaviors test-coverage pass (4d), the test-harness flakiness fix
+(4e), the stubbed metadata provider (4f), and account settings (6).

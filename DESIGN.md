@@ -193,6 +193,19 @@ the `board` param scopes the list server-side.
   **manual** tab falls back to the drag-drop zone with local preview. Either way,
   a multi-file queue carries series/publisher/authors/artists/boards forward
   across files, with board pre-selection.
+- **Stats** (`/stats`) — headline totals, publisher/decade bars, a rating
+  histogram, a release-year timeline, and series/artist/author/character
+  leaderboards. **No API route of its own:** the maths is pure
+  (`src/lib/stats.ts`) over the comics list `useComics()` already caches, the
+  same client-side-bucketing choice as `computeFacets`. Time is keyed off
+  `coverDate` (a property of the collection), never `createdAt` (an artifact of
+  when you uploaded). Every breakdown sums to the collection — "No publisher",
+  "Unknown", "Unrated" and "Other" buckets exist so bars can't quietly fail to
+  add up. Bars are `<a>`s built via `filtersToParams`, so drill-through can't
+  drift from the board's URL contract; the rating histogram is unlinked because
+  no rating filter exists. Charts are hand-rolled divs + one inline SVG — no
+  charting dependency. Reached from the top bar, not the tab strip (tabs are
+  boards you can rename/reorder/delete).
 - **Overlays** — `Dialog` and `Menu` render through React portals to `document.body`
   so ancestor `overflow`/`backdrop-filter` never clips or mis-positions them.
 
@@ -209,7 +222,9 @@ for movement, durations for fades.
   filter URL round-trip, directional `sortComics`, position append (`positionAfterMax`), masonry math
   **+ `placementsInRange` windowing**, **`swapReorder`** (swap-not-insert, symmetry,
   fractional positions, no-op drops), normalized-publisher queries (dedupe/rename/
-  merge), id/name helpers.
+  merge), search-suggestion ranking, **`computeStats`** (bucketing, gap-filled
+  decades and release years, defensive rating snapping, and the invariant that
+  every breakdown sums to the collection), id/name helpers.
 - **Integration (`npm run test:integration`, puppeteer):** drives the real app in
   a headless browser against an **isolated** db (`./data/test`), port 3940, and
   build dir (`.next-itest`), all torn down after — never touches dev data. Covers
