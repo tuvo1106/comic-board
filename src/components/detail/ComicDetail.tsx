@@ -232,13 +232,28 @@ export function ComicDetail({ id, asModal }: Props) {
           {comic && (
             <>
               {/* Blurred backdrop of the same cover, scaled up so the blur's
-                  soft edges don't reveal the container boundary. */}
+                  soft edges don't reveal the container boundary.
+
+                  Two layers, because they do different jobs. `blurDataUrl` is a
+                  ~300-byte inline thumbnail: it paints instantly with no
+                  request, so a cold deep-link is never a flat black panel — but
+                  it's ~16px wide, so it has no detail to reveal no matter how
+                  little blur you put on it. The real thumbnail on top carries
+                  actual artwork, and is already being fetched for the cover
+                  itself, so it costs nothing extra. */}
               <div
                 aria-hidden
                 className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
                 style={{ backgroundImage: `url(${comic.blurDataUrl})` }}
               />
-              <div aria-hidden className="absolute inset-0 bg-black/50" />
+              <div
+                aria-hidden
+                className="absolute inset-0 scale-110 bg-cover bg-center blur-lg"
+                style={{ backgroundImage: `url(${comic.thumbUrl})` }}
+              />
+              {/* Scrim: enough to keep the cover the subject, light enough that
+                  the artwork behind still reads. */}
+              <div aria-hidden className="absolute inset-0 bg-black/30" />
             </>
           )}
           {comic ? (
@@ -246,7 +261,15 @@ export function ComicDetail({ id, asModal }: Props) {
               layoutId={`cover-${id}`}
               src={decodedUrl === comic.imageUrl ? comic.imageUrl : comic.thumbUrl}
               alt={comic.series}
-              className="max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
+              // `relative` is load-bearing, not cosmetic: the blurred backdrop
+              // and its scrim above are `absolute`, and a statically-positioned
+              // image paints *below* positioned siblings in the same stacking
+              // context — so the cover sat behind both and read as not rendering
+              // at all. It looked fine while opening only because Motion applies
+              // a transform during the layout animation, which promotes the
+              // image; once the animation settled the transform went back to
+              // `none` and the cover dropped behind the scrim.
+              className="relative z-10 max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
               layoutCrossfade={false}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
             />
@@ -258,7 +281,10 @@ export function ComicDetail({ id, asModal }: Props) {
           {comic && (
             <button
               onClick={() => setReplacing(true)}
-              className="absolute bottom-6 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
+              // Above the cover's own z-10: this overlays the image on purpose,
+              // and without an explicit layer it sits under the (now
+              // positioned) cover and stops being clickable at all.
+              className="absolute bottom-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
             >
               <ImageIcon className="h-4 w-4" /> Replace cover
             </button>
