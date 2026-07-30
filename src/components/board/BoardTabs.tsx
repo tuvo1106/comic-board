@@ -19,7 +19,8 @@ import {
 } from "@dnd-kit/sortable";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   keys,
@@ -34,20 +35,35 @@ import type { BoardDTO } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
 import { Menu, MenuItem } from "@/components/ui/Menu";
-import { MoreHorizontal, Pencil, Plus, Trash } from "@/components/ui/icons";
+import { BarChart, MoreHorizontal, Pencil, Plus, Trash } from "@/components/ui/icons";
 
 interface Props {
   activeBoardId?: string; // undefined = My Comics
-  /**
-   * False on pages that aren't a board at all (the stats page). The strip still
-   * renders — it's the app's primary navigation, and leaving it out made
-   * /stats a dead end with no visible way back to the covers — but nothing is
-   * highlighted, since none of these tabs is what you're looking at.
-   */
-  showActive?: boolean;
 }
 
-export function BoardTabs({ activeBoardId, showActive = true }: Props) {
+/**
+ * The view switcher: boards, plus Stats as a trailing peer.
+ *
+ * Stats lives *in* the strip rather than being a header button that leaves the
+ * strip behind. Two earlier attempts were worse. Rendering no strip on /stats
+ * stripped the app's primary navigation and made the page a dead end; rendering
+ * the strip with nothing highlighted replaced that with a false affordance —
+ * every tab carries a count, so a row of counts above a page *of* counts reads
+ * as a scope selector, and clicking one silently leaves stats instead of
+ * scoping it. Zero-selection is also a state no tab control has: it reads as
+ * broken, and it strands `layoutId="active-tab"` so the underline pops back
+ * instead of sliding.
+ *
+ * As a peer item, exactly one thing is always highlighted, the underline
+ * animates both ways, and getting back to the covers is "My Comics" — right
+ * where it is on every other page. Stats deliberately carries no count: it
+ * isn't a subset of anything, and a number here would re-imply scoping.
+ */
+export function BoardTabs({ activeBoardId }: Props) {
+  // Read from the route rather than a prop: the strip is rendered by both the
+  // board and the stats page, and "which view is this?" is the router's answer,
+  // not something each caller should have to remember to pass.
+  const onStats = usePathname() === "/stats";
   const qc = useQueryClient();
   const { data: boards } = useBoards();
   const { data: comics } = useComics();
@@ -99,7 +115,7 @@ export function BoardTabs({ activeBoardId, showActive = true }: Props) {
           <Tab
             href="/"
             label="My Comics"
-            active={showActive && !activeBoardId}
+            active={!onStats && !activeBoardId}
             count={comics?.length}
           />
           <SortableContext
@@ -110,7 +126,7 @@ export function BoardTabs({ activeBoardId, showActive = true }: Props) {
               <BoardTab
                 key={b.id}
                 board={b}
-                active={showActive && activeBoardId === b.id}
+                active={!onStats && activeBoardId === b.id}
                 dimmed={activeId === b.id}
               />
             ))}
@@ -122,6 +138,18 @@ export function BoardTabs({ activeBoardId, showActive = true }: Props) {
           >
             <Plus className="h-4 w-4" />
           </button>
+
+          {/* Separates the boards (which you can create, rename, reorder and
+              delete) from Stats, which is a view of them all. The `+` above is
+              already a non-board member of this strip, so the precedent for
+              mixing holds; the rule is the divider, not exclusion. */}
+          <div aria-hidden className="mx-2 h-4 w-px flex-shrink-0 bg-border" />
+          <Tab
+            href="/stats"
+            label="Stats"
+            active={onStats}
+            icon={<BarChart className="h-3.5 w-3.5" />}
+          />
         </div>
         <DragOverlay dropAnimation={null}>
           {activeBoard && (
@@ -136,33 +164,39 @@ export function BoardTabs({ activeBoardId, showActive = true }: Props) {
   );
 }
 
+/**
+ * A non-draggable tab. A real `<Link>`, not a button calling `router.push`, so
+ * middle-click and open-in-new-tab work and assistive tech sees a destination.
+ * (The board tabs below stay buttons — they're drag handles, and an anchor
+ * fights the pointer sensor.)
+ */
 function Tab({
   href,
   label,
   active,
   count,
-  menu,
+  icon,
 }: {
   href: string;
   label: string;
   active: boolean;
   count?: number;
-  menu?: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
-  const router = useRouter();
   return (
     <div className="group relative flex flex-shrink-0 items-center">
-      <button
-        onClick={() => router.push(href)}
+      <Link
+        href={href}
+        aria-current={active ? "page" : undefined}
         className={`relative flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
           active ? "text-fg" : "text-muted hover:text-fg"
         }`}
       >
+        {icon}
         <span>{label}</span>
         {typeof count === "number" && (
           <span className="rounded-full bg-surface-2 px-1.5 text-xs text-muted">{count}</span>
         )}
-        {menu}
         {active && (
           <motion.div
             layoutId="active-tab"
@@ -170,7 +204,7 @@ function Tab({
             transition={{ type: "spring", stiffness: 500, damping: 40 }}
           />
         )}
-      </button>
+      </Link>
     </div>
   );
 }

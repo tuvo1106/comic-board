@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { keys, useComics, useUpdatePosition } from "@/lib/client-api";
 import { useFilters } from "@/lib/use-filters";
@@ -17,13 +17,10 @@ import type { ComicDTO } from "@/lib/types";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { Masonry } from "./Masonry";
 import { ListView } from "./ListView";
-import { TopBar } from "./TopBar";
-import { BoardTabs } from "./BoardTabs";
 import { ComicCardMenu } from "./ComicCardMenu";
 import { ColumnSelector } from "./ColumnSelector";
 import { SortSelector } from "./SortSelector";
 import { ViewToggle } from "./ViewToggle";
-import { UploadModal } from "@/components/upload/UploadModal";
 import { ImageIcon } from "@/components/ui/icons";
 import type { ReorderResult } from "./Masonry";
 
@@ -34,14 +31,13 @@ import type { ReorderResult } from "./Masonry";
 export function BoardView({ boardId }: { boardId?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { filters, update, clear } = useFilters();
+  const { filters, clear } = useFilters();
   // My Comics defaults to cover date; custom boards default to their manual
   // (drag) order.
   const { field: sortField, dir: sortDir, setSort } = useSort(
     boardId ? "manual" : "coverDate",
   );
   const { data: comics, isLoading, isError, error } = useComics(boardId ?? null);
-  const [addOpen, setAddOpen] = useState(false);
   const [columns, setColumns] = useColumns();
   const [view, setView] = useView();
   const qc = useQueryClient();
@@ -64,46 +60,9 @@ export function BoardView({ boardId }: { boardId?: string }) {
     }
   };
 
-  // Debounced search: type into local state, push to the URL after 150ms.
-  const [searchInput, setSearchInput] = useState(filters.q);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track the last value *this component* pushed to the URL, so the re-sync
-  // below can tell "the URL changed because my own debounced update() finally
-  // landed" (ignore — searchInput may already be ahead of it) apart from "the
-  // URL changed externally" (back/forward, cleared filters — adopt it).
-  // State, not a ref: this is read while rendering to decide whether to adopt
-  // the URL's value, and a ref read during render isn't safe under concurrent
-  // rendering (it can be a value from a render that got thrown away). It's only
-  // ever written from an event handler, so it never cascades a render.
-  const [pushedQ, setPushedQ] = useState(filters.q);
-  // Re-sync when the URL's `q` changes from elsewhere. Adjusting state during
-  // render — rather than in an effect — avoids a wasted render pass. See "You
-  // Might Not Need an Effect" (React docs).
-  const [prevQ, setPrevQ] = useState(filters.q);
-  if (filters.q !== prevQ) {
-    setPrevQ(filters.q);
-    if (filters.q !== pushedQ) setSearchInput(filters.q);
-  }
-  const onSearch = (value: string) => {
-    setSearchInput(value);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      setPushedQ(value);
-      update({ q: value });
-    }, 150);
-  };
-  // Picking a search suggestion is deliberate, not mid-typing, so apply it at
-  // once — and drop any in-flight debounce, which would otherwise land after
-  // this and overwrite it with whatever was half-typed.
-  const onSearchCommit = (value: string) => {
-    if (timer.current) clearTimeout(timer.current);
-    setSearchInput(value);
-    setPushedQ(value);
-    update({ q: value });
-  };
-  // Clear a pending debounce on unmount so a late update() can't fire after the
-  // component is gone.
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // Search input + its debounce live in `CollectionChrome` alongside the TopBar
+  // that owns the field. This component reads the committed value from the URL
+  // (`filters.q`) like every other filter.
 
   const filtered = useMemo(
     () => (comics ? sortComics(applyFilters(comics, filters), sortField, sortDir) : []),
@@ -124,20 +83,11 @@ export function BoardView({ boardId }: { boardId?: string }) {
   };
 
   return (
-    <div className="min-h-screen">
-      <TopBar
-        search={searchInput}
-        onSearch={onSearch}
-        onSearchCommit={onSearchCommit}
-        onAdd={() => setAddOpen(true)}
-      />
-      <BoardTabs activeBoardId={boardId} />
+    <>
+      {/* Header + tabs + upload modal are the group layout's (CollectionChrome).
+          The filter bar stays here: it's board-scoped, and its facet counts are
+          derived from this board's comics. */}
       <FilterBar boardComics={comics ?? []} visibleComics={filtered} />
-      <UploadModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        defaultBoardId={boardId}
-      />
 
       <main className="mx-auto max-w-[1800px] px-5 py-6">
         {comics && comics.length > 0 && (
@@ -191,7 +141,7 @@ export function BoardView({ boardId }: { boardId?: string }) {
             />
           ))}
       </main>
-    </div>
+    </>
   );
 }
 
