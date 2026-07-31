@@ -144,6 +144,19 @@ export const Filter = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+/** Indeterminate progress ring. Pair with `animate-spin`. */
+export const Spinner = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
+    <path
+      d="M21 12a9 9 0 0 0-9-9"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 export const Sparkles = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <path d="M9 3 10.5 7.5 15 9l-4.5 1.5L9 15l-1.5-4.5L3 9l4.5-1.5Z" />

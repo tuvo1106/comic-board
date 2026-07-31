@@ -84,11 +84,24 @@ export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, o
           onDone={clearSelection}
         />
       )}
-      <div className="overflow-x-auto rounded-xl border border-border">
+      {/*
+        The bounded height is what makes the sticky header work at all, not a
+        style choice. `overflow-x-auto` forces overflow-y to `auto` as well
+        (CSS computes a `visible` axis to `auto` when its partner isn't), so
+        this box is already a scroll container — but with auto height it never
+        scrolls vertically, and a sticky child of a container that never scrolls
+        never moves. Giving it a real height makes it the scrollport the header
+        sticks to. The offset clears the app chrome: top bar + board tabs +
+        filter row, which are themselves sticky at 0 / 57 / 99.
+      */}
+      <div
+        data-list-table
+        className="max-h-[calc(100vh-190px)] overflow-auto rounded-xl border border-border"
+      >
         <div className="min-w-[900px]">
           {/* Header */}
           <div
-            className={`grid ${COLS} gap-2 border-b border-border bg-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted`}
+            className={`sticky top-0 z-10 grid ${COLS} gap-2 border-b border-border bg-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted`}
           >
             <HeaderCheckbox
               checked={selected.size > 0 && selected.size === comics.length}

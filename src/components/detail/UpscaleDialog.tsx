@@ -11,7 +11,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
 import type { ComicDTO } from "@/lib/types";
-import { Check, Sparkles } from "@/components/ui/icons";
+import { Check, Spinner } from "@/components/ui/icons";
 import { upscaleTarget } from "@/lib/upscale/types";
 
 // The model is 4x-native, and 4x is the only factor offered: anything smaller
@@ -92,8 +92,8 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
   };
 
   return (
-    <Dialog open={open} onClose={dismiss} title="Upscale cover" widthClass="max-w-2xl">
-      <div className="space-y-4 p-5">
+    <Dialog open={open} onClose={dismiss} title="Upscale cover" widthClass="max-w-4xl">
+      <div className="space-y-5 p-5">
         {!info?.available ? (
           <p className="text-sm text-muted">
             No upscaler is configured. Set <code className="text-fg">UPSCALER_BIN</code> to a
@@ -123,50 +123,49 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
             </div>
           </div>
         ) : !candidate ? (
-          // Running. Names the target size so the wait is legible rather than a
-          // bare spinner.
-          <div className="space-y-3 py-8 text-center">
-            <Sparkles className="mx-auto h-6 w-6 animate-pulse text-accent" />
-            <p className="text-sm font-medium">
-              Upscaling to {target.width} × {target.height}px…
-            </p>
-            <p
-              className="text-xs text-muted"
-              title="Upscaling invents plausible detail rather than recovering what was lost. Your current cover is kept, so you can revert."
-            >
-              {info.label} · this can take a few seconds · revertible
-            </p>
+          // Running. Deliberately says nothing about the model or backend: which
+          // upscaler is wired up is a deployment detail, and naming it here made
+          // the wait read like a config screen. Just what's happening, and to
+          // what size.
+          <div className="flex flex-col items-center gap-6 py-14 text-center">
+            <Spinner className="h-8 w-8 animate-spin text-accent" />
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Upscaling…</p>
+              <p
+                className="text-xs text-muted"
+                title="Upscaling invents plausible detail rather than recovering what was lost. Your current cover is kept, so you can revert."
+              >
+                {comic.width} × {comic.height} → {target.width} × {target.height}px
+              </p>
+            </div>
           </div>
         ) : (
           <>
             <Compare comic={comic} candidate={candidate} split={split} onSplit={setSplit} />
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted">
-                {candidate.from.width} × {candidate.from.height} → {candidate.width} ×{" "}
-                {candidate.height}px · {candidate.label}
-              </p>
-              <div className="flex items-center gap-2">
-                {/* Closes rather than clearing the candidate: with no opening
-                    step there's nothing to go back to, and the auto-run effect
-                    is keyed on `open`, so staying put would sit on the running
-                    state forever. */}
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="rounded-lg px-3 py-1.5 text-sm text-muted transition hover:text-fg"
-                >
-                  Discard
-                </button>
-                <button
-                  type="button"
-                  onClick={keep}
-                  disabled={accept.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg transition hover:brightness-110 disabled:opacity-50"
-                >
-                  <Check className="h-4 w-4" />
-                  {accept.isPending ? "Saving…" : "Keep it"}
-                </button>
-              </div>
+            {/* No size readout here: the detail view shows the current size and
+                the running state showed what it was heading for, so repeating it
+                next to the result is a third statement of the same fact. */}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              {/* Closes rather than clearing the candidate: with no opening step
+                  there's nothing to go back to, and the auto-run effect is keyed
+                  on `open`, so staying put would sit on the running state
+                  forever. */}
+              <button
+                type="button"
+                onClick={dismiss}
+                className="rounded-lg px-3 py-1.5 text-sm text-muted transition hover:text-fg"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={keep}
+                disabled={accept.isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg transition hover:brightness-110 disabled:opacity-50"
+              >
+                <Check className="h-4 w-4" />
+                {accept.isPending ? "Saving…" : "Keep it"}
+              </button>
             </div>
           </>
         )}
@@ -196,15 +195,18 @@ function Compare({
   onSplit: (v: number) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <div
-        className="relative mx-auto overflow-hidden rounded-lg bg-black/40 ring-1 ring-border"
-        style={{ aspectRatio: `${comic.width} / ${comic.height}`, maxHeight: "52vh" }}
-      >
-        {/* Same two-layer blurred backdrop as the detail modal: `blurDataUrl`
-            paints instantly with no request but is too small to show detail,
-            and the thumbnail on top carries real artwork and is already loaded.
-            Scaled up so the blur's soft edges don't reveal the container edge. */}
+    <div className="space-y-3">
+      {/* Two boxes, not one. The compare stack has to sit at the cover's exact
+          aspect ratio for the two images to stay in register — which means it
+          fills its own box edge to edge, leaving nowhere for a backdrop to show.
+          So the backdrop gets an outer, padded box and the stack floats inside
+          it, the same relationship the detail modal has between its cover panel
+          and the cover. */}
+      <div className="relative overflow-hidden rounded-lg bg-black/40 p-5 ring-1 ring-border">
+        {/* Same two-layer treatment as the detail modal: `blurDataUrl` paints
+            instantly with no request but is ~16px wide so it has no detail to
+            reveal, and the thumbnail over it carries real artwork and is already
+            loaded. Scaled up so the blur's soft edges don't expose the box edge. */}
         <div
           aria-hidden
           className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
@@ -215,35 +217,45 @@ function Compare({
           className="absolute inset-0 scale-110 bg-cover bg-center blur-lg"
           style={{ backgroundImage: `url(${comic.thumbUrl})` }}
         />
-        <div aria-hidden className="absolute inset-0 bg-black/30" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={comic.imageUrl}
-          alt="Current cover"
-          className="absolute inset-0 h-full w-full object-contain"
-        />
-        <div className="absolute inset-0 overflow-hidden" style={{ width: `${split}%` }}>
-          {/* Sized to the *container*, not the clip, so the two images stay in
-              register as the divider moves rather than squashing. */}
+        <div aria-hidden className="absolute inset-0 bg-black/40" />
+
+        <div
+          className="relative z-10 mx-auto overflow-hidden rounded shadow-2xl"
+          style={{
+            aspectRatio: `${comic.width} / ${comic.height}`,
+            height: "64vh",
+            maxWidth: "100%",
+          }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={candidate.imageUrl}
-            alt="Upscaled cover"
-            className="absolute inset-y-0 left-0 h-full max-w-none object-contain"
-            style={{ width: `${(100 / split) * 100}%` }}
+            src={comic.imageUrl}
+            alt="Current cover"
+            className="absolute inset-0 h-full w-full object-contain"
           />
+          <div className="absolute inset-0 overflow-hidden" style={{ width: `${split}%` }}>
+            {/* Sized to the *stack*, not the clip, so the two images stay in
+                register as the divider moves rather than squashing. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={candidate.imageUrl}
+              alt="Upscaled cover"
+              className="absolute inset-y-0 left-0 h-full max-w-none object-contain"
+              style={{ width: `${(100 / split) * 100}%` }}
+            />
+          </div>
+          <div
+            aria-hidden
+            className="absolute inset-y-0 w-0.5 bg-accent/80"
+            style={{ left: `${split}%` }}
+          />
+          <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
+            Upscaled
+          </span>
+          <span className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
+            Current
+          </span>
         </div>
-        <div
-          aria-hidden
-          className="absolute inset-y-0 w-0.5 bg-accent/80"
-          style={{ left: `${split}%` }}
-        />
-        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
-          Upscaled
-        </span>
-        <span className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
-          Current
-        </span>
       </div>
       <input
         type="range"

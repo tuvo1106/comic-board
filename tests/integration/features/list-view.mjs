@@ -94,9 +94,12 @@ export async function listViewBasics({ p, ck, sleep, apiJson, imgs }, { N }) {
   p.off("request", countDatePatch);
 
   // Sortable list-view headers: clicking "Series" sorts A→Z; clicking again flips Z→A.
+  // Selected via `[data-list-table]`, not a Tailwind class: the container's
+  // overflow classes are layout details that do change (making the header
+  // sticky changed them), and a test shouldn't break because a style did.
   const seriesInDom = async () =>
     p.evaluate(() => {
-      const wrap = document.querySelector("main .overflow-x-auto > div");
+      const wrap = document.querySelector("main [data-list-table] > div");
       return [...wrap.children]
         .slice(1) // drop the header row
         .map((r) => r.children[2]?.textContent.trim() ?? ""); // [checkbox, thumbnail, series]

@@ -48,6 +48,22 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   which is not something you can eyeball one cover at a time across 400 of them.
   Ranked by total pixels rather than width, so a wide-but-short scan doesn't
   outrank a properly large one.
+- **Shaped by using it on the real collection.** The dialog runs the upscale on
+  open and lands on the comparison; a confirm step with one scale only said "yes
+  really". The wait is a spinner and the size it's heading for — which upscaler
+  is wired up is a deployment detail, and naming it there made the wait read
+  like a config screen. Overlay controls on the cover went translucent (they
+  were covering artwork) and go opaque on hover. The list header is sticky, so
+  the sort controls survive scrolling.
+- **The compare view's blurred backdrop shipped invisible first.** The compare
+  stack has to sit at the cover's exact aspect ratio for the two images to stay
+  in register, so it filled its own box edge to edge with nowhere for the blur to
+  show. It's now an outer padded box with the stack floating inside — the same
+  relationship the detail modal has between its cover panel and the cover. The
+  test that would have caught it is geometric, and deliberately checks that the
+  backdrop is a *different element* wrapping the stack: comparing rectangles
+  alone wouldn't have worked, since `scale-110` makes even a fully covered layer
+  measure larger.
 - **Testing:** the flow runs end-to-end in the browser suite against a stub
   binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
   via sharp — real route, real `processUpload`, real accept/revert, fake pixels.

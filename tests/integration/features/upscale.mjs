@@ -50,7 +50,7 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
   // with a single scale it was a button that only said "yes really".
   await clickByText("Upscale");
   await sleep(400);
-  ck(await bodyHas("Upscaling to"), "opening runs the upscale straight away");
+  ck(await bodyHas("Upscaling"), "opening runs the upscale straight away");
   // The stub still runs sharp over a real image; give it room on a slow runner.
   await p.waitForFunction(() => document.body.textContent.includes("Keep it"), { timeout: 60000 });
 
@@ -63,6 +63,43 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
   ck(
     previewed.hasUpscaledImg && previewed.hasCurrentImg,
     "with both covers rendered so they can actually be compared",
+  );
+
+  // The blurred backdrop shipped invisible once: the compare stack has to sit at
+  // the cover's exact aspect ratio, so it filled its own box edge to edge and
+  // covered the backdrop completely. Nothing about "the images render" catches
+  // that — the check has to be geometric. Asserts the backdrop box is strictly
+  // bigger than the stack, i.e. there's actually somewhere for blur to show.
+  const backdrop = await p.evaluate(() => {
+    // Scoped to the dialog. Unscoped, `[aria-hidden].blur-lg` matched the
+    // *detail modal's* own blurred cover panel sitting behind this one — so the
+    // check was comparing two unrelated boxes and its numbers meant nothing.
+    const dlg = document.querySelector("[role='dialog']");
+    const img = dlg?.querySelector("img[alt='Current cover']");
+    const blur = dlg?.querySelector("[aria-hidden].blur-lg");
+    if (!img || !blur) return null;
+    const stack = img.parentElement; // the aspect-ratio compare box
+    const box = blur.parentElement; // whatever carries the backdrop
+    const s = stack.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    return {
+      // The decisive one. In the broken version the blur layers were siblings
+      // of the image inside the *same* aspect-ratio box, so this was true and
+      // the backdrop was covered edge to edge. Comparing rects alone wouldn't
+      // catch it: `scale-110` makes a covered layer measure larger anyway.
+      sameBox: box === stack,
+      wraps: box.contains(stack),
+      padX: Math.round(b.width - s.width),
+      padY: Math.round(b.height - s.height),
+    };
+  });
+  ck(
+    backdrop !== null && !backdrop.sameBox && backdrop.wraps,
+    "the backdrop is a box around the cover, not a layer underneath it",
+  );
+  ck(
+    backdrop !== null && backdrop.padX > 0 && backdrop.padY > 0,
+    `so the blur actually shows (${backdrop?.padX}px × ${backdrop?.padY}px of surround)`,
   );
 
   // The core guarantee: previewing changed nothing.
