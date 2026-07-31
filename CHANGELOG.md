@@ -7,6 +7,10 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 ## 2026-07-31 — Cover upscaling, with preview and revert
 
 - **Upscale a cover from the detail modal, compare it, then keep or discard.**
+  Opening the dialog starts the run — there's a single scale, so a confirm step
+  would only have said "yes really" — and you land on a before/after slider with
+  the two covers at matched display size, which is the only way to see what the
+  model actually changed.
   Motivated by the collection's actual shape: the median stored cover is
   **600px wide** and 334 of 392 are under 700px, because most arrived through
   Metron's "Use this cover", whose CDN images are around that size. The app's
@@ -17,29 +21,44 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   folder and the comic is never touched. That property is the one the
   integration test protects hardest; a preview that quietly mutated the cover
   would be the same dead-end class as the two cover bugs fixed earlier today.
+- **Every upscale converges on a 2400px ceiling** rather than a raw 4× of
+  whatever the source happened to be. 4× a typical 600px cover lands there
+  naturally, but as a *cap* it also stops an already-1600px scan becoming a
+  6400px file that's slow to produce, heavy to store, and no sharper on screen.
+  Shared by the route and the dialog from one constant so the preview can't
+  promise a size the server won't store.
 - **Accepting is reversible.** `comics.original_image_path` (migration 0006,
   a single additive column) keeps the cover that was replaced, and the detail
   view grows a "Revert to the original cover" action. It's written only when
   still null, so upscaling twice still reverts to the *true* original rather
   than to a generated intermediate — asserted directly, since that's the kind
   of thing that looks right until the second run.
-- **Gated on a binary you install** (`UPSCALER_BIN` → `realesrgan-ncnn-vulkan`),
-  exactly as `METRON_API_KEY` gates autofill: unset means the action isn't
-  rendered at all, rather than present and failing on click. The upscaler sits
-  behind a one-method interface shaped like `StorageAdapter`, so a beefier GPU
-  box on the LAN is a drop-in later without callers changing.
-- **The detail view now shows the cover's pixel size**, which is the thing that
-  actually tells you whether upscaling is worth doing.
+- **Gated on a binary you install** (`UPSCALER_BIN`), exactly as
+  `METRON_API_KEY` gates autofill: unset means the action isn't rendered at all,
+  rather than present and failing on click. Upstream Real-ESRGAN has no Homebrew
+  formula, so `.env.example` points at Upscayl's bundled ncnn binary
+  (`brew install --cask upscayl`) — the GUI is just a wrapper, and the binary and
+  its models run standalone. Default model is `digital-art-4x`, the illustration
+  model in that set. The upscaler sits behind a one-method interface shaped like
+  `StorageAdapter`, so a beefier GPU box on the LAN is a drop-in later without
+  callers changing.
+- **Pixel dimensions are now visible where the decision gets made**: on the
+  cover in the detail view, and as a sortable **Size** column in list view.
+  Sorting ascending surfaces the smallest covers — the upscale candidates —
+  which is not something you can eyeball one cover at a time across 400 of them.
+  Ranked by total pixels rather than width, so a wide-but-short scan doesn't
+  outrank a properly large one.
 - **Testing:** the flow runs end-to-end in the browser suite against a stub
   binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
   via sharp — real route, real `processUpload`, real accept/revert, fake pixels.
   A no-op copy would have made "did it actually get bigger?" unassertable, which
   is the single most important thing to prove here. No GPU or model download in
   CI, and no ~5s per image.
-- **Honest limitation, stated in the dialog:** at 600px sources these models
-  *invent* detail rather than recovering it. 2× generally holds up on comic line
-  art; 4× starts looking synthetic. For a cover you care about, a real high-res
-  scan through **Replace cover** still beats any upscale.
+- **Honest limitation, noted in the dialog:** at 600px sources these models
+  *invent* plausible detail rather than recovering what was lost. For a cover you
+  care about, a real high-res scan through **Replace cover** still beats any
+  upscale. The caveat lives in a tooltip rather than a paragraph — it's one-time
+  context, not something to re-read on every run.
 
 ## 2026-07-31 — Add-modal fixes: recoverable image choice, and focus on open
 

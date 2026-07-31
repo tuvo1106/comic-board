@@ -12,7 +12,7 @@ import { BulkActionBar } from "./BulkActionBar";
 import { ComicCardMenu } from "./ComicCardMenu";
 
 const COLS =
-  "grid-cols-[28px_44px_minmax(150px,1.5fr)_56px_minmax(90px,0.8fr)_128px_minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_140px_36px]";
+  "grid-cols-[28px_44px_minmax(150px,1.5fr)_56px_minmax(90px,0.8fr)_128px_minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_96px_140px_36px]";
 
 interface Props {
   comics: ComicDTO[];
@@ -103,6 +103,7 @@ export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, o
             <span>Author</span>
             <span>Cover Artist</span>
             <span>Tags</span>
+            <SortHeader field="size" label="Size" {...sortProps} />
             <SortHeader field="rating" label="Rating" {...sortProps} />
             <span />
           </div>
@@ -290,9 +291,40 @@ function Row({
       <EditTags values={comic.artists} suggestions={suggestions.artists} placeholder="—" onCommit={(v) => save({ artists: v })} />
       <EditTags values={comic.tags} suggestions={suggestions.tags} placeholder="—" onCommit={(v) => save({ tags: v })} />
 
+      <SizeCell comic={comic} />
+
       <RatingCell value={comic.rating} onChange={(rating) => save({ rating })} />
 
       <ComicCardMenu comic={comic} currentBoardId={currentBoardId} />
+    </div>
+  );
+}
+
+/**
+ * Stored pixel dimensions — read-only, unlike every other cell here, because
+ * they're a property of the file rather than metadata you can type.
+ *
+ * Earns a column because it's the one thing that tells you whether a cover is
+ * worth upscaling, and scanning for that in a 400-cover collection is a list-view
+ * job. Sortable ascending by total pixels, so "smallest first" surfaces the
+ * candidates directly.
+ *
+ * Dimmed below 1000px wide: roughly where a cover stops filling the detail
+ * view's ~960 retina pixels and starts looking soft. A hint, not a verdict —
+ * the number is right there to judge for yourself.
+ */
+function SizeCell({ comic }: { comic: ComicDTO }) {
+  const small = comic.width < 1000;
+  return (
+    <div className="flex min-w-0 items-center gap-1 px-1 py-1 text-xs">
+      <span className={small ? "text-muted" : "text-fg"}>
+        {comic.width}×{comic.height}
+      </span>
+      {comic.upscaled && (
+        <span title="Upscaled — can be reverted from the detail view" className="text-accent">
+          ↑
+        </span>
+      )}
     </div>
   );
 }

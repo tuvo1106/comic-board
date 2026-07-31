@@ -39,7 +39,7 @@ import {
 import { detailModalAndCoverFlows } from "./integration/features/detail-modal.mjs";
 import { singleAddRemoveBoard } from "./integration/features/board-membership.mjs";
 import { uploadValidateDeleteUndo } from "./integration/features/comic-lifecycle.mjs";
-import { listViewBasics } from "./integration/features/list-view.mjs";
+import { listViewBasics, listViewSizeColumn } from "./integration/features/list-view.mjs";
 import { bulkActions } from "./integration/features/bulk-actions.mjs";
 import { boardTabsAndReorder } from "./integration/features/board-tabs.mjs";
 import { searchAutocomplete } from "./integration/features/search-autocomplete.mjs";
@@ -74,6 +74,7 @@ try {
   await uploadValidateDeleteUndo(ctx);
 
   await listViewBasics(ctx, { N });
+  await listViewSizeColumn(ctx);
   await bulkActions(ctx);
   await boardTabsAndReorder(ctx);
   await searchAutocomplete(ctx, { N });

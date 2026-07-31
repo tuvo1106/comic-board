@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useAcceptUpscale,
   useDiscardUpscale,
@@ -12,8 +12,13 @@ import { useToast } from "@/components/ui/toast";
 import { Dialog } from "@/components/ui/Dialog";
 import type { ComicDTO } from "@/lib/types";
 import { Check, Sparkles } from "@/components/ui/icons";
+import { upscaleTarget } from "@/lib/upscale/types";
 
-const SCALES = [2, 4] as const;
+// The model is 4x-native, and 4x is the only factor offered: anything smaller
+// meant resampling its output back down, and in practice that option went
+// unused. The API still accepts 2 — see `isUpscaleScale` — so reintroducing a
+// selector is a UI change, not a server one.
+const SCALE = 4;
 
 interface Props {
   comic: ComicDTO;
@@ -22,9 +27,13 @@ interface Props {
 }
 
 /**
- * Generate an upscaled cover, compare it against the current one, then keep or
- * discard it. Nothing is committed until "Keep it" — the preview is a real
- * stored image, but no comic points at it, so declining just deletes a folder.
+ * Runs an upscale on open, shows it against the current cover, and keeps or
+ * discards it. Nothing is committed until "Keep it" — the candidate is a real
+ * stored image that no comic points at, so declining just deletes a folder.
+ *
+ * Mounted with `key={comic.id}` by the caller, so switching comics gets a fresh
+ * instance rather than needing reset logic here — a previous run's result must
+ * never be shown against the wrong cover.
  */
 export function UpscaleDialog({ comic, open, onClose }: Props) {
   const { toast } = useToast();
@@ -33,9 +42,17 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
   const accept = useAcceptUpscale();
   const discard = useDiscardUpscale();
 
-  const [scale, setScale] = useState<number>(2);
-  const [candidate, setCandidate] = useState<UpscaleCandidate | null>(null);
   const [split, setSplit] = useState(50);
+
+  // Capped, so this matches what the server will actually store.
+  const target = upscaleTarget(comic.width, comic.height, SCALE);
+
+  // The candidate lives in the mutation's own cache rather than local state.
+  // Mirroring it into `useState` meant the auto-run effect below set state,
+  // which `react-hooks/set-state-in-effect` flags — correctly: the mirror could
+  // drift from the mutation's status, and there was nothing it could express
+  // that `preview.data` couldn't.
+  const candidate: UpscaleCandidate | null = preview.data ?? null;
 
   // Closing with an unaccepted candidate would leave it orphaned on disk, and
   // the sweep only ever looks at soft-deleted comics — nothing else would
@@ -43,43 +60,31 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
   // cleanup shouldn't produce a toast about something the user didn't ask for.
   const dismiss = () => {
     if (candidate) discard.mutate({ id: comic.id, imagePath: candidate.imagePath });
-    setCandidate(null);
+    // Reset, or the mutation keeps serving the candidate we just deleted:
+    // reopening would show a comparison against files that no longer exist and
+    // "Keep it" would try to adopt a dead path. It also puts the mutation back
+    // to idle, which is what the auto-run effect keys on.
+    preview.reset();
     setSplit(50);
     onClose();
   };
 
-  // Reset on a different comic (a previous run's result must never be shown
-  // against the wrong cover) and on each open. Adjusted during render keyed on
-  // a `prev` value rather than in an effect — the repo's pattern for this, and
-  // what `react-hooks/set-state-in-effect` is pointing at: an effect would
-  // render once with the stale split before correcting it.
-  const [prevId, setPrevId] = useState(comic.id);
-  if (comic.id !== prevId) {
-    setPrevId(comic.id);
-    setCandidate(null);
-    setSplit(50);
-  }
-  const [prevOpen, setPrevOpen] = useState(open);
-  if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (!open) setSplit(50);
-  }
-
-  const run = async () => {
-    try {
-      const c = await preview.mutateAsync({ id: comic.id, scale });
-      setCandidate(c);
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  };
+  // With a single scale there was nothing to decide on an opening step — it was
+  // a button that said "yes really" — so opening the dialog starts the upscale
+  // and you land on the comparison. An accidental open costs a few seconds of
+  // GPU and a discarded folder; nothing is committed either way.
+  useEffect(() => {
+    if (open && preview.isIdle) preview.mutate({ id: comic.id, scale: SCALE });
+    // Keyed on `open` alone: re-running on every status change would restart the
+    // upscale the moment one finished.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const keep = async () => {
     if (!candidate) return;
     try {
       await accept.mutateAsync({ id: comic.id, imagePath: candidate.imagePath });
       toast("Upscaled cover saved", "success");
-      setCandidate(null);
       onClose();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -92,49 +97,46 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
         {!info?.available ? (
           <p className="text-sm text-muted">
             No upscaler is configured. Set <code className="text-fg">UPSCALER_BIN</code> to a
-            Real-ESRGAN binary and restart the server — see <code className="text-fg">.env.example</code>.
+            Real-ESRGAN binary and restart the server — see{" "}
+            <code className="text-fg">.env.example</code>.
           </p>
-        ) : !candidate ? (
-          <>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Current size</p>
-                <p className="text-sm text-muted">
-                  {comic.width} × {comic.height}px
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {SCALES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setScale(s)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                      scale === s
-                        ? "bg-accent text-accent-fg"
-                        : "bg-surface-2 text-muted ring-1 ring-border hover:text-fg"
-                    }`}
-                  >
-                    {s}×
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p className="text-xs text-muted">
-              → {comic.width * scale} × {comic.height * scale}px using {info.label}. The model
-              invents detail rather than recovering it; 2× usually holds up on comic art, 4× can
-              look synthetic. Your current cover is kept, so this is reversible.
+        ) : preview.isError ? (
+          <div className="space-y-3">
+            <p className="text-sm text-red-400">
+              {(preview.error as Error)?.message ?? "The upscaler failed on this cover."}
             </p>
-            <button
-              type="button"
-              onClick={run}
-              disabled={preview.isPending}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:brightness-110 disabled:opacity-50"
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={dismiss}
+                className="rounded-lg px-3 py-1.5 text-sm text-muted transition hover:text-fg"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => preview.mutate({ id: comic.id, scale: SCALE })}
+                className="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg transition hover:brightness-110"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        ) : !candidate ? (
+          // Running. Names the target size so the wait is legible rather than a
+          // bare spinner.
+          <div className="space-y-3 py-8 text-center">
+            <Sparkles className="mx-auto h-6 w-6 animate-pulse text-accent" />
+            <p className="text-sm font-medium">
+              Upscaling to {target.width} × {target.height}px…
+            </p>
+            <p
+              className="text-xs text-muted"
+              title="Upscaling invents plausible detail rather than recovering what was lost. Your current cover is kept, so you can revert."
             >
-              <Sparkles className="h-4 w-4" />
-              {preview.isPending ? "Upscaling — this can take a few seconds…" : `Upscale ${scale}×`}
-            </button>
-          </>
+              {info.label} · this can take a few seconds · revertible
+            </p>
+          </div>
         ) : (
           <>
             <Compare comic={comic} candidate={candidate} split={split} onSplit={setSplit} />
@@ -144,12 +146,13 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
                 {candidate.height}px · {candidate.label}
               </p>
               <div className="flex items-center gap-2">
+                {/* Closes rather than clearing the candidate: with no opening
+                    step there's nothing to go back to, and the auto-run effect
+                    is keyed on `open`, so staying put would sit on the running
+                    state forever. */}
                 <button
                   type="button"
-                  onClick={() => {
-                    discard.mutate({ id: comic.id, imagePath: candidate.imagePath });
-                    setCandidate(null);
-                  }}
+                  onClick={dismiss}
                   className="rounded-lg px-3 py-1.5 text-sm text-muted transition hover:text-fg"
                 >
                   Discard
@@ -195,9 +198,24 @@ function Compare({
   return (
     <div className="space-y-2">
       <div
-        className="relative mx-auto overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
+        className="relative mx-auto overflow-hidden rounded-lg bg-black/40 ring-1 ring-border"
         style={{ aspectRatio: `${comic.width} / ${comic.height}`, maxHeight: "52vh" }}
       >
+        {/* Same two-layer blurred backdrop as the detail modal: `blurDataUrl`
+            paints instantly with no request but is too small to show detail,
+            and the thumbnail on top carries real artwork and is already loaded.
+            Scaled up so the blur's soft edges don't reveal the container edge. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
+          style={{ backgroundImage: `url(${comic.blurDataUrl})` }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 scale-110 bg-cover bg-center blur-lg"
+          style={{ backgroundImage: `url(${comic.thumbUrl})` }}
+        />
+        <div aria-hidden className="absolute inset-0 bg-black/30" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={comic.imageUrl}

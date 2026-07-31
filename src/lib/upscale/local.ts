@@ -24,12 +24,20 @@ const TIMEOUT_MS = 120_000;
  * either way.
  */
 export function localUpscaler(bin: string): Upscaler {
-  const model = process.env.UPSCALER_MODEL ?? "realesrgan-x4plus-anime";
+  // `digital-art-4x` rather than an anime/photo model: it's the illustration
+  // model in Upscayl's bundled set, which is the easiest binary to get hold of
+  // on macOS (`brew install --cask upscayl`) since upstream Real-ESRGAN has no
+  // Homebrew formula. Override for a different model set — upstream's builds
+  // name theirs `realesrgan-x4plus-anime`.
+  const model = process.env.UPSCALER_MODEL ?? "digital-art-4x";
+  // Upscayl keeps its models inside the .app bundle rather than beside the
+  // binary, so this is effectively required there; upstream builds find their
+  // own and can leave it unset.
   const modelDir = process.env.UPSCALER_MODEL_DIR;
 
   return {
-    id: "realesrgan-local",
-    label: `Real-ESRGAN (${model.includes("anime") ? "anime" : model})`,
+    id: "ncnn-local",
+    label: `Real-ESRGAN (${model})`,
 
     async run(input: Buffer, scale: UpscaleScale): Promise<Buffer> {
       const dir = await fs.mkdtemp(path.join(os.tmpdir(), "comic-upscale-"));

@@ -79,6 +79,21 @@ describe("sortComics", () => {
     ]);
   });
 
+  it("size sorts by total pixels, smallest first — the upscale candidates", () => {
+    const small = makeComic({ width: 600, height: 923 });
+    const big = makeComic({ width: 1600, height: 2461 });
+    // Wider than `small` but far fewer pixels overall: ranking on width alone
+    // would put this above a properly large scan, which isn't what "how much
+    // detail is here" means.
+    const wideThin = makeComic({ width: 700, height: 300 });
+
+    const asc = sortComics([big, small, wideThin], "size", "asc");
+    expect(asc.map((c) => c.width)).toEqual([700, 600, 1600]);
+
+    const desc = sortComics([wideThin, small, big], "size", "desc");
+    expect(desc.map((c) => c.width)).toEqual([1600, 600, 700]);
+  });
+
   it("does not mutate the input array", () => {
     const comics = [makeComic({ position: 2 }), makeComic({ position: 1 })];
     const snapshot = ids(comics);

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { authed, badRequest, notFound, ok } from "@/lib/api";
 import { describeStored, processUpload, readStored } from "@/lib/images";
 import { acceptUpscale, discardUpscale, getComic, isCoverReferenced } from "@/db/queries";
-import { getUpscaler, isUpscaleScale } from "@/lib/upscale";
+import { getUpscaler, isUpscaleScale, upscaleTarget } from "@/lib/upscale";
 import { storage } from "@/lib/storage";
 import { logger } from "@/lib/logger";
 
@@ -46,8 +46,11 @@ export async function POST(req: Request, { params }: Params) {
     const enlarged = await upscaler.run(source, raw);
     // Store through the normal pipeline so the candidate has a real thumbnail
     // and blur placeholder — accepting it then needs no extra processing. The
-    // cap is lifted to the upscaled size, or the enlargement is resampled away.
-    const image = await processUpload(enlarged, { maxWidth: comic.width * raw });
+    // width ceiling is raised to the upscale's target (otherwise the default
+    // 1600px cap would resample the enlargement straight back away) but no
+    // further, so every cover converges on a consistent maximum.
+    const target = upscaleTarget(comic.width, comic.height, raw);
+    const image = await processUpload(enlarged, { maxWidth: target.width });
 
     logger.info("upscale preview", {
       tag: "upscale",

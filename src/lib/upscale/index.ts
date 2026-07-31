@@ -1,7 +1,7 @@
 import { localUpscaler } from "./local";
 import { UpscaleError, type Upscaler } from "./types";
 
-export { UpscaleError, UPSCALE_SCALES, isUpscaleScale } from "./types";
+export { UpscaleError, UPSCALE_SCALES, isUpscaleScale, MAX_UPSCALE_WIDTH, upscaleTarget } from "./types";
 export type { Upscaler, UpscaleScale } from "./types";
 
 /**
