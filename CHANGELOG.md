@@ -4,10 +4,15 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-30 — Release hardening ahead of 1.0
+## 2026-07-30 — 1.0.0
 
-A read-through of the whole repo rather than new features: everything below is
-a fix, a consolidation, or a test for something that had none.
+Tagged **v1.0.0**. A read-through of the whole repo rather than new features:
+everything below is a fix, a consolidation, or a test for something that had
+none.
+
+> Headings in this file are dated rather than versioned — it's an engineering
+> log, not a semver changelog. Where a release is cut, the version is appended
+> to the date so a tag can be traced back to its entry.
 
 - **`authed()` replaces the auth preamble in every route.** All 21 handlers
   across 15 route files opened with the identical
