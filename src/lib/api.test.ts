@@ -5,9 +5,9 @@ import { logger } from "./logger";
 import * as session from "./session";
 import { MetadataError } from "@/lib/metadata/types";
 
-// `logger.info` would otherwise write a real line to data/logs on every test
-// run — spy it out, matching how metron.test.ts spies console.log/warn rather
-// than mocking the whole module.
+// `logger.*` would otherwise write real lines to data/logs on every test run —
+// spy it out, matching how metron.test.ts does, rather than mocking the whole
+// module.
 const req = (url = "http://localhost/api/comics", init?: RequestInit) => new Request(url, init);
 
 // winston's `.info()` is overloaded (message+meta, or a single info object),
@@ -51,12 +51,25 @@ describe("handle", () => {
   });
 
   it("reduces any other thrown error to a bare 500, no internal detail leaked", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errSpy = vi.spyOn(logger, "error").mockImplementation(() => logger);
     const res = await handle(req(), () => {
       throw new Error("some internal detail that must not reach the client");
     });
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "Internal error" });
+    // The detail isn't discarded — it goes to the server-side log, which is the
+    // whole point of not putting it in the response.
+    const logged = (errSpy.mock.calls[0] as unknown as [string, Record<string, unknown>])[1];
+    expect(logged).toMatchObject({
+      tag: "api.error",
+      error: "some internal detail that must not reach the client",
+    });
+    expect(typeof logged.stack).toBe("string");
+    // `message` is winston's own field; a meta key of that name gets folded
+    // into the log line's message instead of staying separately greppable.
+    // Spying the logger can't see that (it inspects the meta pre-format), so
+    // assert the shape here — it was wrong in the real file output once.
+    expect(logged).not.toHaveProperty("message");
     errSpy.mockRestore();
   });
 
@@ -150,7 +163,7 @@ describe("authed", () => {
 
   it("reduces an unexpected handler throw to a bare 500", async () => {
     signedInAs("user_123");
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errSpy = vi.spyOn(logger, "error").mockImplementation(() => logger);
     const res = await authed(req(), () => {
       throw new Error("internal detail that must not reach the client");
     });
@@ -161,7 +174,7 @@ describe("authed", () => {
 
   it("500s rather than leaking when the session lookup itself throws", async () => {
     vi.spyOn(session, "getUserId").mockRejectedValue(new Error("db is down"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errSpy = vi.spyOn(logger, "error").mockImplementation(() => logger);
     const res = await authed(req(), () => ok({ reached: true }));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "Internal error" });

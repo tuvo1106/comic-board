@@ -144,9 +144,13 @@ the right status — logs one JSON line (`method`, `path`, `status`, `ms`,
 auth catch-all owns its own request/response cycle end-to-end, so it gets a
 thin equivalent wrapper instead, POST-only (this app's only GET traffic there
 is `get-session` polling, logged nowhere near as usefully as an actual
-sign-in). The Metron metadata provider (§4.1) logs separately and stays plain
-`console.log` — a live diagnostic checked during development, not a persisted
-historical record, so it doesn't need the rotation/retention story.
+sign-in). Everything else server-side logs to the same place and no runtime
+code uses `console.*`: the Metron provider (§4.1) writes `metron.detail` and
+`metron.budget`, `handle()` writes `api.error` (message + stack server-side; the
+client still gets a bare "Internal error"), and the startup sweep writes
+`startup`. Outside production a console transport mirrors every line to the
+terminal, so persisting costs nothing at-a-glance. The `src/db/*` CLI scripts
+are the deliberate exception — their stdout is their user interface.
 
 Restoring a backup is a CLI, not a route — `npm run db:import <zip> --
 --replace` recreates comics/boards via the normal upload pipeline

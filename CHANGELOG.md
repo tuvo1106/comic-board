@@ -4,6 +4,38 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-31 — All server-side logging goes to the log file
+
+- **The Metron diagnostics now land in `data/logs/`, like everything else.**
+  They'd been plain `console.*` on the reasoning that "a live diagnostic checked
+  during development doesn't need the rotation/retention story". That was
+  backwards, and mostly an artifact of sequencing — the Metron logging shipped
+  hours before the file logger existed and wasn't revisited when it arrived.
+  The question it exists to answer (roadmap 4h: *"variants aren't coming back
+  **recently**, can we check the logs?"*) is retrospective and spans days, while
+  terminal scrollback dies with the next server restart — so the logging that
+  existed still couldn't answer the question it was built for. Metron calls are
+  also the scarcest events in the app (a 20-call burst bucket) and so the last
+  ones worth dropping, and `burstRemaining` is only meaningful as a trend.
+- **Same for the other two runtime `console.*` calls**: the unhandled-500 detail
+  in `handle()` (`tag: "api.error"`, with message + stack server-side while the
+  client still gets a bare "Internal error") and the startup sweep
+  (`tag: "startup"`). No `console.*` remains anywhere in the runtime path.
+- **A dev console transport** was the reason none of this had to be either/or —
+  outside production every line still prints to the terminal, so moving off
+  `console.*` costs nothing at-a-glance. Silent under `NODE_ENV=test` so the
+  unit suite doesn't print a wall of JSON.
+- **Left alone on purpose:** the `src/db/*` CLI scripts (`db:migrate`,
+  `db:seed`, `db:import`). Their stdout *is* their user interface — you run them
+  to read the output — and a one-shot CLI invocation shouldn't quietly create
+  and rotate log files.
+- **Caught while verifying:** the first version of the 500 log used `message` as
+  a meta key, which winston reserves — it folded the error text into the log
+  line's own message instead of keeping it a separate greppable field. The unit
+  test couldn't see it (spying the logger inspects meta *before* formatting);
+  only reading real file output did. Renamed to `error`, and the test now
+  asserts the meta carries no `message` key so the collision can't come back.
+
 ## 2026-07-31 — Fixed: couldn't swap an imported cover for your own
 
 - **"I'll add my own image" did nothing once a cover was already imported.**

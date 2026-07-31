@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { fetchJson, readRateLimit } from "./http";
 import { cleanNames, isWriterRole, normalizeCoverDate, toYear } from "./normalize";
 import {
@@ -108,7 +109,7 @@ export function metronCovers(
  */
 function warnIfBudgetLow(burstRemaining: number | null): void {
   if (burstRemaining != null && burstRemaining <= 3) {
-    console.warn(`Metron burst budget low: ${burstRemaining} remaining`);
+    logger.warn("metron budget low", { tag: "metron.budget", burstRemaining });
   }
 }
 
@@ -139,20 +140,17 @@ export function metronProvider(token: string): MetadataProvider {
       const issue = data as MetronIssueDetail;
       // What "why didn't variants come back" needs to answer (roadmap 4h): the
       // record's own cover/variant counts, not just that the call succeeded.
-      // One JSON line — no logging library, matching every other console.*
-      // call in this repo — so it's both `grep '"tag":"metron.detail"'`-able
-      // and `jq`-able once it's ever piped anywhere. Server-side only: the
-      // request URL carries the API key, and fetchJson already keeps it out
-      // of thrown errors.
-      console.log(
-        JSON.stringify({
-          tag: "metron.detail",
-          ref,
-          hasMain: !!issue.image,
-          variantCount: (issue.variants ?? []).length,
-          burstRemaining,
-        }),
-      );
+      // Persisted rather than printed — the question is retrospective ("not
+      // coming back *recently*"), and terminal output doesn't survive a
+      // restart. Server-side only: the request URL carries the API key, and
+      // fetchJson already keeps it out of thrown errors.
+      logger.info("metron detail", {
+        tag: "metron.detail",
+        ref,
+        hasMain: !!issue.image,
+        variantCount: (issue.variants ?? []).length,
+        burstRemaining,
+      });
       return mapMetronIssueDetail(issue);
     },
   };

@@ -35,8 +35,17 @@ function toErrorResponse(err: unknown): Response {
     // Client-safe message from an upstream metadata provider (never the key).
     return NextResponse.json({ error: err.message }, { status: err.status });
   }
-  console.error("API error:", err);
-  // Don't leak internal error details (messages, stack hints) to clients.
+  // Persisted, not printed: an unexpected 500 is exactly the thing you want to
+  // still be able to read tomorrow. The detail stays server-side — the client
+  // gets a bare message with no stack hint.
+  logger.error("unhandled api error", {
+    tag: "api.error",
+    // Deliberately `error`, not `message`: winston reserves `message` and folds
+    // a meta field of that name into the log line's own message, so the error
+    // text stopped being a separate greppable field.
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
   return NextResponse.json({ error: "Internal error" }, { status: 500 });
 }
 

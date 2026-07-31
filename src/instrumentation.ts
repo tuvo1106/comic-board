@@ -8,7 +8,8 @@ export async function register() {
   // edge, and this file also runs once for the edge runtime bundle.
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { sweepDeletedComics } = await import("@/db/queries");
+    const { logger } = await import("@/lib/logger");
     const swept = await sweepDeletedComics();
-    if (swept > 0) console.log(`[startup] swept ${swept} soft-deleted comic(s)`);
+    if (swept > 0) logger.info("startup sweep", { tag: "startup", sweptComics: swept });
   }
 }

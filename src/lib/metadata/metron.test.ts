@@ -1,5 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mapMetronIssue, mapMetronIssueDetail, metronProvider } from "./metron";
+import { logger } from "@/lib/logger";
+
+// These diagnostics go to the app logger (a real file under DATA_DIR), not the
+// console — spy it out rather than writing a line per test run. winston's
+// `.info`/`.warn` are overloaded (message+meta, or a single info object), which
+// makes vi.spyOn's inferred call-args type too narrow for how they're called
+// here; cast once, as api.test.ts does, instead of fighting it per assertion.
+function meta(spy: ReturnType<typeof vi.spyOn>, call = -1): Record<string, unknown> {
+  const calls = spy.mock.calls as unknown as [string, Record<string, unknown>][];
+  return calls.at(call)![1];
+}
+const spyLog = (level: "info" | "warn") =>
+  vi.spyOn(logger, level).mockImplementation(() => logger);
 
 // Fixtures trimmed from real Metron responses (issue 7406 — The Amazing
 // Spider-Man #1, 1963). See DESIGN.md §4.1.
@@ -135,13 +148,13 @@ describe("metronProvider (fetch wiring)", () => {
   });
 
   it("search() warns when the burst budget runs low", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = spyLog("warn");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonRes({ results: [] }, { "x-ratelimit-burst-remaining": "2" })),
     );
     await metronProvider("tok").search({ series: "x" });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("budget low"));
+    expect(meta(warn)).toEqual({ tag: "metron.budget", burstRemaining: 2 });
     warn.mockRestore();
   });
 
@@ -157,51 +170,52 @@ describe("metronProvider (fetch wiring)", () => {
   });
 
   it("detail() warns when the burst budget runs low, same as search()", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const warn = spyLog("warn");
+    const info = spyLog("info");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonRes(fullDetail, { "x-ratelimit-burst-remaining": "1" })),
     );
     await metronProvider("tok").detail("326");
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("budget low"));
+    expect(meta(warn)).toEqual({ tag: "metron.budget", burstRemaining: 1 });
     warn.mockRestore();
-    log.mockRestore();
+    info.mockRestore();
   });
 
   // roadmap 4h: answering "why didn't variants come back" cost live API calls
-  // because nothing logged what the provider actually returned. This is the
-  // fix — a `grep '\[metron\] detail'` should answer it from here on.
-  it("detail() logs the record's own cover/variant counts as one JSON line, not just success", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  // because nothing recorded what the provider actually returned. Persisted to
+  // the daily log rather than the terminal, because that question is asked
+  // about calls that already happened — `grep '"tag":"metron.detail"'
+  // data/logs/*.log`.
+  it("detail() logs the record's own cover/variant counts, not just success", async () => {
+    const info = spyLog("info");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonRes(fullDetail, { "x-ratelimit-burst-remaining": "17" })),
     );
     await metronProvider("tok").detail("326");
-    // JSON, not a template string — grep- AND jq-able, no logging library.
-    expect(JSON.parse(log.mock.calls.at(-1)![0] as string)).toEqual({
+    expect(meta(info)).toEqual({
       tag: "metron.detail",
       ref: "326",
       hasMain: true,
       variantCount: 0,
       burstRemaining: 17,
     });
-    log.mockRestore();
+    info.mockRestore();
   });
 
   it("logs the variant count when the record has some, and null when the budget header is absent", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const info = spyLog("info");
     const withVariants = {
       ...fullDetail,
       variants: [{ name: "Second Printing", image: "https://static.metron.cloud/v.jpg" }],
     };
     vi.stubGlobal("fetch", vi.fn(async () => jsonRes(withVariants)));
     await metronProvider("tok").detail("326");
-    expect(JSON.parse(log.mock.calls.at(-1)![0] as string)).toMatchObject({
+    expect(meta(info)).toMatchObject({
       variantCount: 1,
       burstRemaining: null, // real null, not a placeholder string — machine-checkable
     });
-    log.mockRestore();
+    info.mockRestore();
   });
 });
