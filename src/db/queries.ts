@@ -44,11 +44,97 @@ function notDeleted(): SQL {
 // a comic's associations are user-scoped via the comic itself)
 // ---------------------------------------------------------------------------
 
-function upsertNames(
-  handle: DBOrTx,
-  table: typeof artists | typeof characters | typeof authors | typeof tags,
+/** A name-bearing table: authors, artists, characters, or tags. */
+type NameTable = typeof authors | typeof artists | typeof characters | typeof tags;
+
+/** The four relation kinds, which are also their `ComicDTO`/`MetaDTO` keys. */
+type NameKey = "authors" | "artists" | "characters" | "tags";
+
+interface NameRelation {
+  key: NameKey;
+  nameTable: NameTable;
+  joinTable: SQLiteTable;
+  comicIdCol: SQLiteColumn;
+  /** FK column into `nameTable`, for joins. */
+  fkCol: SQLiteColumn;
+  /**
+   * The same FK as a TS property name. Needed because an insert row has to be
+   * built dynamically (`{ comicId, authorId }` vs `{ comicId, tagId }`), and
+   * `fkCol.name` is the *database* column (`author_id`), not the key Drizzle
+   * expects in `.values()`.
+   */
+  fkKey: "authorId" | "artistId" | "characterId" | "tagId";
+}
+
+/**
+ * The four name-association tables share one shape: a join row carrying a
+ * comicId plus a foreign key into a globally-shared name table. Loading them,
+ * writing them, and faceting them are all driven from this single list rather
+ * than four copy-pasted blocks per operation — adding a fifth relation kind
+ * (say, colorists) means adding one entry here, not editing four functions.
+ */
+const NAME_RELATIONS: NameRelation[] = [
+  {
+    key: "authors",
+    nameTable: authors,
+    joinTable: comicAuthors,
+    comicIdCol: comicAuthors.comicId,
+    fkCol: comicAuthors.authorId,
+    fkKey: "authorId",
+  },
+  {
+    key: "artists",
+    nameTable: artists,
+    joinTable: comicArtists,
+    comicIdCol: comicArtists.comicId,
+    fkCol: comicArtists.artistId,
+    fkKey: "artistId",
+  },
+  {
+    key: "characters",
+    nameTable: characters,
+    joinTable: comicCharacters,
+    comicIdCol: comicCharacters.comicId,
+    fkCol: comicCharacters.characterId,
+    fkKey: "characterId",
+  },
+  {
+    key: "tags",
+    nameTable: tags,
+    joinTable: comicTags,
+    comicIdCol: comicTags.comicId,
+    fkCol: comicTags.tagId,
+    fkKey: "tagId",
+  },
+];
+
+/** Empty per-kind accumulator, so callers never have to spell the four out. */
+function emptyNameMaps(): Record<NameKey, Map<string, string[]>> {
+  return { authors: new Map(), artists: new Map(), characters: new Map(), tags: new Map() };
+}
+
+/**
+ * Point a comic at a set of names for one relation kind, creating any name rows
+ * that don't exist yet. Callers that are *replacing* (rather than adding to) a
+ * comic's names must delete the existing join rows first — see `updateComic`.
+ */
+function addAssociations(
+  tx: DBOrTx,
+  rel: NameRelation,
+  comicId: string,
   names: string[],
-): string[] {
+): void {
+  for (const nameId of upsertNames(tx, rel.nameTable, names)) {
+    tx.insert(rel.joinTable)
+      // Built dynamically from `fkKey`, so it can't be statically typed against
+      // any one join table's row shape; every value here is a real column.
+      .values({ comicId, [rel.fkKey]: nameId } as never)
+      .onConflictDoNothing()
+      .run();
+  }
+}
+
+function upsertNames(handle: DBOrTx, table: NameTable, names: string[]): string[] {
   const ids: string[] = [];
   for (const raw of names) {
     const name = raw.trim();
@@ -122,15 +208,10 @@ function rowToDTO(
 
 /** Batch-load authors, artists, characters, tags, and board memberships. */
 function loadRelations(handle: DBOrTx, comicIds: string[]) {
-  const authorsByComic = new Map<string, string[]>();
-  const artistsByComic = new Map<string, string[]>();
-  const charsByComic = new Map<string, string[]>();
-  const tagsByComic = new Map<string, string[]>();
+  const names = emptyNameMaps();
   const boardsByComic = new Map<string, string[]>();
   const publisherByComic = new Map<string, string>();
-  if (comicIds.length === 0) {
-    return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic, publisherByComic };
-  }
+  if (comicIds.length === 0) return { names, boardsByComic, publisherByComic };
 
   for (const r of handle
     .select({ comicId: comics.id, name: publishers.name })
@@ -146,31 +227,14 @@ function loadRelations(handle: DBOrTx, comicIds: string[]) {
     m.set(k, list);
   };
 
-  // The four name-association tables share the same shape: a join row with a
-  // comicId + a foreign key into a name table. Drive them from one config
-  // instead of copy-pasting the join loop.
-  const nameJoins: {
-    joinTable: SQLiteTable;
-    comicIdCol: SQLiteColumn;
-    fkCol: SQLiteColumn;
-    nameIdCol: SQLiteColumn;
-    nameCol: SQLiteColumn;
-    target: Map<string, string[]>;
-  }[] = [
-    { joinTable: comicAuthors, comicIdCol: comicAuthors.comicId, fkCol: comicAuthors.authorId, nameIdCol: authors.id, nameCol: authors.name, target: authorsByComic },
-    { joinTable: comicArtists, comicIdCol: comicArtists.comicId, fkCol: comicArtists.artistId, nameIdCol: artists.id, nameCol: artists.name, target: artistsByComic },
-    { joinTable: comicCharacters, comicIdCol: comicCharacters.comicId, fkCol: comicCharacters.characterId, nameIdCol: characters.id, nameCol: characters.name, target: charsByComic },
-    { joinTable: comicTags, comicIdCol: comicTags.comicId, fkCol: comicTags.tagId, nameIdCol: tags.id, nameCol: tags.name, target: tagsByComic },
-  ];
-
-  for (const { joinTable, comicIdCol, fkCol, nameIdCol, nameCol, target } of nameJoins) {
+  for (const rel of NAME_RELATIONS) {
     for (const r of handle
-      .select({ comicId: comicIdCol, name: nameCol })
-      .from(joinTable)
-      .innerJoin(nameIdCol.table, eq(nameIdCol, fkCol))
-      .where(inArray(comicIdCol, comicIds))
+      .select({ comicId: rel.comicIdCol, name: rel.nameTable.name })
+      .from(rel.joinTable)
+      .innerJoin(rel.nameTable, eq(rel.nameTable.id, rel.fkCol))
+      .where(inArray(rel.comicIdCol, comicIds))
       .all())
-      push(target, r.comicId as string, r.name as string);
+      push(names[rel.key], r.comicId as string, r.name as string);
   }
 
   for (const r of handle
@@ -180,23 +244,26 @@ function loadRelations(handle: DBOrTx, comicIds: string[]) {
     .all())
     push(boardsByComic, r.comicId, r.boardId);
 
-  return { authorsByComic, artistsByComic, charsByComic, tagsByComic, boardsByComic, publisherByComic };
+  return { names, boardsByComic, publisherByComic };
 }
 
 const sortNames = (a: string[]) => [...a].sort((x, y) => x.localeCompare(y));
 
+/** Assemble one comic's DTO from a batch-loaded relation set. */
+function toDTO(row: ComicRow, rel: ReturnType<typeof loadRelations>): ComicDTO {
+  return rowToDTO(row, {
+    publisher: rel.publisherByComic.get(row.id) ?? null,
+    authors: sortNames(rel.names.authors.get(row.id) ?? []),
+    artists: sortNames(rel.names.artists.get(row.id) ?? []),
+    characters: sortNames(rel.names.characters.get(row.id) ?? []),
+    tags: sortNames(rel.names.tags.get(row.id) ?? []),
+    boardIds: rel.boardsByComic.get(row.id) ?? [],
+  });
+}
+
 function attachRelations(rows: ComicRow[]): ComicDTO[] {
   const rel = loadRelations(db, rows.map((r) => r.id));
-  return rows.map((row) =>
-    rowToDTO(row, {
-      publisher: rel.publisherByComic.get(row.id) ?? null,
-      authors: sortNames(rel.authorsByComic.get(row.id) ?? []),
-      artists: sortNames(rel.artistsByComic.get(row.id) ?? []),
-      characters: sortNames(rel.charsByComic.get(row.id) ?? []),
-      tags: sortNames(rel.tagsByComic.get(row.id) ?? []),
-      boardIds: rel.boardsByComic.get(row.id) ?? [],
-    }),
-  );
+  return rows.map((row) => toDTO(row, rel));
 }
 
 // ---------------------------------------------------------------------------
@@ -279,14 +346,7 @@ export function createComic(input: CreateComicInput): ComicDTO {
       })
       .run();
 
-    for (const authorId of upsertNames(tx, authors, input.authors))
-      tx.insert(comicAuthors).values({ comicId: id, authorId }).onConflictDoNothing().run();
-    for (const artistId of upsertNames(tx, artists, input.artists))
-      tx.insert(comicArtists).values({ comicId: id, artistId }).onConflictDoNothing().run();
-    for (const characterId of upsertNames(tx, characters, input.characters))
-      tx.insert(comicCharacters).values({ comicId: id, characterId }).onConflictDoNothing().run();
-    for (const tagId of upsertNames(tx, tags, input.tags))
-      tx.insert(comicTags).values({ comicId: id, tagId }).onConflictDoNothing().run();
+    for (const rel of NAME_RELATIONS) addAssociations(tx, rel, id, input[rel.key]);
 
     for (const boardId of input.boardIds) {
       const owned = tx
@@ -336,25 +396,14 @@ export function updateComic(
       tx.update(comics).set(fields).where(eq(comics.id, id)).run();
     }
 
-    if (input.authors !== undefined) {
-      tx.delete(comicAuthors).where(eq(comicAuthors.comicId, id)).run();
-      for (const authorId of upsertNames(tx, authors, input.authors))
-        tx.insert(comicAuthors).values({ comicId: id, authorId }).onConflictDoNothing().run();
-    }
-    if (input.artists !== undefined) {
-      tx.delete(comicArtists).where(eq(comicArtists.comicId, id)).run();
-      for (const artistId of upsertNames(tx, artists, input.artists))
-        tx.insert(comicArtists).values({ comicId: id, artistId }).onConflictDoNothing().run();
-    }
-    if (input.characters !== undefined) {
-      tx.delete(comicCharacters).where(eq(comicCharacters.comicId, id)).run();
-      for (const characterId of upsertNames(tx, characters, input.characters))
-        tx.insert(comicCharacters).values({ comicId: id, characterId }).onConflictDoNothing().run();
-    }
-    if (input.tags !== undefined) {
-      tx.delete(comicTags).where(eq(comicTags.comicId, id)).run();
-      for (const tagId of upsertNames(tx, tags, input.tags))
-        tx.insert(comicTags).values({ comicId: id, tagId }).onConflictDoNothing().run();
+    // An absent field means "leave unchanged"; a present one replaces the whole
+    // set, so the existing join rows go first (see `comicUpdateSchema`, which
+    // deliberately omits array defaults for exactly this reason).
+    for (const rel of NAME_RELATIONS) {
+      const names = input[rel.key];
+      if (names === undefined) continue;
+      tx.delete(rel.joinTable).where(eq(rel.comicIdCol, id)).run();
+      addAssociations(tx, rel, id, names);
     }
     return getComicTx(tx, id)!;
   });
@@ -631,61 +680,25 @@ export function getMeta(userId: string): MetaDTO {
     .orderBy(publishers.name)
     .all();
 
-  // Facet name lists scoped to the user's comics via inner joins.
-  const authorRows = db
-    .select({ value: authors.name, count: sql<number>`count(*)` })
-    .from(comicAuthors)
-    .innerJoin(
-      comics,
-      and(eq(comics.id, comicAuthors.comicId), eq(comics.userId, userId), notDeleted()),
-    )
-    .innerJoin(authors, eq(authors.id, comicAuthors.authorId))
-    .groupBy(authors.id)
-    .orderBy(authors.name)
-    .all();
-  const artistRows = db
-    .select({ value: artists.name, count: sql<number>`count(*)` })
-    .from(comicArtists)
-    .innerJoin(
-      comics,
-      and(eq(comics.id, comicArtists.comicId), eq(comics.userId, userId), notDeleted()),
-    )
-    .innerJoin(artists, eq(artists.id, comicArtists.artistId))
-    .groupBy(artists.id)
-    .orderBy(artists.name)
-    .all();
-  const characterRows = db
-    .select({ value: characters.name, count: sql<number>`count(*)` })
-    .from(comicCharacters)
-    .innerJoin(
-      comics,
-      and(eq(comics.id, comicCharacters.comicId), eq(comics.userId, userId), notDeleted()),
-    )
-    .innerJoin(characters, eq(characters.id, comicCharacters.characterId))
-    .groupBy(characters.id)
-    .orderBy(characters.name)
-    .all();
-  const tagRows = db
-    .select({ value: tags.name, count: sql<number>`count(*)` })
-    .from(comicTags)
-    .innerJoin(
-      comics,
-      and(eq(comics.id, comicTags.comicId), eq(comics.userId, userId), notDeleted()),
-    )
-    .innerJoin(tags, eq(tags.id, comicTags.tagId))
-    .groupBy(tags.id)
-    .orderBy(tags.name)
-    .all();
+  // Facet name lists, each scoped to the user's comics via the inner join.
+  const facets = {} as Record<NameKey, { value: string; count: number }[]>;
+  for (const rel of NAME_RELATIONS) {
+    facets[rel.key] = db
+      .select({ value: rel.nameTable.name, count: sql<number>`count(*)` })
+      .from(rel.joinTable)
+      .innerJoin(comics, and(eq(comics.id, rel.comicIdCol), eq(comics.userId, userId), notDeleted()))
+      .innerJoin(rel.nameTable, eq(rel.nameTable.id, rel.fkCol))
+      .groupBy(rel.nameTable.id)
+      .orderBy(rel.nameTable.name)
+      .all();
+  }
 
   return {
     series,
     publishers: publisherRows.filter(
       (p): p is { value: string; count: number } => Boolean(p.value) && p.count > 0,
     ),
-    authors: authorRows,
-    artists: artistRows,
-    characters: characterRows,
-    tags: tagRows,
+    ...facets,
   };
 }
 
@@ -760,13 +773,5 @@ export function renamePublisher(userId: string, currentName: string, newName: st
 function getComicTx(tx: DBOrTx, id: string): ComicDTO | null {
   const row = tx.select().from(comics).where(eq(comics.id, id)).get();
   if (!row) return null;
-  const rel = loadRelations(tx, [id]);
-  return rowToDTO(row, {
-    publisher: rel.publisherByComic.get(id) ?? null,
-    authors: sortNames(rel.authorsByComic.get(id) ?? []),
-    artists: sortNames(rel.artistsByComic.get(id) ?? []),
-    characters: sortNames(rel.charsByComic.get(id) ?? []),
-    tags: sortNames(rel.tagsByComic.get(id) ?? []),
-    boardIds: rel.boardsByComic.get(id) ?? [],
-  });
+  return toDTO(row, loadRelations(tx, [id]));
 }
