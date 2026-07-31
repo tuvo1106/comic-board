@@ -4,6 +4,40 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-31 — Fixed: the cover-date filter wiped what you typed
+
+- **Typing a date into the Date facet reset the field.** Reported from real use,
+  reproduced in a browser: type `01/15/2020` into "Cover date from" and the year
+  came back mangled — `0002-01-15` committed to the filter, and in headless
+  Chrome the field emptied outright.
+  Cause is the interaction of two things that are each fine alone. A
+  `type="date"` input reports a **complete** value on nearly every keystroke in
+  the year segment — typing `2020` yields `0002`, then `0020`, `0202`, `2020` —
+  and filter state lives in the URL, where `router.replace` resolves
+  *asynchronously*. The input was bound straight to the filter prop, so the
+  first keystroke's `0002-01-15` round-tripped through the router and landed
+  back as a prop while the user was still mid-year; React wrote it into the
+  input and the accumulated digits were gone.
+  Fix: the popover's inputs now own local drafts, making the URL strictly
+  downstream while it's open — nothing writes back into a field being typed in.
+  Commits on a 400ms settle, which also stops the board flashing through
+  `0002`/`0020`/`0202` result sets on the way to the intended year. The drafts
+  re-seed on open (the popover unmounts on close), so no prop-sync effect.
+- **Checked the other two date inputs; both were already fine.** The list-view
+  inline editor and the metadata form hold local React state and never touch the
+  router, so there's no async write-back to clobber them — verified directly in
+  a browser rather than assumed. The bug was specific to the one input whose
+  state round-trips through the URL.
+- **Filters had no integration coverage at all** — now they do
+  (`tests/integration/features/date-filter.mjs`). It's a real regression test:
+  it fails against the pre-fix component. Two things in it are deliberate and
+  worth not "tidying" later: the inter-keystroke `delay`, without which the
+  round-trip never lands mid-edit and the bug can't reproduce; and the
+  upper-bound cutoff being derived from live data, since this runs late in the
+  suite after earlier features have edited dates, and a hardcoded year
+  eventually stops splitting the set — at which point the range assertions pass
+  while proving nothing.
+
 ## 2026-07-30 — 1.0.0
 
 Tagged **v1.0.0**. A read-through of the whole repo rather than new features:
