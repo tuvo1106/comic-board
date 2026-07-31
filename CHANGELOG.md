@@ -64,6 +64,17 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   backdrop is a *different element* wrapping the stack: comparing rectangles
   alone wouldn't have worked, since `scale-110` makes even a fully covered layer
   measure larger.
+- **The dialog sizes itself to whichever state is showing** — narrow while
+  working, wide once there's a comparison worth the room — and animates between
+  the two rather than jumping. One width for both had left the spinner marooned
+  in a panel sized for something else.
+- **Each fact stated once.** The running state dropped its "Upscaling…" caption
+  (the dialog is titled *Upscale cover* and a spinner already means "working")
+  and its model/backend block, leaving only the size you're getting. The
+  comparison dropped its size readout for the same reason. The cover's
+  dimensions moved off the artwork entirely, into a file-info line beside the
+  revert action: both describe the *image* rather than the comic, neither is
+  editable, and three overlays on the art was two too many.
 - **Testing:** the flow runs end-to-end in the browser suite against a stub
   binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
   via sharp — real route, real `processUpload`, real accept/revert, fake pixels.

@@ -123,7 +123,11 @@ export function Dialog({ open, onClose, title, children, widthClass = "max-w-md"
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.97 }}
             transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className={`relative w-full ${widthClass} overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl outline-none`}
+            // `max-width` is transitioned because a dialog may change its own
+            // width mid-life (the upscale dialog is narrow while working and
+            // wide once it has a comparison to show); without this it jumps.
+            // Motion drives transform/opacity, so the two don't collide.
+            className={`relative w-full ${widthClass} overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl outline-none transition-[max-width] duration-300 ease-out`}
           >
             {title && (
               <div className="flex items-center justify-between border-b border-border px-5 py-3.5">

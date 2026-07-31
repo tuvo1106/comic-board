@@ -295,30 +295,25 @@ export function ComicDetail({ id, asModal }: Props) {
             // Above the cover's own z-10: these overlay the image on purpose,
             // and without an explicit layer they sit under the (now positioned)
             // cover and stop being clickable at all.
-            <div className="group/cover absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2.5">
-              {/* Above the buttons, not below: it describes the image, so it
-                  reads better adjacent to the artwork than wedged between the
-                  actions and the panel edge, where it was crowding both. */}
-              <p className="rounded bg-black/35 px-1.5 py-0.5 text-[11px] text-white/70 backdrop-blur-sm transition group-hover/cover:bg-black/60 group-hover/cover:text-white">
-                {comic.width} × {comic.height}
-                {comic.upscaled && " · upscaled"}
-              </p>
-              <div className="flex items-center gap-1.5">
+            <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5">
+              {/* Actions only. The dimensions used to sit up here too, which
+                  meant three things overlaying the artwork — they've moved to
+                  the file-info line in the metadata panel, next to the revert
+                  they belong with. */}
+              <button
+                onClick={() => setReplacing(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
+              >
+                <ImageIcon className="h-4 w-4" /> Replace cover
+              </button>
+              {upscaler?.available && (
                 <button
-                  onClick={() => setReplacing(true)}
+                  onClick={() => setUpscaling(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
                 >
-                  <ImageIcon className="h-4 w-4" /> Replace cover
+                  <Sparkles className="h-4 w-4" /> Upscale
                 </button>
-                {upscaler?.available && (
-                  <button
-                    onClick={() => setUpscaling(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
-                  >
-                    <Sparkles className="h-4 w-4" /> Upscale
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -428,25 +423,40 @@ export function ComicDetail({ id, asModal }: Props) {
                 <BoardsField comicId={id} boardIds={comic.boardIds} onOpenBoard={close} />
               </Field>
 
-              {/* Only rendered once there's actually something to revert to —
-                  the kept pre-upscale cover. */}
-              {comic.upscaled && (
-                <button
-                  type="button"
-                  disabled={revertUpscale.isPending}
-                  onClick={async () => {
-                    try {
-                      await revertUpscale.mutateAsync(id);
-                      toast("Reverted to the original cover", "success");
-                    } catch (e) {
-                      toast((e as Error).message, "error");
-                    }
-                  }}
-                  className="text-xs text-muted underline underline-offset-2 transition hover:text-fg disabled:opacity-50"
-                >
-                  {revertUpscale.isPending ? "Reverting…" : "Revert to the original cover"}
-                </button>
-              )}
+              {/* File info, kept apart from the fields above: these describe the
+                  image rather than the comic, and none of them are editable.
+                  The dimensions live here rather than over the artwork — as a
+                  third overlay they were noise on the cover, and they read
+                  better next to the revert they relate to. */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-4 text-xs text-muted">
+                <span>
+                  {comic.width} × {comic.height}px
+                </span>
+                {/* The rest only exists once there's a kept pre-upscale cover
+                    to go back to. */}
+                {comic.upscaled && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>upscaled</span>
+                    <span aria-hidden>·</span>
+                    <button
+                      type="button"
+                      disabled={revertUpscale.isPending}
+                      onClick={async () => {
+                        try {
+                          await revertUpscale.mutateAsync(id);
+                          toast("Reverted to the original cover", "success");
+                        } catch (e) {
+                          toast((e as Error).message, "error");
+                        }
+                      }}
+                      className="underline underline-offset-2 transition hover:text-fg disabled:opacity-50"
+                    >
+                      {revertUpscale.isPending ? "Reverting…" : "Revert to the original"}
+                    </button>
+                  </>
+                )}
+              </div>
             </motion.div>
           ) : null}
 

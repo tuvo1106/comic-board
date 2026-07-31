@@ -92,8 +92,16 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
   };
 
   return (
-    <Dialog open={open} onClose={dismiss} title="Upscale cover" widthClass="max-w-4xl">
-      <div className="space-y-5 p-5">
+    <Dialog
+      open={open}
+      onClose={dismiss}
+      title="Upscale cover"
+      // Sized to whichever state is showing. One width for both left the
+      // spinner marooned in a 4xl panel of empty space; the comparison is the
+      // only thing here that actually wants the room.
+      widthClass={candidate ? "max-w-4xl" : "max-w-md"}
+    >
+      <div className="space-y-4 p-4">
         {!info?.available ? (
           <p className="text-sm text-muted">
             No upscaler is configured. Set <code className="text-fg">UPSCALER_BIN</code> to a
@@ -123,29 +131,32 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
             </div>
           </div>
         ) : !candidate ? (
-          // Running. Deliberately says nothing about the model or backend: which
-          // upscaler is wired up is a deployment detail, and naming it here made
-          // the wait read like a config screen. Just what's happening, and to
-          // what size.
+          // Running. Says nothing about the model or backend — which upscaler is
+          // wired up is a deployment detail, and naming it made the wait read
+          // like a config screen — and no "Upscaling…" caption either, since the
+          // dialog is titled "Upscale cover" and a spinner already means "working".
+          // What's left is the one thing neither of those conveys: the size.
           <div className="flex flex-col items-center gap-6 py-14 text-center">
             <Spinner className="h-8 w-8 animate-spin text-accent" />
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">Upscaling…</p>
-              <p
-                className="text-xs text-muted"
-                title="Upscaling invents plausible detail rather than recovering what was lost. Your current cover is kept, so you can revert."
-              >
-                {comic.width} × {comic.height} → {target.width} × {target.height}px
-              </p>
-            </div>
+            <p
+              className="text-sm font-medium"
+              title="Upscaling invents plausible detail rather than recovering what was lost. Your current cover is kept, so you can revert."
+            >
+              {comic.width} × {comic.height} → {target.width} × {target.height}px
+            </p>
           </div>
         ) : (
           <>
             <Compare comic={comic} candidate={candidate} split={split} onSplit={setSplit} />
-            {/* No size readout here: the detail view shows the current size and
-                the running state showed what it was heading for, so repeating it
-                next to the result is a third statement of the same fact. */}
-            <div className="flex items-center justify-end gap-2 pt-1">
+            {/* No size readout alongside these: the detail view states the
+                current size and the running state stated the target, so a third
+                copy next to the result adds nothing.
+
+                Centred rather than the app's usual right-aligned primary. This
+                dialog is a centred composition (cover, then slider), and it's
+                two roughly equal choices about one thing — not the
+                cancel/commit asymmetry the form dialogs have. */}
+            <div className="flex items-center justify-center gap-3">
               {/* Closes rather than clearing the candidate: with no opening step
                   there's nothing to go back to, and the auto-run effect is keyed
                   on `open`, so staying put would sit on the running state

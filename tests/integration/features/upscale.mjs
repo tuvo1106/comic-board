@@ -50,7 +50,13 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
   // with a single scale it was a button that only said "yes really".
   await clickByText("Upscale");
   await sleep(400);
-  ck(await bodyHas("Upscaling"), "opening runs the upscale straight away");
+  // Keyed on the spinner, not copy: the running state deliberately has no
+  // "Upscaling…" caption (the dialog title and the spinner already say it), so
+  // asserting on words would break every time the wording is tightened.
+  ck(
+    await p.evaluate(() => !!document.querySelector("[role='dialog'] svg.animate-spin")),
+    "opening runs the upscale straight away",
+  );
   // The stub still runs sharp over a real image; give it room on a slow runner.
   await p.waitForFunction(() => document.body.textContent.includes("Keep it"), { timeout: 60000 });
 
@@ -148,9 +154,9 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
   // --- Revert ------------------------------------------------------------
   await p.goto(`${BASE}/comic/${before.id}`, { waitUntil: "networkidle0" });
   await sleep(900);
-  ck(await bodyHas("Revert to the original cover"), "an upscaled cover offers a revert");
+  ck(await bodyHas("Revert to the original"), "an upscaled cover offers a revert");
 
-  await clickByText("Revert to the original cover");
+  await clickByText("Revert to the original");
   await sleep(1800);
   const reverted = (await apiJson("/api/comics")).find((c) => c.id === before.id);
   ck(
