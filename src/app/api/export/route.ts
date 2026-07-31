@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * personal collection is small enough not to need streaming.
  */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
 

@@ -12,7 +12,7 @@ const renameSchema = z.object({
 
 /** Rename a publisher; the new name applies to every comic that uses it. */
 export async function PATCH(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { from, to } = renameSchema.parse(await req.json());

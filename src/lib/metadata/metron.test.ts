@@ -155,4 +155,53 @@ describe("metronProvider (fetch wiring)", () => {
     expect(d.covers[0]).toMatchObject({ label: "Main cover" });
     expect(String(fetchMock.mock.calls[0][0])).toContain("/issue/326/");
   });
+
+  it("detail() warns when the burst budget runs low, same as search()", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonRes(fullDetail, { "x-ratelimit-burst-remaining": "1" })),
+    );
+    await metronProvider("tok").detail("326");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("budget low"));
+    warn.mockRestore();
+    log.mockRestore();
+  });
+
+  // roadmap 4h: answering "why didn't variants come back" cost live API calls
+  // because nothing logged what the provider actually returned. This is the
+  // fix — a `grep '\[metron\] detail'` should answer it from here on.
+  it("detail() logs the record's own cover/variant counts as one JSON line, not just success", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonRes(fullDetail, { "x-ratelimit-burst-remaining": "17" })),
+    );
+    await metronProvider("tok").detail("326");
+    // JSON, not a template string — grep- AND jq-able, no logging library.
+    expect(JSON.parse(log.mock.calls.at(-1)![0] as string)).toEqual({
+      tag: "metron.detail",
+      ref: "326",
+      hasMain: true,
+      variantCount: 0,
+      burstRemaining: 17,
+    });
+    log.mockRestore();
+  });
+
+  it("logs the variant count when the record has some, and null when the budget header is absent", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const withVariants = {
+      ...fullDetail,
+      variants: [{ name: "Second Printing", image: "https://static.metron.cloud/v.jpg" }],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonRes(withVariants)));
+    await metronProvider("tok").detail("326");
+    expect(JSON.parse(log.mock.calls.at(-1)![0] as string)).toMatchObject({
+      variantCount: 1,
+      burstRemaining: null, // real null, not a placeholder string — machine-checkable
+    });
+    log.mockRestore();
+  });
 });

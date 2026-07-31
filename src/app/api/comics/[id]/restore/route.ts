@@ -12,7 +12,7 @@ type Params = { params: Promise<{ id: string }> };
  * ~24h window before the sweep hard-deletes it (see `sweepDeletedComics`).
  */
 export async function POST(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id } = await params;

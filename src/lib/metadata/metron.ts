@@ -100,6 +100,18 @@ export function metronCovers(
 
 // --- provider -----------------------------------------------------------------
 
+/**
+ * Metron reports remaining budget on every response — warn once the short
+ * burst bucket (20) is close to empty, so a caller sees it in logs before
+ * hitting a 429. Shared by `search()` and `detail()` rather than duplicated,
+ * since they draw on the same bucket.
+ */
+function warnIfBudgetLow(burstRemaining: number | null): void {
+  if (burstRemaining != null && burstRemaining <= 3) {
+    console.warn(`Metron burst budget low: ${burstRemaining} remaining`);
+  }
+}
+
 export function metronProvider(token: string): MetadataProvider {
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -111,12 +123,7 @@ export function metronProvider(token: string): MetadataProvider {
       u.searchParams.set("series_name", series);
       if (issue?.trim()) u.searchParams.set("number", issue.trim());
       const { res, data } = await fetchJson(u.toString(), { headers });
-      const { burstRemaining } = readRateLimit(res);
-      // Metron reports remaining budget on every response — surface a warning
-      // as the short burst bucket (20) runs low so it's visible in logs.
-      if (burstRemaining != null && burstRemaining <= 3) {
-        console.warn(`Metron burst budget low: ${burstRemaining} remaining`);
-      }
+      warnIfBudgetLow(readRateLimit(res).burstRemaining);
       const page = data as MetronPage<MetronIssueLite>;
       // Newest series first — "batman 2" returns many issues across decades and
       // the recent run is usually what's wanted. Unknown years sort last.
@@ -126,8 +133,27 @@ export function metronProvider(token: string): MetadataProvider {
     },
 
     async detail(ref) {
-      const { data } = await fetchJson(`${BASE}/issue/${encodeURIComponent(ref)}/`, { headers });
-      return mapMetronIssueDetail(data as MetronIssueDetail);
+      const { res, data } = await fetchJson(`${BASE}/issue/${encodeURIComponent(ref)}/`, { headers });
+      const { burstRemaining } = readRateLimit(res);
+      warnIfBudgetLow(burstRemaining);
+      const issue = data as MetronIssueDetail;
+      // What "why didn't variants come back" needs to answer (roadmap 4h): the
+      // record's own cover/variant counts, not just that the call succeeded.
+      // One JSON line — no logging library, matching every other console.*
+      // call in this repo — so it's both `grep '"tag":"metron.detail"'`-able
+      // and `jq`-able once it's ever piped anywhere. Server-side only: the
+      // request URL carries the API key, and fetchJson already keeps it out
+      // of thrown errors.
+      console.log(
+        JSON.stringify({
+          tag: "metron.detail",
+          ref,
+          hasMain: !!issue.image,
+          variantCount: (issue.variants ?? []).length,
+          burstRemaining,
+        }),
+      );
+      return mapMetronIssueDetail(issue);
     },
   };
 }

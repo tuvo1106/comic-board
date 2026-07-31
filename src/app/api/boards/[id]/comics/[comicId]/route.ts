@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string; comicId: string }> };
 
 /** PUT /api/boards/:id/comics/:comicId — add comic to board. */
 export async function PUT(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id, comicId } = await params;
@@ -19,7 +19,7 @@ export async function PUT(req: Request, { params }: Params) {
 
 /** DELETE /api/boards/:id/comics/:comicId — remove comic from board. */
 export async function DELETE(req: Request, { params }: Params) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const { id, comicId } = await params;

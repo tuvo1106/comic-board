@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /** GET /api/comics?board=<id> — list comics, optionally scoped to a board. */
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const url = new URL(req.url);
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
  *   - meta: JSON string matching comicMetaSchema
  */
 export async function POST(req: Request) {
-  return handle(async () => {
+  return handle(req, async () => {
     const userId = await getUserId(req);
     if (!userId) return unauthorized();
     const form = await req.formData();
