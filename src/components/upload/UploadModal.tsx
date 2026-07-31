@@ -219,11 +219,15 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
           <ModeToggle mode={mode} onChange={setMode} />
           {mode === "search" ? (
             <div className="mt-4">
+              {/* Search is the default mode and the first thing you do here, so
+                  land the caret in the query box — opening Add and typing
+                  should just work, without a click first. */}
               <MetadataSearch
                 value={form}
                 onApply={applyMetadata}
                 onUseCover={applyCover}
                 onUseDetails={useDetailsOnly}
+                autoFocus
               />
             </div>
           ) : (

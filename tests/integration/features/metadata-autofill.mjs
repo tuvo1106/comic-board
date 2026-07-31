@@ -152,6 +152,30 @@ export async function metadataAutofill({ p, ck, sleep }) {
       (await p.$(PROVIDER_INPUT)) !== null,
       "the autofill panel renders once a provider is configured",
     );
+    // Search is the default mode and the first thing you do here, so opening
+    // Add and typing should just work. `Dialog` defers to a child's autoFocus
+    // before falling back to focusing the panel itself — assert the caret
+    // actually landed, since that ordering is what makes it work.
+    ck(
+      await p.evaluate(
+        () =>
+          document.activeElement ===
+          document.querySelector("input[placeholder^='Series and issue']"),
+      ),
+      "opening Add puts the caret straight in the search box",
+    );
+    // And typing with no click first reaches it.
+    await p.keyboard.type("zz");
+    ck(
+      (await p.$eval(PROVIDER_INPUT, (el) => el.value)) === "zz",
+      "so typing immediately goes into the query box, no click needed",
+    );
+    await p.evaluate((s) => {
+      const el = document.querySelector(s);
+      el.value = "";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, PROVIDER_INPUT);
+    await sleep(200);
     await p.type(PROVIDER_INPUT, "abso", { delay: 30 });
     await sleep(400);
     const seriesRows = await p.$$eval(PROVIDER_OPTION, (els) =>

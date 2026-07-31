@@ -38,6 +38,16 @@ interface Props {
    * that couldn't do anything.
    */
   onUseDetails?: () => void;
+  /**
+   * Focus the query box on mount. Opt-in rather than always-on: this panel also
+   * renders in the details step and in `ReplaceCoverDialog`, where the user has
+   * already moved past searching and stealing focus would fight them.
+   *
+   * `Dialog` explicitly defers to a child's `autoFocus` before falling back to
+   * focusing the panel, so this cooperates with the focus trap rather than
+   * racing it.
+   */
+  autoFocus?: boolean;
 }
 
 function slug(s: string): string {
@@ -65,7 +75,7 @@ async function loadCover(cover: CoverOption, series: string, issue: string | nul
  * — each with a size/quality indicator. Self-hides when no provider is
  * configured; a toggle A/Bs providers.
  */
-export function MetadataSearch({ value, onApply, onUseCover, onUseDetails }: Props) {
+export function MetadataSearch({ value, onApply, onUseCover, onUseDetails, autoFocus }: Props) {
   const { data: config } = useMetadataConfig();
   const { toast } = useToast();
   const detail = useMetadataDetail();
@@ -186,6 +196,7 @@ export function MetadataSearch({ value, onApply, onUseCover, onUseDetails }: Pro
         <div className="relative min-w-0 flex-1">
           <input
             {...typeahead.inputProps}
+            autoFocus={autoFocus}
             placeholder="Series and issue — e.g. Black Cat 4"
             className="w-full rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-accent placeholder:text-muted"
           />
