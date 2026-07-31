@@ -75,6 +75,12 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   dimensions moved off the artwork entirely, into a file-info line beside the
   revert action: both describe the *image* rather than the comic, neither is
   editable, and three overlays on the art was two too many.
+- **Fixed: upscaling again after a revert did nothing.** Reported from real use.
+  `keep()` closed the dialog without resetting the preview mutation — the
+  candidate had just become the live cover, so there was nothing to discard —
+  leaving it in `success` still holding that candidate. Reopening found it
+  non-idle, skipped the run, and rendered the *previous* comparison against
+  files the revert had since deleted. Opening now always starts a fresh run.
 - **Testing:** the flow runs end-to-end in the browser suite against a stub
   binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
   via sharp — real route, real `processUpload`, real accept/revert, fake pixels.

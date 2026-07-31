@@ -154,9 +154,9 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
   // --- Revert ------------------------------------------------------------
   await p.goto(`${BASE}/comic/${before.id}`, { waitUntil: "networkidle0" });
   await sleep(900);
-  ck(await bodyHas("Revert to the original"), "an upscaled cover offers a revert");
+  ck(await bodyHas("Revert"), "an upscaled cover offers a revert");
 
-  await clickByText("Revert to the original");
+  await clickByText("Revert");
   await sleep(1800);
   const reverted = (await apiJson("/api/comics")).find((c) => c.id === before.id);
   ck(
@@ -176,4 +176,35 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
     return { ok: r.ok, bytes: (await r.blob()).size };
   }, reverted.imageUrl);
   ck(img.ok && img.bytes > 0, `and the restored file is really on disk (${img.bytes} bytes)`);
+
+  // --- Upscaling again after a revert --------------------------------------
+  // Reported from real use. `keep()` closes without resetting the preview
+  // mutation — the candidate had become the live cover, so there was nothing to
+  // discard — which left it in `success` still holding that candidate. Opening
+  // again found it non-idle, skipped the run, and rendered the *old* comparison
+  // against files the revert had since deleted.
+  await clickByText("Upscale");
+  await sleep(500);
+  const reopened = await p.evaluate(() => ({
+    spinning: !!document.querySelector("[role='dialog'] svg.animate-spin"),
+    // The tell for the bug: a comparison already on screen half a second in
+    // means it served a cached candidate instead of starting work.
+    staleComparison: !!document.querySelector("[role='dialog'] img[alt='Upscaled cover']"),
+  }));
+  ck(reopened.spinning, "upscaling again after a revert starts a fresh run");
+  ck(!reopened.staleComparison, "rather than showing the previous run's comparison");
+
+  await p.waitForFunction(() => document.body.textContent.includes("Keep it"), { timeout: 60000 });
+  const second = await p.evaluate(
+    () => document.querySelector("[role='dialog'] img[alt='Upscaled cover']")?.src ?? null,
+  );
+  ck(Boolean(second), "and the second run produces its own candidate");
+  // Load it, so a candidate pointing at a deleted folder can't pass.
+  const secondBytes = await p.evaluate(async (url) => {
+    const r = await fetch(url);
+    return r.ok ? (await r.blob()).size : 0;
+  }, second);
+  ck(secondBytes > 0, `whose image really exists (${secondBytes} bytes)`);
+  await clickByText("Discard");
+  await sleep(600);
 }

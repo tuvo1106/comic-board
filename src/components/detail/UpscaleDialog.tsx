@@ -74,7 +74,14 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
   // and you land on the comparison. An accidental open costs a few seconds of
   // GPU and a discarded folder; nothing is committed either way.
   useEffect(() => {
-    if (open && preview.isIdle) preview.mutate({ id: comic.id, scale: SCALE });
+    if (!open) return;
+    // Reset first, so every open is a fresh run. `keep()` closes without
+    // resetting (the candidate became the live cover, so there was nothing to
+    // discard), which left the mutation in `success` holding that candidate.
+    // Reopening then found it non-idle, skipped the run, and rendered the old
+    // comparison — pointing at files that a subsequent Revert had deleted.
+    preview.reset();
+    preview.mutate({ id: comic.id, scale: SCALE });
     // Keyed on `open` alone: re-running on every status change would restart the
     // upscale the moment one finished.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,7 +143,12 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
           // like a config screen — and no "Upscaling…" caption either, since the
           // dialog is titled "Upscale cover" and a spinner already means "working".
           // What's left is the one thing neither of those conveys: the size.
-          <div className="flex flex-col items-center gap-6 py-14 text-center">
+          // Tightened, but deliberately not to a thin strip. The panel animates
+          // its *width* into the comparison; its height just jumps. Collapsing
+          // this to the height of one line would make that jump much larger,
+          // and a spinner boxed in tight reads as anxious for a state that
+          // lasts several seconds.
+          <div className="flex flex-col items-center gap-5 py-10 text-center">
             <Spinner className="h-8 w-8 animate-spin text-accent" />
             <p
               className="text-sm font-medium"

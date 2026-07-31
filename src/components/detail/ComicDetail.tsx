@@ -370,8 +370,7 @@ export function ComicDetail({ id, asModal }: Props) {
                 />
               </Field>
 
-              {(comic.publisher || comic.coverDate) && (
-                <div className="flex flex-wrap gap-x-6 gap-y-3">
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
                   {comic.publisher && (
                     <button
                       type="button"
@@ -396,8 +395,18 @@ export function ComicDetail({ id, asModal }: Props) {
                       <span className="text-sm">{formatDate(comic.coverDate)}</span>
                     </button>
                   )}
+                  {/* Same shape as its neighbours, but a plain div rather than a
+                      button: they click through to edit that field, and there's
+                      nothing here to edit — it's a property of the image file. */}
+                  <div className="px-1">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                      Image
+                    </p>
+                    <span className="text-sm text-fg">
+                      {comic.width} × {comic.height}px
+                    </span>
+                  </div>
                 </div>
-              )}
 
               {comic.authors.length > 0 && (
                 <Field label="Author" onClick={() => startEdit("authors")}>
@@ -423,40 +432,38 @@ export function ComicDetail({ id, asModal }: Props) {
                 <BoardsField comicId={id} boardIds={comic.boardIds} onOpenBoard={close} />
               </Field>
 
-              {/* File info, kept apart from the fields above: these describe the
-                  image rather than the comic, and none of them are editable.
-                  The dimensions live here rather than over the artwork — as a
-                  third overlay they were noise on the cover, and they read
-                  better next to the revert they relate to. */}
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-4 text-xs text-muted">
-                <span>
-                  {comic.width} × {comic.height}px
-                </span>
-                {/* The rest only exists once there's a kept pre-upscale cover
-                    to go back to. */}
-                {comic.upscaled && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>upscaled</span>
-                    <span aria-hidden>·</span>
-                    <button
-                      type="button"
-                      disabled={revertUpscale.isPending}
-                      onClick={async () => {
-                        try {
-                          await revertUpscale.mutateAsync(id);
-                          toast("Reverted to the original cover", "success");
-                        } catch (e) {
-                          toast((e as Error).message, "error");
-                        }
-                      }}
-                      className="underline underline-offset-2 transition hover:text-fg disabled:opacity-50"
-                    >
-                      {revertUpscale.isPending ? "Reverting…" : "Revert to the original"}
-                    </button>
-                  </>
-                )}
-              </div>
+              {/* Only when there's actually a kept pre-upscale cover. No Field
+                  label: the pill already says what this is, and labelling it
+                  "Upscaled" above a pill reading "Upscaled" would be the same
+                  redundancy as the caption this replaced. The size itself moved
+                  up to sit with Publisher / Cover date — same kind of short
+                  scalar fact — so an ordinary cover shows none of this. */}
+              {comic.upscaled && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  {/* Same treatment as the board chips, so "this image was
+                      altered" carries weight without needing a sentence. */}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-1 text-xs text-fg ring-1 ring-accent/30">
+                    <Sparkles className="h-3 w-3" /> Upscaled
+                  </span>
+                  <button
+                    type="button"
+                    disabled={revertUpscale.isPending}
+                    onClick={async () => {
+                      try {
+                        await revertUpscale.mutateAsync(id);
+                        toast("Reverted to the original cover", "success");
+                      } catch (e) {
+                        toast((e as Error).message, "error");
+                      }
+                    }}
+                    className="text-xs text-muted underline underline-offset-2 transition hover:text-fg disabled:opacity-50"
+                  >
+                    {/* Just "Revert": the pill beside it already says what
+                        happened, so naming the object again adds nothing. */}
+                    {revertUpscale.isPending ? "Reverting…" : "Revert"}
+                  </button>
+                </div>
+              )}
             </motion.div>
           ) : null}
 
