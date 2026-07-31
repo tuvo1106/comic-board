@@ -43,6 +43,13 @@
       "when": 1785464082522,
       "tag": "0005_fast_ulik",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785530984365,
+      "tag": "0006_rapid_phil_sheldon",
+      "breakpoints": true
     }
   ]
 }

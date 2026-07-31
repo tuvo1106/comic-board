@@ -302,3 +302,81 @@ describe("replaceComicCover", () => {
     expect(await q.replaceComicCover(userB, comic.id, fakeImage())).toBeNull();
   });
 });
+
+describe("upscale accept / revert", () => {
+  // revertUpscale re-reads the restored file's dimensions rather than storing
+  // them twice; in tests there's no real file, so stub that read.
+  const size = (w: number, h: number) => async () => ({
+    width: w,
+    height: h,
+    blurDataUrl: "data:,restored",
+  });
+
+  it("accepting keeps the replaced cover so it can be restored", () => {
+    const comic = makeComic(userA, { series: "Batman" });
+    const original = comic.imageUrl;
+
+    const bigger = { ...fakeImage(), width: 1200, height: 1820 };
+    const updated = q.acceptUpscale(userA, comic.id, bigger)!;
+
+    expect(updated.imageUrl).toContain(bigger.id);
+    expect(updated.width).toBe(1200);
+    expect(updated.upscaled).toBe(true); // the DTO flag the UI gates revert on
+    expect(updated.series).toBe("Batman"); // metadata untouched
+    expect(updated.imageUrl).not.toBe(original);
+  });
+
+  it("reverting restores the original image and clears the flag", async () => {
+    const comic = makeComic(userA);
+    const original = comic.imageUrl;
+    q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 1200, height: 1820 });
+
+    const reverted = await q.revertUpscale(userA, comic.id, size(600, 910))!;
+    expect(reverted!.imageUrl).toBe(original);
+    expect(reverted!.width).toBe(600); // re-read, not the upscaled 1200
+    expect(reverted!.upscaled).toBe(false);
+  });
+
+  // The reason originalImagePath is written only when null: otherwise the
+  // second upscale would record the first *generated* image as the "original",
+  // and reverting would land on an upscale rather than the user's real cover.
+  it("upscaling twice still reverts to the true original, not the first upscale", async () => {
+    const comic = makeComic(userA);
+    const original = comic.imageUrl;
+
+    q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 1200, height: 1820 });
+    q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 2400, height: 3640 });
+
+    const reverted = await q.revertUpscale(userA, comic.id, size(600, 910))!;
+    expect(reverted!.imageUrl).toBe(original);
+    expect(reverted!.upscaled).toBe(false);
+  });
+
+  it("reverting a comic that was never upscaled returns null", async () => {
+    const comic = makeComic(userA);
+    expect(await q.revertUpscale(userA, comic.id, size(600, 910))).toBeNull();
+  });
+
+  it("won't accept or revert another user's comic", async () => {
+    const comic = makeComic(userA);
+    expect(q.acceptUpscale(userB, comic.id, fakeImage())).toBeNull();
+    q.acceptUpscale(userA, comic.id, fakeImage());
+    expect(await q.revertUpscale(userB, comic.id, size(600, 910))).toBeNull();
+  });
+
+  // isCoverReferenced is the authorization check for a client-supplied path:
+  // a candidate is by definition unreferenced, so anything in use — including
+  // another account's — must not be adoptable or deletable through it.
+  it("treats live covers and kept originals as referenced, across users", () => {
+    const mine = makeComic(userA);
+    const theirs = makeComic(userB);
+    const upscaled = { ...fakeImage(), width: 1200, height: 1820 };
+    q.acceptUpscale(userA, mine.id, upscaled);
+
+    const originalKey = `covers/${mine.id}/full.webp`;
+    expect(q.isCoverReferenced(upscaled.imagePath)).toBe(true); // live cover
+    expect(q.isCoverReferenced(originalKey)).toBe(true); // kept pre-upscale original
+    expect(q.isCoverReferenced(`covers/${theirs.id}/full.webp`)).toBe(true); // another user's
+    expect(q.isCoverReferenced("covers/never-existed/full.webp")).toBe(false);
+  });
+});

@@ -17,6 +17,7 @@ export function makeComic(over: Partial<ComicDTO> = {}): ComicDTO {
     blurDataUrl: "data:,",
     width: 660,
     height: 1014,
+    upscaled: false,
     position: seq,
     createdAt: seq,
     authors: [],

@@ -62,6 +62,7 @@ export const keys = {
   boards: ["boards"] as const,
   meta: ["meta"] as const,
   metadataConfig: ["metadata", "config"] as const,
+  upscaler: ["upscale", "config"] as const,
   metadataSearch: (provider: string, q: string) => ["metadata", "search", provider, q] as const,
 };
 
@@ -144,6 +145,84 @@ export function useMetadataDetail() {
       const p = new URLSearchParams({ provider: args.provider, ref: args.ref });
       if (args.issue) p.set("issue", args.issue);
       return jsonFetch<MetadataDetail>(`/api/metadata/detail?${p.toString()}`);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Upscaling
+// ---------------------------------------------------------------------------
+
+export interface UpscaleCandidate {
+  imagePath: string;
+  imageUrl: string;
+  width: number;
+  height: number;
+  scale: number;
+  label: string;
+  from: { width: number; height: number };
+}
+
+/** Whether an upscaler is installed — gates the UI action entirely. */
+export function useUpscalerInfo() {
+  return useQuery({
+    queryKey: keys.upscaler,
+    queryFn: () => jsonFetch<{ available: boolean; label: string | null }>("/api/upscale"),
+    staleTime: Infinity, // only changes on a server restart
+  });
+}
+
+/**
+ * Generate a preview. Nothing is committed — the comic is untouched until
+ * `useAcceptUpscale`, so declining costs only a discarded folder. `retry: false`
+ * because this is slow and expensive; a failure should surface, not silently
+ * run the GPU three more times.
+ */
+export function usePreviewUpscale() {
+  return useMutation({
+    mutationFn: ({ id, scale }: { id: string; scale: number }) =>
+      jsonFetch<UpscaleCandidate>(`/api/comics/${id}/upscale?scale=${scale}`, { method: "POST" }),
+    retry: false,
+  });
+}
+
+export function useAcceptUpscale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, imagePath }: { id: string; imagePath: string }) =>
+      jsonFetch<ComicDTO>(`/api/comics/${id}/upscale`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imagePath }),
+      }),
+    onSuccess: (updated) => {
+      // Same shape as replace-cover: urls change, metadata doesn't.
+      qc.setQueryData(keys.comic(updated.id), updated);
+      patchComicInLists(qc, updated);
+    },
+  });
+}
+
+/** Throw away a candidate the user declined, so it doesn't linger on disk. */
+export function useDiscardUpscale() {
+  return useMutation({
+    mutationFn: ({ id, imagePath }: { id: string; imagePath: string }) =>
+      jsonFetch(`/api/comics/${id}/upscale`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imagePath }),
+      }),
+  });
+}
+
+export function useRevertUpscale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      jsonFetch<ComicDTO>(`/api/comics/${id}/upscale/revert`, { method: "POST" }),
+    onSuccess: (updated) => {
+      qc.setQueryData(keys.comic(updated.id), updated);
+      patchComicInLists(qc, updated);
     },
   });
 }

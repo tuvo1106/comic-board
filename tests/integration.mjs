@@ -46,6 +46,7 @@ import { searchAutocomplete } from "./integration/features/search-autocomplete.m
 import { dateRangeFilter } from "./integration/features/date-filter.mjs";
 import { metadataAutofill } from "./integration/features/metadata-autofill.mjs";
 import { statsPage } from "./integration/features/stats.mjs";
+import { upscaleCover } from "./integration/features/upscale.mjs";
 
 await buildAndSeed();
 const server = startServer();
@@ -78,6 +79,7 @@ try {
   await searchAutocomplete(ctx, { N });
   await dateRangeFilter(ctx);
   await metadataAutofill(ctx);
+  await upscaleCover(ctx);
   // Late on purpose: by here the collection has been added to, deleted from and
   // renamed, so "the numbers match /api/comics" is a real check rather than a
   // restatement of the seed.

@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { logger } from "@/lib/logger";
 import { getUserId } from "@/lib/session";
 import { MetadataError } from "@/lib/metadata/types";
+import { UpscaleError } from "@/lib/upscale/types";
 
 export function ok<T>(data: T, init?: ResponseInit) {
   return NextResponse.json(data, init);
@@ -31,8 +32,9 @@ function toErrorResponse(err: unknown): Response {
   if (err instanceof ZodError) {
     return badRequest("Validation failed", err.flatten().fieldErrors as Record<string, string[]>);
   }
-  if (err instanceof MetadataError) {
-    // Client-safe message from an upstream metadata provider (never the key).
+  if (err instanceof MetadataError || err instanceof UpscaleError) {
+    // Client-safe message from an upstream provider or the local upscaler —
+    // never the API key, binary path, or command line that produced it.
     return NextResponse.json({ error: err.message }, { status: err.status });
   }
   // Persisted, not printed: an unexpected 500 is exactly the thing you want to

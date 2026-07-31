@@ -12,6 +12,8 @@ export interface ComicDTO {
   blurDataUrl: string;
   width: number;
   height: number;
+  /** True once an upscale has been accepted — the pre-upscale cover is kept and can be restored. */
+  upscaled: boolean;
   position: number; // ordering on My Comics
   createdAt: number;
   authors: string[];

@@ -20,6 +20,11 @@ export const env = {
   // Known seed account to log in with.
   SEED_USER_EMAIL: "itest@example.com",
   SEED_USER_PASSWORD: "integration123",
+  // Points at the stub written by `writeFakeUpscaler()` — see
+  // tests/integration/fake-upscaler.mjs for why a stub rather than the real
+  // binary. Its presence is also what makes the Upscale action render at all,
+  // since the UI gates on this being set.
+  UPSCALER_BIN: path.join(DATA_DIR, "fake-upscaler"),
 };
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

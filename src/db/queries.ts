@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
 import { positionAfterMax } from "@/lib/positions";
@@ -196,6 +196,7 @@ function rowToDTO(
     blurDataUrl: row.blurDataUrl,
     width: row.width,
     height: row.height,
+    upscaled: row.originalImagePath != null,
     position: row.position,
     createdAt: row.createdAt,
     authors: names.authors,
@@ -488,6 +489,107 @@ export async function replaceComicCover(
   const oldDir = coverDir(row.imagePath);
   if (oldDir !== coverDir(image.imagePath)) await storage.deletePrefix(oldDir).catch(() => {});
   return dto;
+}
+
+/**
+ * Commit an accepted upscale: repoint the comic at the new image and remember
+ * the cover it replaced so it can be restored.
+ *
+ * Unlike `replaceComicCover` this does NOT delete the outgoing folder — that
+ * folder *is* the backup. `originalImagePath` is written only if it's still
+ * null, so upscaling an already-upscaled cover still reverts to the true
+ * original rather than to a generated intermediate. Returns null if the comic
+ * isn't owned by the user.
+ */
+export function acceptUpscale(userId: string, id: string, image: ProcessedImage): ComicDTO | null {
+  const row = db
+    .select({ imagePath: comics.imagePath, originalImagePath: comics.originalImagePath })
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
+    .get();
+  if (!row) return null;
+
+  return db.transaction((tx) => {
+    tx.update(comics)
+      .set({
+        imagePath: image.imagePath,
+        thumbPath: image.thumbPath,
+        blurDataUrl: image.blurDataUrl,
+        width: image.width,
+        height: image.height,
+        originalImagePath: row.originalImagePath ?? row.imagePath,
+      })
+      .where(eq(comics.id, id))
+      .run();
+    return getComicTx(tx, id)!;
+  });
+}
+
+/**
+ * Undo an accepted upscale, restoring the kept original and deleting the
+ * generated cover. Dimensions are re-read from the restored file rather than
+ * stored separately — one source of truth, and the masonry needs them exact.
+ * Returns null if the comic isn't owned or was never upscaled.
+ */
+export async function revertUpscale(
+  userId: string,
+  id: string,
+  readSize: (key: string) => Promise<{ width: number; height: number; blurDataUrl: string }>,
+): Promise<ComicDTO | null> {
+  const row = db
+    .select({ imagePath: comics.imagePath, originalImagePath: comics.originalImagePath })
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
+    .get();
+  if (!row?.originalImagePath) return null;
+
+  const original = row.originalImagePath;
+  const meta = await readSize(original);
+
+  const dto = db.transaction((tx) => {
+    tx.update(comics)
+      .set({
+        imagePath: original,
+        thumbPath: original.replace(/[^/]+$/, "thumb.webp"),
+        blurDataUrl: meta.blurDataUrl,
+        width: meta.width,
+        height: meta.height,
+        originalImagePath: null,
+      })
+      .where(eq(comics.id, id))
+      .run();
+    return getComicTx(tx, id)!;
+  });
+
+  // Only now that nothing points at it, drop the generated cover.
+  if (coverDir(row.imagePath) !== coverDir(original)) {
+    await storage.deletePrefix(coverDir(row.imagePath)).catch(() => {});
+  }
+  return dto;
+}
+
+/**
+ * Is this cover key in use by any comic, as either its live cover or its kept
+ * pre-upscale original?
+ *
+ * Not user-scoped on purpose. It's the authorization check for a path supplied
+ * by the client (see the upscale route), and the question being asked is "is
+ * this a free-floating candidate?" — a key belonging to *anyone* answers no.
+ * Scoping it to the caller would let one account name another's cover and have
+ * it treated as adoptable.
+ */
+export function isCoverReferenced(imagePath: string): boolean {
+  const hit = db
+    .select({ id: comics.id })
+    .from(comics)
+    .where(or(eq(comics.imagePath, imagePath), eq(comics.originalImagePath, imagePath)))
+    .get();
+  return Boolean(hit);
+}
+
+/** Discard a previewed-but-unaccepted upscale's files. */
+export async function discardUpscale(imagePath: string): Promise<void> {
+  await storage.deletePrefix(coverDir(imagePath)).catch(() => {});
 }
 
 export function updateComicPosition(

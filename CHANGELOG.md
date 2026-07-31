@@ -4,6 +4,43 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-31 — Cover upscaling, with preview and revert
+
+- **Upscale a cover from the detail modal, compare it, then keep or discard.**
+  Motivated by the collection's actual shape: the median stored cover is
+  **600px wide** and 334 of 392 are under 700px, because most arrived through
+  Metron's "Use this cover", whose CDN images are around that size. The app's
+  own 1600px cap was never the constraint — only 6% of covers reach it — so
+  raising it would have changed nothing.
+- **Nothing is committed until you accept.** The preview is a real stored image
+  in its own folder that no comic points at, so declining costs a deleted
+  folder and the comic is never touched. That property is the one the
+  integration test protects hardest; a preview that quietly mutated the cover
+  would be the same dead-end class as the two cover bugs fixed earlier today.
+- **Accepting is reversible.** `comics.original_image_path` (migration 0006,
+  a single additive column) keeps the cover that was replaced, and the detail
+  view grows a "Revert to the original cover" action. It's written only when
+  still null, so upscaling twice still reverts to the *true* original rather
+  than to a generated intermediate — asserted directly, since that's the kind
+  of thing that looks right until the second run.
+- **Gated on a binary you install** (`UPSCALER_BIN` → `realesrgan-ncnn-vulkan`),
+  exactly as `METRON_API_KEY` gates autofill: unset means the action isn't
+  rendered at all, rather than present and failing on click. The upscaler sits
+  behind a one-method interface shaped like `StorageAdapter`, so a beefier GPU
+  box on the LAN is a drop-in later without callers changing.
+- **The detail view now shows the cover's pixel size**, which is the thing that
+  actually tells you whether upscaling is worth doing.
+- **Testing:** the flow runs end-to-end in the browser suite against a stub
+  binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
+  via sharp — real route, real `processUpload`, real accept/revert, fake pixels.
+  A no-op copy would have made "did it actually get bigger?" unassertable, which
+  is the single most important thing to prove here. No GPU or model download in
+  CI, and no ~5s per image.
+- **Honest limitation, stated in the dialog:** at 600px sources these models
+  *invent* detail rather than recovering it. 2× generally holds up on comic line
+  art; 4× starts looking synthetic. For a cover you care about, a real high-res
+  scan through **Replace cover** still beats any upscale.
+
 ## 2026-07-31 — Add-modal fixes: recoverable image choice, and focus on open
 
 - **Picking the wrong image had no way back.** Reported from real use. The

@@ -144,6 +144,13 @@ export const Filter = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+export const Sparkles = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M9 3 10.5 7.5 15 9l-4.5 1.5L9 15l-1.5-4.5L3 9l4.5-1.5Z" />
+    <path d="M17 13l.9 2.6L20.5 16.5l-2.6.9L17 20l-.9-2.6-2.6-.9 2.6-.9Z" />
+  </Icon>
+);
+
 export const ImageIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <rect x="3" y="3" width="18" height="18" rx="2" />

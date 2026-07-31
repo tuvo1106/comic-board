@@ -3,7 +3,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBoards, useComic, useDeleteComic, useRestoreComic, useUpdateComic } from "@/lib/client-api";
+import {
+  useBoards,
+  useComic,
+  useDeleteComic,
+  useRestoreComic,
+  useRevertUpscale,
+  useUpdateComic,
+  useUpscalerInfo,
+} from "@/lib/client-api";
 import { navOrder } from "@/lib/nav-order";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import type { ComicDTO } from "@/lib/types";
@@ -13,6 +21,7 @@ import { StarRating } from "@/components/ui/StarRating";
 import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataForm";
 import { BoardMembershipList } from "@/components/board/BoardMembershipList";
 import { ReplaceCoverDialog } from "@/components/detail/ReplaceCoverDialog";
+import { UpscaleDialog } from "@/components/detail/UpscaleDialog";
 import {
   Check,
   ChevronLeft,
@@ -20,6 +29,7 @@ import {
   ImageIcon,
   Pencil,
   Plus,
+  Sparkles,
   Trash,
   X,
 } from "@/components/ui/icons";
@@ -53,6 +63,9 @@ export function ComicDetail({ id, asModal }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [upscaling, setUpscaling] = useState(false);
+  const { data: upscaler } = useUpscalerInfo();
+  const revertUpscale = useRevertUpscale();
   const [form, setForm] = useState<ComicFormValue | null>(null);
   // Which field to focus once the form mounts — set when the user clicks
   // directly on a display-mode field instead of the global Edit button.
@@ -279,15 +292,33 @@ export function ComicDetail({ id, asModal }: Props) {
             <div className="aspect-[2/3] h-[45vh] max-w-full animate-pulse rounded-lg bg-surface-2 md:h-[76vh]" />
           )}
           {comic && (
-            <button
-              onClick={() => setReplacing(true)}
-              // Above the cover's own z-10: this overlays the image on purpose,
-              // and without an explicit layer it sits under the (now
-              // positioned) cover and stops being clickable at all.
-              className="absolute bottom-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
-            >
-              <ImageIcon className="h-4 w-4" /> Replace cover
-            </button>
+            // Above the cover's own z-10: these overlay the image on purpose,
+            // and without an explicit layer they sit under the (now positioned)
+            // cover and stop being clickable at all.
+            <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setReplacing(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
+                >
+                  <ImageIcon className="h-4 w-4" /> Replace cover
+                </button>
+                {upscaler?.available && (
+                  <button
+                    onClick={() => setUpscaling(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
+                  >
+                    <Sparkles className="h-4 w-4" /> Upscale
+                  </button>
+                )}
+              </div>
+              {/* The deciding factor for whether upscaling is worth it, so it
+                  sits with the actions rather than buried in the metadata. */}
+              <p className="rounded bg-black/50 px-1.5 py-0.5 text-[11px] text-white/80 backdrop-blur">
+                {comic.width} × {comic.height}
+                {comic.upscaled && " · upscaled"}
+              </p>
+            </div>
           )}
         </div>
 
@@ -395,6 +426,26 @@ export function ComicDetail({ id, asModal }: Props) {
               <Field label="Boards">
                 <BoardsField comicId={id} boardIds={comic.boardIds} onOpenBoard={close} />
               </Field>
+
+              {/* Only rendered once there's actually something to revert to —
+                  the kept pre-upscale cover. */}
+              {comic.upscaled && (
+                <button
+                  type="button"
+                  disabled={revertUpscale.isPending}
+                  onClick={async () => {
+                    try {
+                      await revertUpscale.mutateAsync(id);
+                      toast("Reverted to the original cover", "success");
+                    } catch (e) {
+                      toast((e as Error).message, "error");
+                    }
+                  }}
+                  className="text-xs text-muted underline underline-offset-2 transition hover:text-fg disabled:opacity-50"
+                >
+                  {revertUpscale.isPending ? "Reverting…" : "Revert to the original cover"}
+                </button>
+              )}
             </motion.div>
           ) : null}
 
@@ -478,6 +529,9 @@ export function ComicDetail({ id, asModal }: Props) {
 
       {comic && (
         <ReplaceCoverDialog comic={comic} open={replacing} onClose={() => setReplacing(false)} />
+      )}
+      {comic && (
+        <UpscaleDialog comic={comic} open={upscaling} onClose={() => setUpscaling(false)} />
       )}
     </div>
   );

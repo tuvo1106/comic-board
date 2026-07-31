@@ -48,6 +48,11 @@ export const comics = sqliteTable("comics", {
   // deletedAt IS NULL; actual row + file removal is deferred to a sweep of
   // rows deleted more than 24h ago (see sweepDeletedComics in queries.ts).
   deletedAt: integer("deleted_at"),
+  // Set when an upscale is accepted, holding the cover it replaced so it can be
+  // reverted. Null means "never upscaled" — and it is only ever written once,
+  // so upscaling twice still reverts to the true original rather than to an
+  // intermediate generated one.
+  originalImagePath: text("original_image_path"),
 }, (t) => [
   // `listComics` — the app's hottest read: user's comics in board order
   // (WHERE user_id = ? AND deleted_at IS NULL ORDER BY position). Ordering
