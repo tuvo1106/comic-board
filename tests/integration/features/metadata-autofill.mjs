@@ -527,6 +527,95 @@ export async function metadataAutofill({ p, ck, sleep }) {
     const afterOwnKept = await readDetailsStep();
     ck(afterOwnKept.hasPreview, "details-only does NOT discard an image you supplied yourself");
     ck(afterOwnKept.saveDisabled === false, "so saving stays available");
+
+    // --- Picking the wrong image must be recoverable -----------------------
+    // The dropzone renders only when there's no preview, so before this the
+    // first image you chose was the one you were stuck with: no way to clear or
+    // swap it short of closing the modal, which loses the metadata too.
+    ck(
+      await p.evaluate(() =>
+        [...document.querySelectorAll("label")].some((l) =>
+          l.textContent.includes("Choose a different image"),
+        ),
+      ),
+      "a previewed image offers a way to swap it",
+    );
+
+    // A visibly different second image, so "it changed" is checkable rather
+    // than assumed — 2x2 red vs the 1x1 used above.
+    const altPng = path.join(DATA_DIR, "replacement-cover.png");
+    fs.writeFileSync(
+      altPng,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8BQz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC",
+        "base64",
+      ),
+    );
+    const beforeSwap = await p.$eval("img[alt='Preview']", (el) => el.naturalWidth);
+    const replaceInput = await p.$("label input[type='file']");
+    await replaceInput.uploadFile(altPng);
+    await sleep(900);
+    const afterSwap2 = await p.evaluate(() => {
+      const img = document.querySelector("img[alt='Preview']");
+      const save = [...document.querySelectorAll("button")].find((b) =>
+        /^Save cover$/.test(b.textContent.trim()),
+      );
+      const el = [...document.querySelectorAll("label")].find((l) =>
+        l.textContent.trim().startsWith("Series"),
+      );
+      return {
+        width: img?.naturalWidth ?? null,
+        series: el?.parentElement.querySelector("input")?.value ?? null,
+        saveDisabled: save ? save.disabled : null,
+      };
+    });
+    ck(
+      afterSwap2.width !== beforeSwap && afterSwap2.width === 2,
+      `choosing a different image actually replaces it (${beforeSwap}px -> ${afterSwap2.width}px)`,
+    );
+    ck(
+      afterSwap2.series === "Stub Detective Comics",
+      `and keeps the metadata (got "${afterSwap2.series}")`,
+    );
+    ck(afterSwap2.saveDisabled === false, "and saving stays available");
+    await p.keyboard.press("Escape");
+    await sleep(500);
+
+    // Replacing one entry of a multi-file batch must swap only that entry —
+    // `addFiles` starts a fresh queue, which would silently drop the rest.
+    // No other test drives the modal's multi-file queue at all.
+    await openModal();
+    await clickContaining("Upload image");
+    await sleep(300);
+    const batchInput = await p.$("input[type='file']");
+    await batchInput.uploadFile(tmpPng, altPng); // 1px then 2px
+    await sleep(900);
+    const batch = await p.evaluate(() => ({
+      counter: [...document.querySelectorAll("p")]
+        .map((n) => n.textContent.trim())
+        .find((t) => /^\d+ of \d+$/.test(t)),
+      width: document.querySelector("img[alt='Preview']")?.naturalWidth ?? null,
+    }));
+    ck(batch.counter === "1 of 2", `a multi-file batch queues them (got "${batch.counter}")`);
+    ck(batch.width === 1, `and previews the first (${batch.width}px)`);
+
+    const swapInput = await p.$("label input[type='file']");
+    await swapInput.uploadFile(altPng);
+    await sleep(900);
+    const afterBatchSwap = await p.evaluate(() => ({
+      counter: [...document.querySelectorAll("p")]
+        .map((n) => n.textContent.trim())
+        .find((t) => /^\d+ of \d+$/.test(t)),
+      width: document.querySelector("img[alt='Preview']")?.naturalWidth ?? null,
+    }));
+    ck(
+      afterBatchSwap.counter === "1 of 2",
+      `swapping one entry leaves the queue intact (got "${afterBatchSwap.counter}")`,
+    );
+    ck(
+      afterBatchSwap.width === 2,
+      `while the current entry's image did change (${afterBatchSwap.width}px)`,
+    );
     await p.keyboard.press("Escape");
     await sleep(500);
 

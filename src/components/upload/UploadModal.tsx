@@ -81,8 +81,9 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     return () => URL.revokeObjectURL(previewSrc);
   }, [previewSrc]);
 
-  const addFiles = (list: FileList | File[]) => {
-    const incoming = Array.from(list).filter((f) => {
+  /** Drop anything unsupported, toasting why. Shared by add and replace. */
+  const accepted = (list: FileList | File[]) =>
+    Array.from(list).filter((f) => {
       if (!ACCEPT.includes(f.type)) {
         toast(`${f.name}: unsupported type`, "error");
         return false;
@@ -93,6 +94,24 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
       }
       return true;
     });
+
+  /**
+   * Swap the image for the entry being edited, leaving the rest of the queue
+   * alone — unlike `addFiles`, which starts a fresh batch.
+   *
+   * Picking the wrong file had no way back: the dropzone renders only when
+   * there's no preview, so the first image you chose was the one you were stuck
+   * with short of closing the modal and losing the metadata with it.
+   */
+  const replaceCurrentFile = (list: FileList | File[]) => {
+    const [next] = accepted(list);
+    if (!next) return;
+    setFiles((fs) => (fs.length === 0 ? [next] : fs.map((f, i) => (i === index ? next : f))));
+    setCoverFromProvider(false); // the user's own file now, not the provider's
+  };
+
+  const addFiles = (list: FileList | File[]) => {
+    const incoming = accepted(list);
     if (incoming.length === 0) return;
     setFiles(incoming);
     setIndex(0);
@@ -240,10 +259,13 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
             {/* Preview — or the dropzone, when details arrived without an image */}
             <div className="space-y-3">
               {previewSrc ? (
+                <>
                 <div className="overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={previewSrc} alt="Preview" className="h-auto w-full object-contain" />
                 </div>
+                <ReplaceImageButton onFile={replaceCurrentFile} />
+                </>
               ) : (
                 <Dropzone {...dropzoneProps} compact />
               )}
@@ -338,6 +360,34 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
         </div>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * Swap the previewed image for a different one. A plain `label`-wrapped file
+ * input rather than a button, so it needs no ref or imperative `.click()`.
+ *
+ * Single-file by design: this replaces the entry you're editing, so accepting a
+ * multi-select here would be ambiguous — starting a fresh batch is what the
+ * dropzone on the choose step is for.
+ */
+function ReplaceImageButton({ onFile }: { onFile: (list: FileList) => void }) {
+  return (
+    <label className="block cursor-pointer rounded-lg border border-border px-3 py-1.5 text-center text-xs text-muted transition hover:border-muted hover:text-fg">
+      Choose a different image
+      <input
+        type="file"
+        accept={ACCEPT.join(",")}
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) onFile(e.target.files);
+          // Clearing the value is what lets you re-pick the *same* file after a
+          // rejected type/size — without it the input reports no change and the
+          // retry silently does nothing. Same guard as ReplaceCoverDialog.
+          e.target.value = "";
+        }}
+      />
+    </label>
   );
 }
 

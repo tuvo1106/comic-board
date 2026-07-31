@@ -4,6 +4,35 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-31 — Add-modal fixes: recoverable image choice, and focus on open
+
+- **Picking the wrong image had no way back.** Reported from real use. The
+  details step's dropzone renders only when there's *no* preview, so the first
+  image you chose was the one you were stuck with — no clear, no swap, short of
+  closing the modal, which threw the metadata away with it. There's now a
+  **Choose a different image** control under the preview.
+  It swaps only the entry being edited, rather than reusing `addFiles` (which
+  starts a fresh batch and would silently drop the rest of a multi-file queue).
+  Re-selecting the *same* file after a rejected type/size works too — the input
+  clears its value, or the browser reports no change and the retry does nothing.
+  This is the same root gap as the details-only bug fixed earlier today: "has an
+  image" was treated as "is finished with images".
+- **Add now opens with the caret in the search box.** Search is the default mode
+  and the first thing you do there, but it took a click first. The provider
+  panel takes an opt-in `autoFocus`, passed from the choose step and from
+  `ReplaceCoverDialog`'s search tab (which mounts only on an explicit tab
+  switch) — but *not* the details step, where you've moved past searching and
+  grabbing focus would fight you. `Dialog` already defers to a child's
+  `autoFocus` before focusing the panel, and captures its focus-restore target
+  during render precisely so a child can't clobber it, so this cooperates with
+  the trap rather than racing it.
+- Both covered in `metadata-autofill.mjs`. The focus test asserts the caret
+  landed *and* that typing with no click reaches the box — focus can be set and
+  stolen a frame later, and only the typing check catches that. The image test
+  compares `naturalWidth` across the swap rather than trusting that something
+  changed, and the multi-file case is now driven for the first time anywhere in
+  the suite, since nothing else exercised the modal's queue.
+
 ## 2026-07-31 — All server-side logging goes to the log file
 
 - **The Metron diagnostics now land in `data/logs/`, like everything else.**
