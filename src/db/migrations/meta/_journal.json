@@ -36,6 +36,13 @@
       "when": 1785342981535,
       "tag": "0004_abnormal_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785464082522,
+      "tag": "0005_fast_ulik",
+      "breakpoints": true
     }
   ]
 }

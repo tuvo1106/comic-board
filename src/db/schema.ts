@@ -1,4 +1,5 @@
 import {
+  index,
   integer,
   primaryKey,
   real,
@@ -6,6 +7,13 @@ import {
   text,
 } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
+
+/**
+ * Indexes below are added per query, not per column. The join tables
+ * (`comic_authors` etc.) deliberately get none: they're only ever entered by
+ * `comic_id`, which is already the leading column of their composite primary
+ * key, and nothing queries them by the name-side id.
+ */
 
 /**
  * A single comic cover + its metadata.
@@ -40,7 +48,18 @@ export const comics = sqliteTable("comics", {
   // deletedAt IS NULL; actual row + file removal is deferred to a sweep of
   // rows deleted more than 24h ago (see sweepDeletedComics in queries.ts).
   deletedAt: integer("deleted_at"),
-});
+}, (t) => [
+  // `listComics` — the app's hottest read: user's comics in board order
+  // (WHERE user_id = ? AND deleted_at IS NULL ORDER BY position). Ordering
+  // `position` second lets the index satisfy the sort, not just the filter.
+  index("comics_user_position_idx").on(t.userId, t.position),
+  // `sweepDeletedComics` — the only query that looks at deleted rows
+  // (WHERE deleted_at IS NOT NULL AND deleted_at < ?), once per server start.
+  index("comics_deleted_at_idx").on(t.deletedAt),
+  // `renamePublisher` repoints every comic on a publisher row, and the
+  // publisher name join in `loadRelations` reads this column per comic.
+  index("comics_publisher_idx").on(t.publisherId),
+]);
 
 /** A user-created board. "My Comics" is virtual and never has a row here. */
 export const boards = sqliteTable("boards", {
@@ -50,7 +69,11 @@ export const boards = sqliteTable("boards", {
   name: text("name").notNull(),
   tabPosition: real("tab_position").notNull(),
   createdAt: integer("created_at").notNull(),
-});
+}, (t) => [
+  // `listBoards` — WHERE user_id = ? ORDER BY tab_position, on every page load
+  // that renders the tab strip.
+  index("boards_user_tab_idx").on(t.userId, t.tabPosition),
+]);
 
 /** Membership of a comic in a custom board, with a per-board sort key. */
 export const boardComics = sqliteTable(
@@ -65,7 +88,15 @@ export const boardComics = sqliteTable(
     position: real("position").notNull(),
     addedAt: integer("added_at").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.boardId, t.comicId] })],
+  (t) => [
+    primaryKey({ columns: [t.boardId, t.comicId] }),
+    // The one join table that *does* need an index. Its PK leads with
+    // `board_id`, so the reverse lookup can't use it — and two hot paths do
+    // exactly that: `loadRelations` reads a comic's board memberships
+    // (WHERE comic_id IN (…)), and deleting a comic cascades here, which
+    // SQLite resolves by scanning the child table without this.
+    index("board_comics_comic_idx").on(t.comicId),
+  ],
 );
 
 /**
