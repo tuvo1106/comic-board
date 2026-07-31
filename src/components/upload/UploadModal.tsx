@@ -42,6 +42,10 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   // Whether a provider record has been applied to the form. Guards the reset in
   // `addFiles` — see there for why.
   const [fromProvider, setFromProvider] = useState(false);
+  // Whether the currently-held image came from a provider rather than the user.
+  // Only a provider cover may be discarded by "I'll add my own image"; a file
+  // the user chose themselves must survive it. See `useDetailsOnly`.
+  const [coverFromProvider, setCoverFromProvider] = useState(false);
   const [selectedBoards, setSelectedBoards] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
 
@@ -52,6 +56,7 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     setIndex(0);
     setForm(EMPTY_FORM);
     setFromProvider(false);
+    setCoverFromProvider(false);
     setSelectedBoards(defaultBoardId ? [defaultBoardId] : []);
   }, [defaultBoardId]);
 
@@ -91,6 +96,7 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
     if (incoming.length === 0) return;
     setFiles(incoming);
     setIndex(0);
+    setCoverFromProvider(false); // the user's own file now, not the provider's
     // Only clear the form for a genuinely fresh batch. This used to reset
     // unconditionally, which silently destroyed everything a provider record had
     // just filled in — so "pick the right record, then supply my own scan" threw
@@ -126,12 +132,33 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
   // one. Moves the modal into the details step.
   const applyCover = (file: File) => {
     setFiles((fs) => (fs.length === 0 ? [file] : fs.map((f, i) => (i === index ? file : f))));
+    setCoverFromProvider(true);
     setStep("details");
   };
 
-  // Take the record's details and go on without its image — the user supplies
-  // their own in the details step's dropzone.
-  const useDetailsOnly = () => setStep("details");
+  /**
+   * Take the record's details and go on without its image — the user supplies
+   * their own in the details step's dropzone.
+   *
+   * Dropping the held cover is the part that makes this work a second time
+   * round. The details step hosts its own copy of the search panel, so the
+   * common flow is: import a provider cover, realise it's the wrong variant,
+   * search again, and pick "I'll add my own image". Before, this only set a step
+   * we were already on, so the first cover stayed — and since the dropzone
+   * renders only when there's no preview, there was no way to supply the
+   * replacement. A dead end that looked like the button doing nothing.
+   *
+   * Guarded twice on purpose: a file the *user* chose is never discarded (the
+   * provider only filled in fields for it), and neither is a multi-file batch,
+   * where dropping one entry would renumber the rest mid-queue.
+   */
+  const useDetailsOnly = () => {
+    if (coverFromProvider && files.length === 1) {
+      setFiles([]);
+      setCoverFromProvider(false);
+    }
+    setStep("details");
+  };
 
   const saveCurrent = async () => {
     const file = files[index];

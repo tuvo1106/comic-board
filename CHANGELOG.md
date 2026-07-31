@@ -4,6 +4,30 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-31 — Fixed: couldn't swap an imported cover for your own
+
+- **"I'll add my own image" did nothing once a cover was already imported.**
+  Reported from real use. The details step hosts its own copy of the search
+  panel, so the natural flow is: import a provider cover, notice it's the wrong
+  variant, search again, pick the record, and choose *Use details only — I'll
+  add my own image*. `useDetailsOnly` was just `setStep("details")` — a step you
+  were already on — so it never released the held cover. And because the
+  dropzone renders only when there's no preview, there was then no way to supply
+  the replacement: a dead end that read as the button being broken.
+  It now drops the held cover, so the dropzone comes back. Guarded twice: an
+  image the **user** chose is never discarded (the provider only filled in
+  fields around it, and throwing it away would destroy the one thing this flow
+  exists to preserve), and neither is a multi-file batch, where removing one
+  entry would renumber the rest mid-queue. Tracked with a new
+  `coverFromProvider` flag, since "has an image" and "that image came from the
+  provider" are different questions — the same distinction that split `Step`
+  from `files.length > 0` when details-only first shipped.
+- Covered in `metadata-autofill.mjs`, which had extensive details-only coverage
+  that all started from the *choose* step with no cover imported — so the second
+  time round, the case actually being reported, was the one path it missed. Both
+  directions are asserted now: a provider cover gets cleared, a user's own file
+  survives. Verified to fail against the pre-fix component.
+
 ## 2026-07-31 — Fixed: the cover-date filter wiped what you typed
 
 - **Typing a date into the Date facet reset the field.** Reported from real use,

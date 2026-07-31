@@ -438,6 +438,74 @@ export async function metadataAutofill({ p, ck, sleep }) {
     await p.keyboard.press("Escape");
     await sleep(500);
 
+    // --- Swapping an ALREADY-IMPORTED cover for your own -------------------
+    // The details step hosts its own copy of the search panel, so the real flow
+    // is: import a provider cover, notice it's the wrong variant, search again,
+    // and pick "I'll add my own image". `useDetailsOnly` only set a step we were
+    // already on, so the first cover survived — and since the dropzone renders
+    // only when there's no preview, there was no way to supply the replacement.
+    // A dead end that read as the button doing nothing.
+    const readDetailsStep = () =>
+      p.evaluate(() => {
+        const val = (label) => {
+          const el = [...document.querySelectorAll("label")].find((l) =>
+            l.textContent.trim().startsWith(label),
+          );
+          return el?.parentElement.querySelector("input")?.value ?? null;
+        };
+        const save = [...document.querySelectorAll("button")].find((b) =>
+          /^Save cover$/.test(b.textContent.trim()),
+        );
+        return {
+          series: val("Series"),
+          hasPreview: !!document.querySelector("img[alt='Preview']"),
+          dropzone: document.body.textContent.includes("Add your cover"),
+          saveDisabled: save ? save.disabled : null,
+        };
+      });
+
+    await openAutofill();
+    await clickContaining("Stub Detective Comics");
+    await sleep(1200);
+    await clickByText("Use this cover");
+    await sleep(900);
+    ck((await readDetailsStep()).hasPreview, "an imported provider cover previews in the details step");
+
+    // Search again from *inside* the details step, then take details only.
+    await runSearch("stub");
+    await clickContaining("Stub Detective Comics");
+    await sleep(1200);
+    await clickContaining("Use details only");
+    await sleep(800);
+
+    const afterSwap = await readDetailsStep();
+    ck(!afterSwap.hasPreview, "'I'll add my own image' clears the already-imported cover");
+    ck(afterSwap.dropzone, "and the dropzone returns so a replacement can be supplied");
+    ck(
+      afterSwap.series === "Stub Detective Comics",
+      `while keeping the imported details (got "${afterSwap.series}")`,
+    );
+    ck(afterSwap.saveDisabled === true, "saving is blocked again until the replacement arrives");
+
+    // The other half of the guard: a file the USER chose must survive the same
+    // action. The provider only filled in fields around it, so discarding it
+    // would throw away the one thing details-only exists to let you keep.
+    const ownInput = await p.$("input[type='file']");
+    await ownInput.uploadFile(tmpPng);
+    await sleep(900);
+    ck((await readDetailsStep()).hasPreview, "your own image previews after adding it");
+
+    await runSearch("stub");
+    await clickContaining("Stub Detective Comics");
+    await sleep(1200);
+    await clickContaining("Use details only");
+    await sleep(800);
+    const afterOwnKept = await readDetailsStep();
+    ck(afterOwnKept.hasPreview, "details-only does NOT discard an image you supplied yourself");
+    ck(afterOwnKept.saveDisabled === false, "so saving stays available");
+    await p.keyboard.press("Escape");
+    await sleep(500);
+
     // On a record with no covers at all, details-only is the only way forward,
     // so it takes over as the primary action instead of leaving a dead end.
     await openAutofill();
