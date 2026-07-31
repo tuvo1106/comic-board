@@ -4,6 +4,48 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-30 — Release hardening ahead of 1.0
+
+A read-through of the whole repo rather than new features: everything below is
+a fix, a consolidation, or a test for something that had none.
+
+- **`authed()` replaces the auth preamble in every route.** All 21 handlers
+  across 15 route files opened with the identical
+  `const userId = await getUserId(req); if (!userId) return unauthorized();`.
+  `src/lib/api.ts` now exports `authed(req, fn)` alongside `handle(req, fn)`:
+  it resolves the session once and either hands the id to the handler or
+  short-circuits with a 401. Net −61 lines across the routes.
+  This also closes something the previous entry flagged and accepted: `handle()`
+  attaches `userId` to its log line via *a second* `getUserId` call, so every
+  authenticated request paid two session reads. `authed()` reuses the one it
+  already did. `handle()` keeps the old behaviour for genuinely anonymous
+  routes, and the error mapping both share moved into one `toErrorResponse`.
+- **Fixed: `db:import --replace` orphaned replaced covers on disk.** `wipeUser`
+  deleted each comic's folder as `covers/<comicId>`, but a comic id only equals
+  its cover folder until the first **Replace cover** — after that the live image
+  is at `covers/<newImageId>/`, so the wipe deleted an already-gone path and
+  left the real folder behind on every restore. It now deletes
+  `coverDir(imagePath)`, matching what `sweepDeletedComics` always did.
+  This is the same bug class as the `buildBackupZip` fix on 2026-07-28, in the
+  sibling code path that was missed; `coverDir` moved to `src/lib/storage.ts`
+  so both callers share one definition with the invariant documented on it.
+- **Tests for the three things above, plus the untested traversal guard.**
+  New `src/lib/storage.test.ts` covers `coverDir`, the `getUrl`/`keyFromUrl`
+  round-trip, and — newly — `resolve()`'s path-traversal rejection, which
+  guards a route that serves files straight off disk from a user-supplied path
+  and had no test at all. The import-orphan case is a real regression test:
+  it fails against the old delete-by-comic-id code. 210 → 227 unit tests.
+- **Repo hygiene.** `tsconfig.json` had six committed `include` entries for
+  `.next-build`, `.next-build2`, `.next-build3` — dist dirs nothing references
+  and which don't exist, auto-appended by Next when a build runs with a custom
+  `NEXT_DIST_DIR`. AGENTS.md already documents reverting that; `.gitignore` now
+  globs `/.next*` (as `eslint.config.mjs` already did) so a stray one can't be
+  committed again. Added an `npm run typecheck` script — CI and AGENTS.md both
+  spelled out `npx tsc --noEmit` — and dropped two genuinely unused exports
+  (`nowMs`, `BoardRow`). `.env.example` now documents `DATA_DIR`,
+  `DATABASE_PATH`, the `SEED_USER_*` trio, and `IMPORT_USER_EMAIL`, which were
+  real knobs mentioned only in prose.
+
 ## 2026-07-30 — Provider observability, and a repo-wide docs cleanup ahead of 1.0
 
 - **Every API route now logs to a daily-rotating file.** Started as "log the

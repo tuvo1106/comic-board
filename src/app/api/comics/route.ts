@@ -1,16 +1,13 @@
-import { handle, badRequest, ok, unauthorized } from "@/lib/api";
+import { authed, badRequest, ok } from "@/lib/api";
 import { comicMetaSchema } from "@/lib/schemas";
 import { processUpload } from "@/lib/images";
 import { createComic, listComics } from "@/db/queries";
-import { getUserId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 /** GET /api/comics?board=<id> — list comics, optionally scoped to a board. */
 export async function GET(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const url = new URL(req.url);
     const board = url.searchParams.get("board");
     return ok(listComics(userId, board));
@@ -23,9 +20,7 @@ export async function GET(req: Request) {
  *   - meta: JSON string matching comicMetaSchema
  */
 export async function POST(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const form = await req.formData();
     const file = form.get("file");
     const metaRaw = form.get("meta");

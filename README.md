@@ -59,6 +59,8 @@ Uploaded images and the SQLite database live under `./data` (gitignored).
 | `npm run db:import <zip> -- --replace` | Restore a collection from an exported backup zip |
 | `npm test` | Unit tests (vitest) |
 | `npm run test:integration` | Browser E2E against an isolated DB (puppeteer) |
+| `npm run typecheck` | `tsc --noEmit` (kept separate from `build`; see Requirements) |
+| `npm run lint` | ESLint |
 
 ## How it's organized
 

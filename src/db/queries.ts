@@ -2,7 +2,7 @@ import { and, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
 import { positionAfterMax } from "@/lib/positions";
-import { storage } from "@/lib/storage";
+import { coverDir, storage } from "@/lib/storage";
 import type { BoardDTO, ComicDTO, MetaDTO } from "@/lib/types";
 import type { ProcessedImage } from "@/lib/images";
 import { db } from "./client";
@@ -439,11 +439,6 @@ export async function replaceComicCover(
   const oldDir = coverDir(row.imagePath);
   if (oldDir !== coverDir(image.imagePath)) await storage.deletePrefix(oldDir).catch(() => {});
   return dto;
-}
-
-/** Folder of a cover key: "covers/<id>/full.webp" -> "covers/<id>". */
-function coverDir(imagePath: string): string {
-  return imagePath.replace(/\/[^/]+$/, "");
 }
 
 export function updateComicPosition(

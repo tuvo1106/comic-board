@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import {
   integer,
   primaryKey,
@@ -158,7 +157,3 @@ export const comicTags = sqliteTable(
 );
 
 export type ComicRow = typeof comics.$inferSelect;
-export type BoardRow = typeof boards.$inferSelect;
-
-// Convenience for a raw timestamp default if ever needed inline.
-export const nowMs = sql`(unixepoch() * 1000)`;

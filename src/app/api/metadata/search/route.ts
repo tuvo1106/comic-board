@@ -1,5 +1,4 @@
-import { badRequest, handle, ok, unauthorized } from "@/lib/api";
-import { getUserId } from "@/lib/session";
+import { authed, badRequest, ok } from "@/lib/api";
 import { getProvider, resolveProvider } from "@/lib/metadata";
 import { cached } from "@/lib/metadata/cache";
 import { parseSearchQuery } from "@/lib/metadata/query";
@@ -12,10 +11,7 @@ export const runtime = "nodejs";
  * the issue. Auth-gated; keys stay server-side; results are cached.
  */
 export async function GET(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
-
+  return authed(req, async () => {
     const url = new URL(req.url);
     const q = (url.searchParams.get("q") ?? "").trim();
     if (!q) return badRequest("A search term is required");

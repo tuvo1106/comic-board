@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { handle, notFound, ok, unauthorized } from "@/lib/api";
+import { authed, notFound, ok } from "@/lib/api";
 import { renamePublisher } from "@/db/queries";
-import { getUserId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -12,9 +11,7 @@ const renameSchema = z.object({
 
 /** Rename a publisher; the new name applies to every comic that uses it. */
 export async function PATCH(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const { from, to } = renameSchema.parse(await req.json());
     const renamed = renamePublisher(userId, from, to);
     return renamed ? ok({ ok: true }) : notFound("Publisher not found");

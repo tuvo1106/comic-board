@@ -1,7 +1,6 @@
-import { handle, notFound, ok, unauthorized } from "@/lib/api";
+import { authed, notFound, ok } from "@/lib/api";
 import { positionUpdateSchema } from "@/lib/schemas";
 import { updateComicPosition } from "@/db/queries";
-import { getUserId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -9,9 +8,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** PATCH /api/comics/:id/position — { position, boardId? } */
 export async function PATCH(req: Request, { params }: Params) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const { id } = await params;
     const { position, boardId } = positionUpdateSchema.parse(await req.json());
     const done = updateComicPosition(userId, id, position, boardId ?? null);

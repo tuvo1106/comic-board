@@ -24,7 +24,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       # The react-hooks rules here catch real bugs that tsc can't (refs read
       # during render, setState cascades in effects). Two such errors sat on main

@@ -1,8 +1,7 @@
-import { badRequest, handle, notFound, ok, unauthorized } from "@/lib/api";
+import { authed, badRequest, notFound, ok } from "@/lib/api";
 import { processUpload } from "@/lib/images";
 import { getComic, replaceComicCover } from "@/db/queries";
-import { getUserId } from "@/lib/session";
-import { storage } from "@/lib/storage";
+import { coverDir, storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -14,9 +13,7 @@ type Params = { params: Promise<{ id: string }> };
  * repoints the comic, deleting the old image (see `replaceComicCover`).
  */
 export async function PUT(req: Request, { params }: Params) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const { id } = await params;
 
     // Ownership check first, so a non-image or non-owned request never processes
@@ -40,7 +37,7 @@ export async function PUT(req: Request, { params }: Params) {
     if (!updated) {
       // The comic was removed between the ownership check and the swap — clean
       // up the image we just wrote so it isn't orphaned on disk.
-      await storage.deletePrefix(image.imagePath.replace(/\/[^/]+$/, "")).catch(() => {});
+      await storage.deletePrefix(coverDir(image.imagePath)).catch(() => {});
       return notFound("Comic not found");
     }
     return ok(updated);

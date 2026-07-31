@@ -130,11 +130,14 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 | `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
 | `ALL /api/auth/[...all]` | better-auth handler (sign-up / sign-in / sign-out); HTTP-only session cookie. |
 
-All non-auth routes resolve the session (`getUserId`) and **401 when absent**;
-every query is scoped to that user id.
+All non-auth routes resolve the session and **401 when absent**; every query is
+scoped to that user id. In practice that means wrapping the handler in
+`src/lib/api.ts`'s `authed(req, (userId) => …)`, which resolves the session once
+and 401s for you — the plain `handle(req, …)` form below is for routes that
+genuinely serve anonymous requests.
 
 **Request logging:** every route above except the auth catch-all goes through
-`src/lib/api.ts`'s `handle()` wrapper, which — beyond mapping thrown errors to
+`src/lib/api.ts`'s `handle()`/`authed()` wrappers, which — beyond mapping thrown errors to
 the right status — logs one JSON line (`method`, `path`, `status`, `ms`,
 `userId`) per request to `DATA_DIR/logs/<date>.log`, one file per calendar day,
 7 days kept (`winston` + `winston-daily-rotate-file`, `src/lib/logger.ts`). The
@@ -312,7 +315,9 @@ for movement, durations for fades.
   every breakdown sums to the collection), id/name helpers, **`handle()`'s
   request logging** (spies `logger.info`, since it would otherwise write a real
   line to `data/logs` on every test run — a logging failure must never break
-  the actual response, asserted directly).
+  the actual response, asserted directly), **`authed()`'s 401 short-circuit and
+  single session resolution**, and **storage-key mapping** (`coverDir`, the
+  url↔key round-trip, and `resolve()`'s path-traversal rejection).
 - **Integration (`npm run test:integration`, puppeteer):** drives the real app in
   a headless browser against an **isolated** db (`./data/test`), port 3940, and
   build dir (`.next-itest`), all torn down after — never touches dev data. Covers
@@ -368,7 +373,7 @@ Ordered; each is a self-contained slice.
   account claims any genuinely unowned rows (e.g. a real pre-auth migration).
 - **Scoping:** every query in `db/queries.ts` takes a `userId` and filters/sets by
   it (a null userId = the unowned pool for seeding). API routes resolve the
-  session (`getUserId`) and 401 when absent.
+  session via `authed()` and 401 when absent.
 - **UI:** `/signup` and `/login` pages, a user menu with logout in the top bar,
   `middleware.ts` optimistic cookie gate redirecting unauthenticated page views to
   `/login`, and a client 401 → `/login` redirect.

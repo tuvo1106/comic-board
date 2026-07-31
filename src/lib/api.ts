@@ -21,17 +21,35 @@ export function unauthorized(message = "Not signed in") {
 }
 
 /**
- * Wraps a route handler body, turning thrown errors into the right client-safe
- * response: Zod validation errors become 400s with field detail, `MetadataError`
- * passes its status and message through (an upstream provider's own message,
- * never the API key), and anything else is logged server-side and reduced to a
- * bare 500 — no internal message or stack hint reaches the client.
+ * Turn a thrown error into the right client-safe response: Zod validation
+ * errors become 400s with field detail, `MetadataError` passes its status and
+ * message through (an upstream provider's own message, never the API key), and
+ * anything else is logged server-side and reduced to a bare 500 — no internal
+ * message or stack hint reaches the client.
+ */
+function toErrorResponse(err: unknown): Response {
+  if (err instanceof ZodError) {
+    return badRequest("Validation failed", err.flatten().fieldErrors as Record<string, string[]>);
+  }
+  if (err instanceof MetadataError) {
+    // Client-safe message from an upstream metadata provider (never the key).
+    return NextResponse.json({ error: err.message }, { status: err.status });
+  }
+  console.error("API error:", err);
+  // Don't leak internal error details (messages, stack hints) to clients.
+  return NextResponse.json({ error: "Internal error" }, { status: 500 });
+}
+
+/**
+ * Wraps a route handler body with the error mapping above, and logs one
+ * `tag: "api"` line per request (method, path, status, duration, user) to the
+ * daily-rotating file log (`src/lib/logger.ts`) — every route that uses this
+ * gets it for free, present and future, rather than each handler instrumenting
+ * itself.
  *
- * Also logs one `tag: "api"` line per request (method, path, status, duration,
- * user) to the daily-rotating file log (`src/lib/logger.ts`) — every route
- * that uses `handle()` gets this for free, present and future, rather than
- * each handler instrumenting itself. `req` is only needed for that log line;
- * routes that don't care about it still just call `handle(req, async () => …)`.
+ * Use `authed()` instead for any route that requires a signed-in user; this
+ * plain form is for routes that genuinely serve anonymous requests, and it
+ * costs a session lookup purely to attach `userId` to the log line.
  */
 export async function handle(
   req: Request,
@@ -42,31 +60,48 @@ export async function handle(
   try {
     res = await fn();
   } catch (err) {
-    if (err instanceof ZodError) {
-      res = badRequest("Validation failed", err.flatten().fieldErrors as Record<string, string[]>);
-    } else if (err instanceof MetadataError) {
-      // Client-safe message from an upstream metadata provider (never the key).
-      res = NextResponse.json({ error: err.message }, { status: err.status });
-    } else {
-      console.error("API error:", err);
-      // Don't leak internal error details (messages, stack hints) to clients.
-      res = NextResponse.json({ error: "Internal error" }, { status: 500 });
-    }
+    res = toErrorResponse(err);
   }
-  await logRequest(req, res, start);
+  await logRequest(req, res, start, await getUserId(req).catch(() => null));
   return res;
 }
 
 /**
- * A second `getUserId` lookup (most handlers already call it once for
- * authorization) rather than threading the value out of every route body —
- * a duplicate indexed session read is negligible at this app's scale, and it
- * keeps every route's diff to "pass `req` in" instead of restructuring what
- * each handler returns. Never lets a logging failure break the real response.
+ * `handle()` for the common case: a route that requires a signed-in user.
+ * Resolves the session once and either hands the id to `fn` or short-circuits
+ * with a 401, replacing the `getUserId`/`if (!userId) return unauthorized()`
+ * pair that opened every authenticated handler.
+ *
+ * Resolving it here rather than inside each handler is also what lets the log
+ * line reuse the id — the plain `handle()` path has to look the session up a
+ * second time to report `userId`, which is a real duplicate read on every
+ * authenticated request.
  */
-async function logRequest(req: Request, res: Response, start: number): Promise<void> {
+export async function authed(
+  req: Request,
+  fn: (userId: string) => Promise<Response> | Response,
+): Promise<Response> {
+  const start = Date.now();
+  let userId: string | null = null;
+  let res: Response;
   try {
-    const userId = await getUserId(req).catch(() => null);
+    userId = await getUserId(req);
+    res = userId ? await fn(userId) : unauthorized();
+  } catch (err) {
+    res = toErrorResponse(err);
+  }
+  await logRequest(req, res, start, userId);
+  return res;
+}
+
+/** Never lets a logging failure break the real response. */
+async function logRequest(
+  req: Request,
+  res: Response,
+  start: number,
+  userId: string | null,
+): Promise<void> {
+  try {
     logger.info("api", {
       tag: "api",
       method: req.method,
