@@ -92,7 +92,10 @@ export function ReplaceCoverDialog({ comic, open, onClose }: Props) {
             />
           </label>
         ) : (
-          <MetadataSearch value={seed} onApply={() => {}} onUseCover={doReplace} />
+          // Mounts only when the user explicitly switches to this tab, so the
+          // caret belongs in the query box — same reasoning as the Add modal,
+          // where search is the landing mode.
+          <MetadataSearch value={seed} onApply={() => {}} onUseCover={doReplace} autoFocus />
         )}
 
         {replace.isPending && <p className="text-center text-sm text-muted">Replacing cover…</p>}
