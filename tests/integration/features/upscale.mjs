@@ -57,6 +57,46 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
     await p.evaluate(() => !!document.querySelector("[role='dialog'] svg.animate-spin")),
     "opening runs the upscale straight away",
   );
+
+  // The target size counts up from the source and sharpens as it lands. Driven
+  // by MotionValues written straight to the DOM (no React state), so the only
+  // way to know it's working is to sample the text over time — a static render
+  // of the final number would look identical in a single snapshot.
+  const digits = () =>
+    p.evaluate(() => {
+      const p2 = [...document.querySelectorAll("[role='dialog'] p")].find((n) =>
+        /→/.test(n.textContent),
+      );
+      return p2 ? p2.textContent.replace(/\s+/g, " ").trim() : null;
+    });
+  const frames = [];
+  for (let i = 0; i < 6; i++) {
+    frames.push(await digits());
+    await sleep(120);
+  }
+  const distinct = [...new Set(frames.filter(Boolean))];
+  ck(
+    distinct.length > 1,
+    `the target size animates rather than just appearing (${distinct.length} distinct frames)`,
+  );
+
+  // Direction and bounds, not the settled value: the sampling window is shorter
+  // than the animation, and racing it against the upscale (which may finish
+  // first and swap in the comparison) would make an exact-final-value assertion
+  // timing-dependent. Growing from the source toward the cap is the real claim.
+  const widthOf = (txt) => {
+    const m = txt?.match(/→\s*(\d+)\s*×\s*(\d+)px/);
+    return m ? Number(m[1]) : null;
+  };
+  const widths = frames.map(widthOf).filter((n) => n !== null);
+  ck(
+    widths.length > 1 && widths[widths.length - 1] > widths[0],
+    `counting upward, not down or static (${widths[0]} → ${widths[widths.length - 1]})`,
+  );
+  ck(
+    widths.every((w) => w >= before.width && w <= MAX_UPSCALE_WIDTH),
+    `and every frame sits between the source and the cap (${Math.min(...widths)}–${Math.max(...widths)})`,
+  );
   // The stub still runs sharp over a real image; give it room on a slow runner.
   await p.waitForFunction(() => document.body.textContent.includes("Keep it"), { timeout: 60000 });
 

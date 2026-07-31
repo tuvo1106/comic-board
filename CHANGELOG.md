@@ -81,6 +81,14 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   leaving it in `success` still holding that candidate. Reopening found it
   non-idle, skipped the run, and rendered the *previous* comparison against
   files the revert had since deleted. Opening now always starts a fresh run.
+- **The wait animates the operation.** The target size counts up from the
+  cover's real dimensions to the target over ~1.8s, blurred at first and
+  sharpening as it lands — a number growing while detail resolves, which is
+  literally what the upscale is doing. A generic shimmer would have suited any
+  loading state anywhere; this one knows what it's waiting for. Driven by
+  MotionValues written straight to the DOM rather than React state, since it
+  updates every frame. Starts settled under `prefers-reduced-motion`, which
+  `globals.css` can't cover because this is JS-driven.
 - **Testing:** the flow runs end-to-end in the browser suite against a stub
   binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
   via sharp — real route, real `processUpload`, real accept/revert, fake pixels.

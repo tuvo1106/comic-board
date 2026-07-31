@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import {
   useAcceptUpscale,
   useDiscardUpscale,
@@ -154,7 +155,8 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
               className="text-sm font-medium"
               title="Upscaling invents plausible detail rather than recovering what was lost. Your current cover is kept, so you can revert."
             >
-              {comic.width} × {comic.height} → {target.width} × {target.height}px
+              {comic.width} × {comic.height} →{" "}
+              <GrowingSize from={{ width: comic.width, height: comic.height }} to={target} />
             </p>
           </div>
         ) : (
@@ -194,6 +196,59 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * The target size, counting up from the source and sharpening as it lands.
+ *
+ * The animation is the operation: a number growing, and detail resolving out of
+ * blur. That's literally what the wait is doing, so it explains itself instead
+ * of just passing time — which a generic shimmer wouldn't.
+ *
+ * Runs once (~0.9s) and settles; the spinner carries "still working" from there.
+ * Looping it would read as a slot machine, and an upscale takes several seconds
+ * anyway, so a loop would outlast its own meaning.
+ *
+ * Driven entirely by MotionValues rather than React state: this updates every
+ * frame, and routing that through `setState` would re-render the dialog ~60
+ * times a second (and trip `react-hooks/set-state-in-effect` on the way).
+ * Motion renders a MotionValue passed as a child directly into the DOM text.
+ */
+function GrowingSize({
+  from,
+  to,
+}: {
+  from: { width: number; height: number };
+  to: { width: number; height: number };
+}) {
+  // globals.css neutralises CSS animation under reduced-motion, but this is
+  // JS-driven and wouldn't be caught — so start already settled instead.
+  const reduce = useReducedMotion();
+  const t = useMotionValue(reduce ? 1 : 0);
+  const width = useTransform(t, (v) => Math.round(from.width + (to.width - from.width) * v));
+  const height = useTransform(t, (v) => Math.round(from.height + (to.height - from.height) * v));
+  const filter = useTransform(t, (v) => `blur(${((1 - v) * 3.5).toFixed(2)}px)`);
+
+  useEffect(() => {
+    if (reduce) return;
+    // Eased-out cubic rather than the expo it started as: over this duration
+    // expo front-loads so hard that it hits ~90% in the first third and then
+    // crawls, which reads as stalling. Cubic spends its time more evenly while
+    // still settling rather than stopping dead.
+    //
+    // Roughly matched to a real upscale rather than comfortably under it. If
+    // the result lands first the count is simply cut off as the comparison
+    // swaps in — no harm, since the spinner and the numbers are both just
+    // saying "working" and the real answer has arrived.
+    const controls = animate(t, 1, { duration: 2.4, ease: [0.33, 1, 0.68, 1] });
+    return () => controls.stop();
+  }, [reduce, t]);
+
+  return (
+    <motion.span style={{ filter, display: "inline-block" }}>
+      <motion.span>{width}</motion.span> × <motion.span>{height}</motion.span>px
+    </motion.span>
   );
 }
 
