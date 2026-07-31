@@ -1,6 +1,5 @@
 import { backupFilename, buildBackupZip } from "@/lib/backup";
-import { handle, unauthorized } from "@/lib/api";
-import { getUserId } from "@/lib/session";
+import { authed } from "@/lib/api";
 
 export const runtime = "nodejs";
 
@@ -10,10 +9,7 @@ export const runtime = "nodejs";
  * personal collection is small enough not to need streaming.
  */
 export async function GET(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
-
+  return authed(req, async (userId) => {
     const zip = await buildBackupZip(userId);
     return new Response(new Uint8Array(zip), {
       headers: {

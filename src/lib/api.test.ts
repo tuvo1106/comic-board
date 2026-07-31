@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { badRequest, handle, ok } from "./api";
+import { authed, badRequest, handle, ok } from "./api";
 import { logger } from "./logger";
+import * as session from "./session";
 import { MetadataError } from "@/lib/metadata/types";
 
 // `logger.info` would otherwise write a real line to data/logs on every test
@@ -98,5 +99,79 @@ describe("handle", () => {
     await handle(req(), () => badRequest("nope"));
     expect(loggedMeta(info)).toMatchObject({ status: 400 });
     info.mockRestore();
+  });
+});
+
+describe("authed", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const signedInAs = (id: string | null) =>
+    vi.spyOn(session, "getUserId").mockResolvedValue(id);
+
+  it("hands the resolved user id to the handler", async () => {
+    signedInAs("user_123");
+    const res = await authed(req(), (userId) => ok({ userId }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ userId: "user_123" });
+  });
+
+  it("short-circuits with a 401 and never runs the handler when signed out", async () => {
+    signedInAs(null);
+    const body = vi.fn(() => ok({ reached: true }));
+    const res = await authed(req(), body);
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Not signed in" });
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("resolves the session exactly once — the log line reuses it", async () => {
+    // The whole point of authed() over handle(): the pre-refactor pairing of an
+    // in-handler getUserId with a second lookup inside logRequest meant two
+    // session reads on every authenticated request.
+    const getUserId = signedInAs("user_123");
+    const info = vi.spyOn(logger, "info").mockImplementation(() => logger);
+    await authed(req(), () => ok({}));
+    expect(getUserId).toHaveBeenCalledTimes(1);
+    expect(loggedMeta(info)).toMatchObject({ userId: "user_123" });
+  });
+
+  it("applies the same error mapping as handle (ZodError -> 400 + fields)", async () => {
+    signedInAs("user_123");
+    const schema = z.object({ name: z.string() });
+    const res = await authed(req(), (): Response => {
+      schema.parse({});
+      throw new Error("unreachable");
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Validation failed");
+    expect(body.fields).toHaveProperty("name");
+  });
+
+  it("reduces an unexpected handler throw to a bare 500", async () => {
+    signedInAs("user_123");
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await authed(req(), () => {
+      throw new Error("internal detail that must not reach the client");
+    });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Internal error" });
+    errSpy.mockRestore();
+  });
+
+  it("500s rather than leaking when the session lookup itself throws", async () => {
+    vi.spyOn(session, "getUserId").mockRejectedValue(new Error("db is down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await authed(req(), () => ok({ reached: true }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Internal error" });
+    errSpy.mockRestore();
+  });
+
+  it("logs the 401 with userId: null", async () => {
+    signedInAs(null);
+    const info = vi.spyOn(logger, "info").mockImplementation(() => logger);
+    await authed(req(), () => ok({}));
+    expect(loggedMeta(info)).toMatchObject({ status: 401, userId: null });
   });
 });

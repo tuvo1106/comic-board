@@ -30,7 +30,7 @@ checkbox items — work it like this:
 
 ## Verify commands
 
-- `npx tsc --noEmit` — typecheck
+- `npm run typecheck` — typecheck (`tsc --noEmit`)
 - `npm test` — unit suite (vitest). **Run the whole suite before committing**,
   not just the changed file's subset.
 - `npm run test:integration` — browser E2E (puppeteer). Spins up its own

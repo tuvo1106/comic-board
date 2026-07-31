@@ -1,5 +1,4 @@
-import { badRequest, handle, unauthorized } from "@/lib/api";
-import { getUserId } from "@/lib/session";
+import { authed, badRequest } from "@/lib/api";
 import { fetchCover } from "@/lib/metadata/covers";
 
 export const runtime = "nodejs";
@@ -10,10 +9,7 @@ export const runtime = "nodejs";
  * server-side (SSRF guard in `fetchCover`). Streams the raw image bytes.
  */
 export async function GET(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
-
+  return authed(req, async () => {
     const raw = new URL(req.url).searchParams.get("url");
     if (!raw) return badRequest("A cover url is required");
 

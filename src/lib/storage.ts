@@ -65,3 +65,16 @@ class LocalStorage implements StorageAdapter {
 
 export const storage: StorageAdapter = new LocalStorage();
 export { COVERS_ROOT };
+
+/**
+ * Folder of a cover key: "covers/<id>/full.webp" -> "covers/<id>".
+ *
+ * Always derive a comic's cover folder from its stored `imagePath`, never from
+ * its comic id. The two match only until the cover is replaced: a new comic's
+ * id *is* its original image id, but `replaceComicCover` writes to a fresh
+ * `covers/<newImageId>/` folder and leaves the comic id alone. Deleting by
+ * comic id therefore misses the live folder and orphans it on disk.
+ */
+export function coverDir(imagePath: string): string {
+  return imagePath.replace(/\/[^/]+$/, "");
+}

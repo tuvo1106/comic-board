@@ -1,6 +1,9 @@
 /node_modules
-/.next
-/.next-itest
+# Any Next build output, however the dist dir is named (NEXT_DIST_DIR) — the
+# enumerated form missed `.next-manual` and `.next-build*`, which the
+# throwaway-instance recipes in AGENTS.md create. Glob, so the next dist dir
+# someone invents is covered too (eslint.config.mjs ignores the same shape).
+/.next*
 /out
 /build
 next-env.d.ts

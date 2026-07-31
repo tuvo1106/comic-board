@@ -1,5 +1,4 @@
-import { badRequest, handle, ok, unauthorized } from "@/lib/api";
-import { getUserId } from "@/lib/session";
+import { authed, badRequest, ok } from "@/lib/api";
 import { getProvider, resolveProvider } from "@/lib/metadata";
 import { cached } from "@/lib/metadata/cache";
 
@@ -11,10 +10,7 @@ export const runtime = "nodejs";
  * candidate; `issue` is optional (unused by the issue-grain Metron provider).
  */
 export async function GET(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
-
+  return authed(req, async () => {
     const url = new URL(req.url);
     const ref = (url.searchParams.get("ref") ?? "").trim();
     if (!ref) return badRequest("A candidate ref is required");

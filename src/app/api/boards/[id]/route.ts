@@ -1,7 +1,6 @@
-import { handle, notFound, ok, unauthorized } from "@/lib/api";
+import { authed, notFound, ok } from "@/lib/api";
 import { boardUpdateSchema } from "@/lib/schemas";
 import { deleteBoard, updateBoard } from "@/db/queries";
-import { getUserId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -9,9 +8,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** PATCH /api/boards/:id — { name?, tabPosition? }. */
 export async function PATCH(req: Request, { params }: Params) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const { id } = await params;
     const body = boardUpdateSchema.parse(await req.json());
     const done = updateBoard(userId, id, body);
@@ -21,9 +18,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
 /** DELETE /api/boards/:id — deletes the board; its comics are untouched. */
 export async function DELETE(req: Request, { params }: Params) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async (userId) => {
     const { id } = await params;
     const done = deleteBoard(userId, id);
     return done ? ok({ ok: true }) : notFound("Board not found");

@@ -1,5 +1,4 @@
-import { handle, ok, unauthorized } from "@/lib/api";
-import { getUserId } from "@/lib/session";
+import { authed, ok } from "@/lib/api";
 import { configuredProviders, defaultProvider } from "@/lib/metadata";
 
 export const runtime = "nodejs";
@@ -9,9 +8,7 @@ export const runtime = "nodejs";
  * upload UI show the autofill panel (and provider toggle) only when usable.
  */
 export async function GET(req: Request) {
-  return handle(req, async () => {
-    const userId = await getUserId(req);
-    if (!userId) return unauthorized();
+  return authed(req, async () => {
     return ok({ providers: configuredProviders(), default: defaultProvider() });
   });
 }

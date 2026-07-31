@@ -11,7 +11,6 @@
  * already exist.
  */
 import fs from "node:fs/promises";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { unzipSync, strFromU8 } from "fflate";
@@ -19,7 +18,7 @@ import { db } from "./client";
 import { boards, comics } from "./schema";
 import { user } from "./auth-schema";
 import { createBoard, createComic } from "./queries";
-import { COVERS_ROOT } from "@/lib/storage";
+import { coverDir, storage } from "@/lib/storage";
 import { processUpload } from "@/lib/images";
 import { BACKUP_VERSION, type BackupManifest } from "@/lib/backup";
 
@@ -30,11 +29,19 @@ export interface ImportResult {
 
 /** Delete a user's comics, boards, and cover files. Joins cascade via FKs. */
 async function wipeUser(userId: string) {
-  const owned = db.select({ id: comics.id }).from(comics).where(eq(comics.userId, userId)).all();
+  // Select `imagePath`, not just the id: a replaced cover lives in a folder
+  // named after its *image* id, which stops matching the comic id from the
+  // first replace onward (see `coverDir`). Deleting by comic id orphaned those
+  // folders on disk.
+  const owned = db
+    .select({ imagePath: comics.imagePath })
+    .from(comics)
+    .where(eq(comics.userId, userId))
+    .all();
   db.delete(comics).where(eq(comics.userId, userId)).run(); // cascades comic_* + board_comics
   db.delete(boards).where(eq(boards.userId, userId)).run(); // cascades any remaining board_comics
-  for (const { id } of owned) {
-    await fs.rm(path.join(COVERS_ROOT, id), { recursive: true, force: true });
+  for (const { imagePath } of owned) {
+    await storage.deletePrefix(coverDir(imagePath));
   }
 }
 

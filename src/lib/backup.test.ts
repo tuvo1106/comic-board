@@ -1,4 +1,5 @@
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
@@ -43,6 +44,39 @@ async function makeComicWithCover(userId: string, over: Partial<q.CreateComicInp
     image,
     ...over,
   });
+}
+
+/**
+ * Swap a comic's cover for a fresh image in its own folder, mirroring what the
+ * replace-cover route does. Returns the new image so a test can assert against
+ * the folder it actually landed in — which is *not* `covers/<comicId>`.
+ */
+async function replaceCoverWithNewImage(userId: string, comicId: string) {
+  const id = newId();
+  const buf = await sharp({
+    create: { width: 10, height: 15, channels: 3, background: { r: 200, g: 30, b: 30 } },
+  })
+    .webp()
+    .toBuffer();
+  const image: ProcessedImage = {
+    id,
+    imagePath: `covers/${id}/full.webp`,
+    thumbPath: `covers/${id}/thumb.webp`,
+    blurDataUrl: "data:,",
+    width: 10,
+    height: 15,
+  };
+  await storage.put(image.imagePath, buf);
+  await q.replaceComicCover(userId, comicId, image);
+  return { image, buf };
+}
+
+/** True if a storage key's folder still exists on disk. */
+async function dirExists(key: string): Promise<boolean> {
+  return fs
+    .stat(storage.resolve(key))
+    .then(() => true)
+    .catch(() => false);
 }
 
 beforeAll(() => {
@@ -126,24 +160,7 @@ describe("buildBackupZip", () => {
 
   it("exports a replaced cover from its new folder, not covers/<comicId>", async () => {
     const comic = await makeComicWithCover(userA, { series: "Batman" });
-
-    // Replace the cover with a distinct image in a different folder.
-    const newImgId = newId();
-    const buf = await sharp({
-      create: { width: 10, height: 15, channels: 3, background: { r: 200, g: 30, b: 30 } },
-    })
-      .webp()
-      .toBuffer();
-    const newImage: ProcessedImage = {
-      id: newImgId,
-      imagePath: `covers/${newImgId}/full.webp`,
-      thumbPath: `covers/${newImgId}/thumb.webp`,
-      blurDataUrl: "data:,",
-      width: 10,
-      height: 15,
-    };
-    await storage.put(newImage.imagePath, buf);
-    await q.replaceComicCover(userA, comic.id, newImage);
+    const { buf } = await replaceCoverWithNewImage(userA, comic.id);
 
     // Before the fix this threw (covers/<comicId> was deleted by the replace).
     const files = unzipSync(await buildBackupZip(userA));
@@ -194,6 +211,20 @@ describe("importBackup (replace)", () => {
     await importBackup(zip, userB, { replace: true });
     await importBackup(zip, userB, { replace: true });
     expect(q.listComics(userB)).toHaveLength(1);
+  });
+
+  it("deletes a replaced cover's real folder when wiping, leaving no orphan", async () => {
+    // The wipe used to delete `covers/<comicId>`, which stops being where the
+    // cover lives the moment it's replaced — so the live folder survived the
+    // wipe and leaked on every restore. Sibling of the buildBackupZip case above.
+    const comic = await makeComicWithCover(userB, { series: "Batman" });
+    const { image } = await replaceCoverWithNewImage(userB, comic.id);
+    expect(await dirExists(image.imagePath)).toBe(true);
+
+    await makeComicWithCover(userA, { series: "Incoming" });
+    await importBackup(await buildBackupZip(userA), userB, { replace: true });
+
+    expect(await dirExists(image.imagePath)).toBe(false);
   });
 
   it("rejects an unsupported backup version", async () => {
