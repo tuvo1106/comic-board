@@ -39,6 +39,15 @@ export async function POST(req: Request, { params }: Params) {
     const raw = Number(new URL(req.url).searchParams.get("scale") ?? "2");
     if (!isUpscaleScale(raw)) return badRequest("Scale must be 2 or 4");
 
+    // Already at (or past) the ceiling: there is nothing to gain, and it isn't
+    // free to find out. `local.ts` always runs the model at its native 4x, so a
+    // 2400px cover would have the binary produce a ~9600px PNG — hundreds of MB,
+    // very likely past TIMEOUT_MS — purely to be resampled straight back to 2400.
+    const target = upscaleTarget(comic.width, comic.height, raw);
+    if (target.width <= comic.width) {
+      return badRequest("This cover is already at the maximum size");
+    }
+
     const upscaler = getUpscaler(); // throws UpscaleError(501) when unconfigured
     const source = await readStored(storage.keyFromUrl(comic.imageUrl));
 
@@ -49,7 +58,6 @@ export async function POST(req: Request, { params }: Params) {
     // width ceiling is raised to the upscale's target (otherwise the default
     // 1600px cap would resample the enlargement straight back away) but no
     // further, so every cover converges on a consistent maximum.
-    const target = upscaleTarget(comic.width, comic.height, raw);
     const image = await processUpload(enlarged, { maxWidth: target.width });
 
     logger.info("upscale preview", {
@@ -94,7 +102,7 @@ export async function PUT(req: Request, { params }: Params) {
     const meta = await describeStored(imagePath).catch(() => null);
     if (!meta) return notFound("That upscale is no longer available");
 
-    const updated = acceptUpscale(userId, id, {
+    const updated = await acceptUpscale(userId, id, {
       id: "",
       imagePath,
       thumbPath: imagePath.replace(/[^/]+$/, "thumb.webp"),

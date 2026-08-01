@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import sharp from "sharp";
+import { logger } from "@/lib/logger";
 import { UpscaleError, type Upscaler, type UpscaleScale } from "./types";
 
 const run = promisify(execFile);
@@ -61,7 +62,16 @@ export function localUpscaler(bin: string): Upscaler {
           if (e.killed || e.code === "ETIMEDOUT") {
             throw new UpscaleError("Upscaling timed out", 504);
           }
-          // stderr can name the binary path and model dir — log it, don't return it.
+          // stderr names the binary path and model dir, so it stays server-side
+          // — but it must be recorded somewhere, or a wrong UPSCALER_MODEL (the
+          // likeliest misconfiguration) surfaces as a bare "failed" with no
+          // diagnosis anywhere. That's the gap the provider-observability pass
+          // closed for Metron.
+          logger.error("upscaler failed", {
+            tag: "upscale.error",
+            model,
+            stderr: (e.stderr ?? "").slice(0, 2000),
+          });
           throw new UpscaleError("The upscaler failed on this image");
         }
 

@@ -40,7 +40,12 @@ export function upscaleTarget(
   return { width: w, height: Math.round(height * (w / width)) };
 }
 
-/** Supported factors. 2 is the sweet spot for ~600px comic scans; 4 tends to look synthetic. */
+/**
+ * Factors the API accepts. The UI offers 4 only (see `SCALE` in
+ * `UpscaleDialog`) — combined with `MAX_UPSCALE_WIDTH` that lands a typical
+ * 600px cover exactly on the cap. 2 stays supported so reintroducing a selector
+ * is a UI change rather than a server one.
+ */
 export const UPSCALE_SCALES = [2, 4] as const;
 export type UpscaleScale = (typeof UPSCALE_SCALES)[number];
 

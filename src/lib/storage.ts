@@ -15,6 +15,13 @@ export interface StorageAdapter {
   delete(key: string): Promise<void>;
   /** Delete everything under a prefix (e.g. a whole `covers/<id>` folder). */
   deletePrefix(prefix: string): Promise<void>;
+  /**
+   * Every stored cover folder, with when it was last written. Used by the
+   * orphan sweep to find folders no comic references — which is the only way to
+   * catch a candidate whose owner never accepted or discarded it (a mid-upscale
+   * close, an unmount, a crash, a restart).
+   */
+  listCoverDirs(): Promise<{ key: string; modifiedAt: number }[]>;
   getUrl(key: string): string;
   /** Inverse of `getUrl`: map a client image URL back to its storage key. */
   keyFromUrl(url: string): string;
@@ -39,6 +46,18 @@ class LocalStorage implements StorageAdapter {
   async deletePrefix(prefix: string): Promise<void> {
     const abs = this.resolve(prefix);
     await fs.rm(abs, { recursive: true, force: true });
+  }
+
+  async listCoverDirs(): Promise<{ key: string; modifiedAt: number }[]> {
+    // Missing root just means nothing has been uploaded yet.
+    const entries = await fs.readdir(COVERS_ROOT, { withFileTypes: true }).catch(() => []);
+    const out: { key: string; modifiedAt: number }[] = [];
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const stat = await fs.stat(path.join(COVERS_ROOT, e.name)).catch(() => null);
+      if (stat) out.push({ key: `covers/${e.name}`, modifiedAt: stat.mtimeMs });
+    }
+    return out;
   }
 
   getUrl(key: string): string {

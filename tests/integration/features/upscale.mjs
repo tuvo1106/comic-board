@@ -69,10 +69,17 @@ export async function upscaleCover({ p, ck, sleep, apiJson }) {
       );
       return p2 ? p2.textContent.replace(/\s+/g, " ").trim() : null;
     });
+  // Sampled tightly and bounded on the running state still being present: on a
+  // fast machine the stub can finish and swap in the comparison mid-loop, at
+  // which point `digits()` returns null and a fixed-count loop would collect too
+  // few samples to compare — a flake in the shared suite rather than a real
+  // regression.
   const frames = [];
-  for (let i = 0; i < 6; i++) {
-    frames.push(await digits());
-    await sleep(120);
+  for (let i = 0; i < 15; i++) {
+    const d = await digits();
+    if (d === null) break; // comparison arrived; stop sampling
+    frames.push(d);
+    await sleep(60);
   }
   const distinct = [...new Set(frames.filter(Boolean))];
   ck(

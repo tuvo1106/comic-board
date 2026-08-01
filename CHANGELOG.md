@@ -89,6 +89,27 @@ Notable work, newest first, grouped by theme rather than one line per commit —
   MotionValues written straight to the DOM rather than React state, since it
   updates every frame. Starts settled under `prefers-reduced-motion`, which
   `globals.css` can't cover because this is JS-driven.
+- **Cover files are now garbage-collected.** An upscale candidate is written to
+  disk *before* anyone decides its fate, so closing mid-run, an unmount, a
+  crash or a restart each stranded one — and accept/discard, the only cleanup
+  paths, can't run in any of those cases. `sweepOrphanedCovers` runs at startup
+  beside the soft-delete sweep and removes any cover folder no row references,
+  which is self-healing regardless of cause. Its minimum-age floor is the whole
+  safety story: a candidate is unreferenced *by design* while the dialog is
+  deciding on it, so sweeping recent folders would delete the preview out from
+  under the user. Soft-deleted comics count as referencing their files, since
+  Undo has to be able to bring them back.
+- **Fixed, found by review:** replacing the cover of an upscaled comic left
+  `originalImagePath` pointing at the old original, so the comic still claimed
+  to be upscaled and still offered Revert — which would have restored the stale
+  original *and deleted the image just uploaded*. Silent, permanent loss of a
+  file the user had deliberately chosen, and CI was green throughout. Alongside
+  it: upscaling twice orphaned the intermediate, the delete sweep never
+  collected kept originals, arrow keys on the compare slider navigated the
+  detail view away (remounting the dialog and starting a fresh upscale on the
+  wrong comic), an already-at-cap cover would run the model to produce a
+  ~9600px image only to resample it straight back, and the upscaler's stderr
+  was dropped despite a comment promising it was logged.
 - **Testing:** the flow runs end-to-end in the browser suite against a stub
   binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
   via sharp — real route, real `processUpload`, real accept/revert, fake pixels.

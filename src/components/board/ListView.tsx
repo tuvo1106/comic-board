@@ -96,7 +96,14 @@ export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, o
       */}
       <div
         data-list-table
-        className="max-h-[calc(100vh-190px)] overflow-auto rounded-xl border border-border"
+        // The offset tracks the sticky chrome above (top bar 57 + tabs 42 +
+        // filter row) — and the bulk action bar, which renders in normal flow
+        // directly above this box. Without the second figure, selecting a row
+        // pushed the table's bottom edge below the viewport and the page grew a
+        // second scrollbar outside the one the sticky header is anchored to.
+        className={`${
+          selected.size > 0 ? "max-h-[calc(100vh-252px)]" : "max-h-[calc(100vh-190px)]"
+        } overflow-auto rounded-xl border border-border`}
       >
         <div className="min-w-[900px]">
           {/* Header */}

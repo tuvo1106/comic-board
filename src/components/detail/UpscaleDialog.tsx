@@ -206,7 +206,7 @@ export function UpscaleDialog({ comic, open, onClose }: Props) {
  * blur. That's literally what the wait is doing, so it explains itself instead
  * of just passing time — which a generic shimmer wouldn't.
  *
- * Runs once (~0.9s) and settles; the spinner carries "still working" from there.
+ * Runs once and settles; the spinner carries "still working" from there.
  * Looping it would read as a slot machine, and an upscale takes several seconds
  * anyway, so a loop would outlast its own meaning.
  *

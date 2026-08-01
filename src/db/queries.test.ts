@@ -1,10 +1,12 @@
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db, sqlite } from "./client";
 import * as q from "./queries";
 import { newId } from "@/lib/ids";
 import type { ProcessedImage } from "@/lib/images";
+import { coverDir, storage } from "@/lib/storage";
 
 /** Fake processed image so we don't need sharp / real files in the DB. */
 function fakeImage(): ProcessedImage {
@@ -18,6 +20,34 @@ function fakeImage(): ProcessedImage {
     height: 1014,
   };
 }
+
+/**
+ * Write real bytes for a fake image, so tests about *file* lifecycle (which
+ * folders survive an operation) can assert on disk rather than just on the row.
+ * Content is irrelevant — nothing decodes these.
+ */
+async function withFile(image: ProcessedImage): Promise<ProcessedImage> {
+  await storage.put(image.imagePath, Buffer.from("cover"));
+  await storage.put(image.thumbPath, Buffer.from("thumb"));
+  return image;
+}
+
+/**
+ * Age a folder so the sweep's minimum-age floor doesn't shield it. Explicit
+ * backdating rather than a zero floor: mtime resolution makes "written just now
+ * vs cutoff of now" a coin flip, and this is the real scenario anyway — a
+ * candidate stranded some hours ago.
+ */
+async function backdate(key: string, ms: number) {
+  const when = new Date(Date.now() - ms);
+  await fs.utimes(storage.resolve(coverDir(key)), when, when);
+}
+
+const dirExists = (key: string) =>
+  fs
+    .stat(storage.resolve(coverDir(key)))
+    .then(() => true)
+    .catch(() => false);
 
 let userA = "";
 let userB = "";
@@ -312,12 +342,12 @@ describe("upscale accept / revert", () => {
     blurDataUrl: "data:,restored",
   });
 
-  it("accepting keeps the replaced cover so it can be restored", () => {
+  it("accepting keeps the replaced cover so it can be restored", async () => {
     const comic = makeComic(userA, { series: "Batman" });
     const original = comic.imageUrl;
 
     const bigger = { ...fakeImage(), width: 1200, height: 1820 };
-    const updated = q.acceptUpscale(userA, comic.id, bigger)!;
+    const updated = (await q.acceptUpscale(userA, comic.id, bigger))!;
 
     expect(updated.imageUrl).toContain(bigger.id);
     expect(updated.width).toBe(1200);
@@ -329,7 +359,7 @@ describe("upscale accept / revert", () => {
   it("reverting restores the original image and clears the flag", async () => {
     const comic = makeComic(userA);
     const original = comic.imageUrl;
-    q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 1200, height: 1820 });
+    await q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 1200, height: 1820 });
 
     const reverted = await q.revertUpscale(userA, comic.id, size(600, 910))!;
     expect(reverted!.imageUrl).toBe(original);
@@ -344,12 +374,125 @@ describe("upscale accept / revert", () => {
     const comic = makeComic(userA);
     const original = comic.imageUrl;
 
-    q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 1200, height: 1820 });
-    q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 2400, height: 3640 });
+    await q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 1200, height: 1820 });
+    await q.acceptUpscale(userA, comic.id, { ...fakeImage(), width: 2400, height: 3640 });
 
     const reverted = await q.revertUpscale(userA, comic.id, size(600, 910))!;
     expect(reverted!.imageUrl).toBe(original);
     expect(reverted!.upscaled).toBe(false);
+  });
+
+  // Found by review. Replacing a cover on an upscaled comic left
+  // `originalImagePath` pointing at the old original, so the comic still
+  // reported `upscaled: true` and still offered Revert — and taking it would
+  // restore that stale original *and delete the image just uploaded*.
+  it("replacing the cover of an upscaled comic clears the upscale, not the new image", async () => {
+    const comic = makeComic(userA);
+    const trueOriginal = `covers/${comic.id}/full.webp`;
+    await withFile({ ...fakeImage(), id: comic.id, imagePath: trueOriginal, thumbPath: `covers/${comic.id}/thumb.webp` });
+
+    const upscaled = await withFile({ ...fakeImage(), width: 2400, height: 3640 });
+    await q.acceptUpscale(userA, comic.id, upscaled);
+
+    const replacement = await withFile({ ...fakeImage(), width: 900, height: 1400 });
+    const after = (await q.replaceComicCover(userA, comic.id, replacement))!;
+
+    expect(after.imageUrl).toContain(replacement.id);
+    expect(after.upscaled).toBe(false); // no Revert offered for a cover never upscaled
+    // And the replacement survives: the whole point is that Revert can no
+    // longer reach in and delete it.
+    expect(await dirExists(replacement.imagePath)).toBe(true);
+    expect(await q.revertUpscale(userA, comic.id, size(600, 910))).toBeNull();
+    expect(await dirExists(replacement.imagePath)).toBe(true);
+    // Both superseded folders are collected rather than leaked.
+    expect(await dirExists(upscaled.imagePath)).toBe(false);
+    expect(await dirExists(trueOriginal)).toBe(false);
+  });
+
+  // Found by review. The first generated cover becomes unreferenced on a second
+  // accept — `originalImagePath` stays pinned to the true original, revert only
+  // deletes the current image, and the sweep only looks at deleted comics — so
+  // nothing would ever have collected it.
+  it("upscaling twice deletes the superseded generated cover", async () => {
+    const comic = makeComic(userA);
+    const first = await withFile({ ...fakeImage(), width: 1200, height: 1820 });
+    await q.acceptUpscale(userA, comic.id, first);
+    expect(await dirExists(first.imagePath)).toBe(true);
+
+    const second = await withFile({ ...fakeImage(), width: 2400, height: 3640 });
+    await q.acceptUpscale(userA, comic.id, second);
+
+    expect(await dirExists(first.imagePath)).toBe(false); // collected
+    expect(await dirExists(second.imagePath)).toBe(true); // the live one
+  });
+
+  // Found by review. The sweep is the only thing that ever collects cover
+  // files, so a kept original it didn't know about would survive on disk
+  // forever once its row was hard-deleted.
+  it("the sweep collects the kept original too, not just the live cover", async () => {
+    const comic = makeComic(userA);
+    const trueOriginal = `covers/${comic.id}/full.webp`;
+    await withFile({ ...fakeImage(), id: comic.id, imagePath: trueOriginal, thumbPath: `covers/${comic.id}/thumb.webp` });
+    const upscaled = await withFile({ ...fakeImage(), width: 2400, height: 3640 });
+    await q.acceptUpscale(userA, comic.id, upscaled);
+
+    q.deleteComic(userA, comic.id);
+    sqlite.prepare("UPDATE comics SET deleted_at = ? WHERE id = ?").run(Date.now() - 5000, comic.id);
+    expect(await q.sweepDeletedComics(1000)).toBe(1);
+
+    expect(await dirExists(upscaled.imagePath)).toBe(false);
+    expect(await dirExists(trueOriginal)).toBe(false);
+  });
+
+  // Found by review. Accept/discard cover the ordinary paths, but a candidate is
+  // written to disk before anyone decides its fate — closing mid-run, an
+  // unmount, a crash or a restart all strand one. Nothing else collects them.
+  describe("orphaned cover sweep", () => {
+    it("deletes unreferenced folders and keeps every referenced one", async () => {
+      const comic = makeComic(userA);
+      const live = `covers/${comic.id}/full.webp`;
+      await withFile({ ...fakeImage(), id: comic.id, imagePath: live, thumbPath: `covers/${comic.id}/thumb.webp` });
+      const upscaled = await withFile({ ...fakeImage(), width: 2400, height: 3640 });
+      await q.acceptUpscale(userA, comic.id, upscaled);
+      // Never accepted or discarded — exactly what a mid-run close leaves.
+      const orphan = await withFile(fakeImage());
+
+      // Backdate everything past the floor, so what survives is decided purely
+      // by whether a row references it — not by how recently it was written.
+      for (const k of [live, upscaled.imagePath, orphan.imagePath]) await backdate(k, 60 * 60 * 1000);
+
+      // Asserted per-folder, not on the return count: DATA_DIR is shared across
+      // this file's tests, so earlier cases leave their own (genuinely
+      // orphaned) folders behind and the total isn't stable.
+      await q.sweepOrphanedCovers(60_000);
+      expect(await dirExists(orphan.imagePath)).toBe(false);
+      expect(await dirExists(upscaled.imagePath)).toBe(true); // the live cover
+      expect(await dirExists(live)).toBe(true); // the kept pre-upscale original
+    });
+
+    // The age floor is the whole safety story: a candidate is unreferenced *by
+    // design* while the dialog is deciding on it, so sweeping recent folders
+    // would delete the preview out from under the user looking at it.
+    it("leaves a just-written candidate alone", async () => {
+      const inFlight = await withFile(fakeImage());
+      // Again per-folder rather than on the count: folders stranded by earlier
+      // cases in this shared DATA_DIR are genuinely orphaned, and this sweep
+      // will legitimately collect them.
+      await q.sweepOrphanedCovers(60_000);
+      expect(await dirExists(inFlight.imagePath)).toBe(true);
+    });
+
+    it("does not touch a soft-deleted comic's cover, which undo still needs", async () => {
+      const comic = makeComic(userA);
+      const key = `covers/${comic.id}/full.webp`;
+      await withFile({ ...fakeImage(), id: comic.id, imagePath: key, thumbPath: `covers/${comic.id}/thumb.webp` });
+      q.deleteComic(userA, comic.id);
+      await backdate(key, 60 * 60 * 1000); // old enough to sweep, if it were unreferenced
+
+      await q.sweepOrphanedCovers(60_000);
+      expect(await dirExists(key)).toBe(true);
+      expect(q.restoreComic(userA, comic.id)).toBe(true);
+    });
   });
 
   it("reverting a comic that was never upscaled returns null", async () => {
@@ -359,19 +502,19 @@ describe("upscale accept / revert", () => {
 
   it("won't accept or revert another user's comic", async () => {
     const comic = makeComic(userA);
-    expect(q.acceptUpscale(userB, comic.id, fakeImage())).toBeNull();
-    q.acceptUpscale(userA, comic.id, fakeImage());
+    expect(await q.acceptUpscale(userB, comic.id, fakeImage())).toBeNull();
+    await q.acceptUpscale(userA, comic.id, fakeImage());
     expect(await q.revertUpscale(userB, comic.id, size(600, 910))).toBeNull();
   });
 
   // isCoverReferenced is the authorization check for a client-supplied path:
   // a candidate is by definition unreferenced, so anything in use — including
   // another account's — must not be adoptable or deletable through it.
-  it("treats live covers and kept originals as referenced, across users", () => {
+  it("treats live covers and kept originals as referenced, across users", async () => {
     const mine = makeComic(userA);
     const theirs = makeComic(userB);
     const upscaled = { ...fakeImage(), width: 1200, height: 1820 };
-    q.acceptUpscale(userA, mine.id, upscaled);
+    await q.acceptUpscale(userA, mine.id, upscaled);
 
     const originalKey = `covers/${mine.id}/full.webp`;
     expect(q.isCoverReferenced(upscaled.imagePath)).toBe(true); // live cover

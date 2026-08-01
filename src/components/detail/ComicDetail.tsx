@@ -22,6 +22,7 @@ import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataFo
 import { BoardMembershipList } from "@/components/board/BoardMembershipList";
 import { ReplaceCoverDialog } from "@/components/detail/ReplaceCoverDialog";
 import { UpscaleDialog } from "@/components/detail/UpscaleDialog";
+import { MAX_UPSCALE_WIDTH } from "@/lib/upscale/types";
 import {
   Check,
   ChevronLeft,
@@ -155,6 +156,12 @@ export function ComicDetail({ id, asModal }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A dialog on top owns the keyboard. Without this, Left/Right on the
+      // upscale comparison's range slider ALSO navigated to another comic —
+      // which remounted the keyed dialog and started a fresh upscale on the new
+      // cover, orphaning the candidate you were looking at. Escape likewise
+      // closed the dialog and this modal together.
+      if (replacing || upscaling) return;
       if (editing) {
         // While editing, Escape backs out of edit mode; don't navigate covers.
         if (e.key === "Escape") cancelEdit();
@@ -166,7 +173,7 @@ export function ComicDetail({ id, asModal }: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, goto, prev, next, editing]);
+  }, [close, goto, prev, next, editing, replacing, upscaling]);
 
   const onDelete = async () => {
     try {
@@ -306,7 +313,10 @@ export function ComicDetail({ id, asModal }: Props) {
               >
                 <ImageIcon className="h-4 w-4" /> Replace cover
               </button>
-              {upscaler?.available && (
+              {/* Hidden at the ceiling as well as when unconfigured: the server
+                  refuses a no-op upscale, so offering it would just produce an
+                  error a few seconds later. */}
+              {upscaler?.available && comic.width < MAX_UPSCALE_WIDTH && (
                 <button
                   onClick={() => setUpscaling(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
