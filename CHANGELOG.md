@@ -4,7 +4,7 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
-## 2026-07-31 — Cover upscaling, with preview and revert
+## 2026-07-31 — 1.1.0 — Cover upscaling, with preview and revert
 
 - **Upscale a cover from the detail modal, compare it, then keep or discard.**
   Opening the dialog starts the run — there's a single scale, so a confirm step
