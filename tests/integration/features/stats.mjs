@@ -82,7 +82,7 @@ export async function statsPage({ p, ck, sleep, apiJson, coverCount }) {
   ck(view.heading === "Stats", `the page is titled Stats (got ${view.heading})`);
 
   // Every chart the roadmap asked for is present.
-  for (const title of ["By publisher", "By decade", "Ratings", "By release year"]) {
+  for (const title of ["By publisher", "Ratings", "By release year"]) {
     ck(view.panels.includes(title), `the "${title}" chart renders`);
   }
   for (const title of ["Top series", "Top cover artists", "Top authors", "Top characters"]) {
@@ -111,10 +111,10 @@ export async function statsPage({ p, ck, sleep, apiJson, coverCount }) {
     view.barLinks.some((h) => h.startsWith("/?publisher=")),
     "publisher bars link by ?publisher=",
   );
-  ck(
-    view.barLinks.some((h) => h.includes("from=") && h.includes("to=")),
-    "decade bars link by a ?from=/?to= date range",
-  );
+  // No date-range drill-through any more: the decade chart was the only chart
+  // whose bars carried ?from=/?to=, and it was dropped for saying nothing about
+  // a collection that's 98% one decade. Restoring it would mean adding per-year
+  // hit targets to the release-year area chart — see ROADMAP.
 
   // Drill-through actually lands on the filtered board.
   const publisherBar = await p.evaluate(() => {

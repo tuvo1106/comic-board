@@ -4,6 +4,27 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-08-01 — Stats: dropped the decade chart, fixed loose stat-tile digits
+
+- **Removed "By decade".** Reported as saying nothing, and the data agrees
+  bluntly: 466 of 475 covers are 2020s, so 98% of the chart was a single bar and
+  its whole visual range went on the ~2% tail (one comic each from the 1940s,
+  60s, 70s and 90s). "By release year" already covers the same dimension with
+  more resolution — 2024/2025/2026 actually move — so this reclaims space rather
+  than losing information. The now-unused `decadeBreakdown` and its tests went
+  with it, and the "N undated" caveat moved to the release-year panel, which was
+  the only other place it could live.
+- **Stat-tile values are no longer `tabular-nums`.** Reported as "16 Publishers
+  isn't centered" — it wasn't an alignment problem. Equal-width digits pad every
+  numeral to the width of a `0`, which on a large standalone value reads as
+  loose spacing; the dataviz guidance names it as an anti-pattern and reserves
+  tabular figures for columns that must align vertically. The bar-list counts
+  and axis ticks keep them, correctly.
+- **Known consequence:** stats no longer offers date-range drill-through. The
+  decade bars were the only ones carrying `?from=`/`?to=`; restoring it means
+  giving the release-year *area* chart per-year hit targets, which is a real
+  interaction change rather than a rename. Noted where the old assertion was.
+
 ## 2026-07-31 — 1.1.0 — Cover upscaling, with preview and revert
 
 - **Upscale a cover from the detail modal, compare it, then keep or discard.**

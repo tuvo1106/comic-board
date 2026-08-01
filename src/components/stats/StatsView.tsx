@@ -78,26 +78,6 @@ export function StatsView() {
               </Panel>
 
               <Panel
-                title="By decade"
-                subtitle={
-                  stats.totals.undated > 0
-                    ? `${stats.totals.undated} with no cover date`
-                    : "From cover dates"
-                }
-              >
-                <BarList
-                  rows={stats.decades.map((d) => ({
-                    key: d.label,
-                    label: d.label,
-                    count: d.count,
-                    muted: d.from === null,
-                    href:
-                      d.from && d.to ? boardHref({ dateFrom: d.from, dateTo: d.to }) : undefined,
-                  }))}
-                />
-              </Panel>
-
-              <Panel
                 title="Ratings"
                 // No rating filter exists on the board, so unlike every other
                 // chart here these bars aren't links — hence the plain histogram.
@@ -113,7 +93,17 @@ export function StatsView() {
                 />
               </Panel>
 
-              <Panel title="By release year" subtitle={peakYearLabel(stats.releaseYears)}>
+              {/* Carries the undated count now that the decade panel is gone —
+                  it was the only place surfacing how many comics have no cover
+                  date, which is the caveat on any of this being complete. */}
+              <Panel
+                title="By release year"
+                subtitle={
+                  stats.totals.undated > 0
+                    ? `${peakYearLabel(stats.releaseYears)} · ${stats.totals.undated} undated`
+                    : peakYearLabel(stats.releaseYears)
+                }
+              >
                 <YearChart points={stats.releaseYears} />
               </Panel>
             </div>

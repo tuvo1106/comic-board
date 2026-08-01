@@ -97,48 +97,6 @@ describe("computeStats", () => {
     });
   });
 
-  describe("decades", () => {
-    it("buckets cover dates by decade with an inclusive date range for filtering", () => {
-      const comics = [
-        makeComic({ coverDate: "1994-05-01" }),
-        makeComic({ coverDate: "1999-12-31" }),
-      ];
-      expect(computeStats(comics).decades).toEqual([
-        { label: "1990s", count: 2, from: "1990-01-01", to: "1999-12-31" },
-      ]);
-    });
-
-    it("keeps empty decades between the first and last as zero-count buckets", () => {
-      const comics = [makeComic({ coverDate: "1975-01-01" }), makeComic({ coverDate: "2004-01-01" })];
-      expect(pairs(computeStats(comics).decades)).toEqual([
-        ["1970s", 1],
-        ["1980s", 0],
-        ["1990s", 0],
-        ["2000s", 1],
-      ]);
-    });
-
-    it("puts undated comics in a trailing Unknown bucket with no date range", () => {
-      const comics = [makeComic({ coverDate: "1994-05-01" }), makeComic({ coverDate: null })];
-      const decades = computeStats(comics).decades;
-      expect(decades[decades.length - 1]).toEqual({
-        label: "Unknown",
-        count: 1,
-        from: null,
-        to: null,
-      });
-    });
-
-    it("treats a malformed cover date as undated instead of inventing a decade", () => {
-      const comics = [makeComic({ coverDate: "not-a-date" })];
-      expect(labels(computeStats(comics).decades)).toEqual(["Unknown"]);
-    });
-
-    it("returns only Unknown when nothing is dated", () => {
-      expect(labels(computeStats([makeComic({ coverDate: null })]).decades)).toEqual(["Unknown"]);
-    });
-  });
-
   describe("ratings", () => {
     it("always returns all ten half-star buckets plus unrated, holes included", () => {
       const stats = computeStats([makeComic({ rating: 4 })]);
@@ -247,7 +205,6 @@ describe("computeStats", () => {
     // missing metadata".
     it.each([
       ["publishers", (s: ReturnType<typeof computeStats>) => s.publishers],
-      ["decades", (s: ReturnType<typeof computeStats>) => s.decades],
       ["ratings", (s: ReturnType<typeof computeStats>) => s.ratings],
     ])("%s buckets sum to the comic count", (_name, pick) => {
       const stats = computeStats(comics);
@@ -274,7 +231,6 @@ describe("computeStats", () => {
       undated: 0,
     });
     expect(stats.publishers).toEqual([]);
-    expect(stats.decades).toEqual([]);
     expect(stats.releaseYears).toEqual([]);
     expect(stats.topSeries).toEqual([]);
     // The rating histogram is a fixed axis, so it keeps its (empty) buckets.

@@ -47,7 +47,12 @@ export function StatCard({
 }) {
   return (
     <div className="rounded-[var(--radius-card)] border border-border bg-surface px-4 py-3">
-      <p className="text-2xl font-bold tabular-nums tracking-tight text-fg">{value}</p>
+      {/* Proportional figures, deliberately not `tabular-nums`. Equal-width
+          digits are for columns that must align vertically (the bar-list counts
+          and axis ticks below still use them); on a large standalone value they
+          pad every digit to the width of a `0`, so a short number like 16 reads
+          as loosely spaced — which is what it looked like. */}
+      <p className="text-2xl font-bold tracking-tight text-fg">{value}</p>
       <p className="mt-0.5 text-xs font-medium text-muted">{label}</p>
       {hint && <p className="mt-1 text-[11px] text-muted/70">{hint}</p>}
     </div>

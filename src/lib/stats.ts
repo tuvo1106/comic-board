@@ -19,14 +19,6 @@ export interface CountBucket {
   count: number;
 }
 
-export interface DecadeBucket {
-  label: string; // "1990s", or "Unknown"
-  count: number;
-  /** Inclusive yyyy-mm-dd range for a date-filter link; null on the Unknown bucket. */
-  from: string | null;
-  to: string | null;
-}
-
 export interface RatingBucket {
   rating: number | null; // null = unrated
   label: string; // "0.5" … "5", or "Unrated"
@@ -54,7 +46,6 @@ export interface Totals {
 export interface Stats {
   totals: Totals;
   publishers: CountBucket[];
-  decades: DecadeBucket[];
   ratings: RatingBucket[];
   releaseYears: YearPoint[];
   topSeries: CountBucket[];
@@ -117,44 +108,6 @@ function publisherBreakdown(comics: ComicDTO[]): CountBucket[] {
   const unattributed = comics.filter((c) => !c.publisher).length;
   if (unattributed > 0) {
     buckets.push({ value: null, label: "No publisher", count: unattributed });
-  }
-  return buckets;
-}
-
-/**
- * Decades spanned by cover dates, with empty decades in the middle kept as
- * zero-count buckets — a gap in a collection is information, and dropping it
- * would make 1970s-then-2010s read as if they were adjacent.
- */
-function decadeBreakdown(comics: ComicDTO[]): DecadeBucket[] {
-  const counts = new Map<number, number>();
-  let unknown = 0;
-  for (const c of comics) {
-    const year = yearOf(c.coverDate);
-    if (year === null) {
-      unknown += 1;
-      continue;
-    }
-    const decade = Math.floor(year / 10) * 10;
-    counts.set(decade, (counts.get(decade) ?? 0) + 1);
-  }
-
-  const buckets: DecadeBucket[] = [];
-  if (counts.size > 0) {
-    const decades = [...counts.keys()];
-    const first = Math.min(...decades);
-    const last = Math.max(...decades);
-    for (let d = first; d <= last; d += 10) {
-      buckets.push({
-        label: `${d}s`,
-        count: counts.get(d) ?? 0,
-        from: `${d}-01-01`,
-        to: `${d + 9}-12-31`,
-      });
-    }
-  }
-  if (unknown > 0) {
-    buckets.push({ label: "Unknown", count: unknown, from: null, to: null });
   }
   return buckets;
 }
@@ -232,7 +185,6 @@ export function computeStats(comics: ComicDTO[]): Stats {
   return {
     totals: totals(comics),
     publishers: publisherBreakdown(comics),
-    decades: decadeBreakdown(comics),
     ratings: ratingBreakdown(comics),
     releaseYears: releaseYears(comics),
     topSeries: rank(
