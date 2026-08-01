@@ -4,6 +4,124 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-07-31 — 1.1.0 — Cover upscaling, with preview and revert
+
+- **Upscale a cover from the detail modal, compare it, then keep or discard.**
+  Opening the dialog starts the run — there's a single scale, so a confirm step
+  would only have said "yes really" — and you land on a before/after slider with
+  the two covers at matched display size, which is the only way to see what the
+  model actually changed.
+  Motivated by the collection's actual shape: the median stored cover is
+  **600px wide** and 334 of 392 are under 700px, because most arrived through
+  Metron's "Use this cover", whose CDN images are around that size. The app's
+  own 1600px cap was never the constraint — only 6% of covers reach it — so
+  raising it would have changed nothing.
+- **Nothing is committed until you accept.** The preview is a real stored image
+  in its own folder that no comic points at, so declining costs a deleted
+  folder and the comic is never touched. That property is the one the
+  integration test protects hardest; a preview that quietly mutated the cover
+  would be the same dead-end class as the two cover bugs fixed earlier today.
+- **Every upscale converges on a 2400px ceiling** rather than a raw 4× of
+  whatever the source happened to be. 4× a typical 600px cover lands there
+  naturally, but as a *cap* it also stops an already-1600px scan becoming a
+  6400px file that's slow to produce, heavy to store, and no sharper on screen.
+  Shared by the route and the dialog from one constant so the preview can't
+  promise a size the server won't store.
+- **Accepting is reversible.** `comics.original_image_path` (migration 0006,
+  a single additive column) keeps the cover that was replaced, and the detail
+  view grows a "Revert to the original cover" action. It's written only when
+  still null, so upscaling twice still reverts to the *true* original rather
+  than to a generated intermediate — asserted directly, since that's the kind
+  of thing that looks right until the second run.
+- **Gated on a binary you install** (`UPSCALER_BIN`), exactly as
+  `METRON_API_KEY` gates autofill: unset means the action isn't rendered at all,
+  rather than present and failing on click. Upstream Real-ESRGAN has no Homebrew
+  formula, so `.env.example` points at Upscayl's bundled ncnn binary
+  (`brew install --cask upscayl`) — the GUI is just a wrapper, and the binary and
+  its models run standalone. Default model is `digital-art-4x`, the illustration
+  model in that set. The upscaler sits behind a one-method interface shaped like
+  `StorageAdapter`, so a beefier GPU box on the LAN is a drop-in later without
+  callers changing.
+- **Pixel dimensions are now visible where the decision gets made**: on the
+  cover in the detail view, and as a sortable **Size** column in list view.
+  Sorting ascending surfaces the smallest covers — the upscale candidates —
+  which is not something you can eyeball one cover at a time across 400 of them.
+  Ranked by total pixels rather than width, so a wide-but-short scan doesn't
+  outrank a properly large one.
+- **Shaped by using it on the real collection.** The dialog runs the upscale on
+  open and lands on the comparison; a confirm step with one scale only said "yes
+  really". The wait is a spinner and the size it's heading for — which upscaler
+  is wired up is a deployment detail, and naming it there made the wait read
+  like a config screen. Overlay controls on the cover went translucent (they
+  were covering artwork) and go opaque on hover. The list header is sticky, so
+  the sort controls survive scrolling.
+- **The compare view's blurred backdrop shipped invisible first.** The compare
+  stack has to sit at the cover's exact aspect ratio for the two images to stay
+  in register, so it filled its own box edge to edge with nowhere for the blur to
+  show. It's now an outer padded box with the stack floating inside — the same
+  relationship the detail modal has between its cover panel and the cover. The
+  test that would have caught it is geometric, and deliberately checks that the
+  backdrop is a *different element* wrapping the stack: comparing rectangles
+  alone wouldn't have worked, since `scale-110` makes even a fully covered layer
+  measure larger.
+- **The dialog sizes itself to whichever state is showing** — narrow while
+  working, wide once there's a comparison worth the room — and animates between
+  the two rather than jumping. One width for both had left the spinner marooned
+  in a panel sized for something else.
+- **Each fact stated once.** The running state dropped its "Upscaling…" caption
+  (the dialog is titled *Upscale cover* and a spinner already means "working")
+  and its model/backend block, leaving only the size you're getting. The
+  comparison dropped its size readout for the same reason. The cover's
+  dimensions moved off the artwork entirely, into a file-info line beside the
+  revert action: both describe the *image* rather than the comic, neither is
+  editable, and three overlays on the art was two too many.
+- **Fixed: upscaling again after a revert did nothing.** Reported from real use.
+  `keep()` closed the dialog without resetting the preview mutation — the
+  candidate had just become the live cover, so there was nothing to discard —
+  leaving it in `success` still holding that candidate. Reopening found it
+  non-idle, skipped the run, and rendered the *previous* comparison against
+  files the revert had since deleted. Opening now always starts a fresh run.
+- **The wait animates the operation.** The target size counts up from the
+  cover's real dimensions to the target over ~1.8s, blurred at first and
+  sharpening as it lands — a number growing while detail resolves, which is
+  literally what the upscale is doing. A generic shimmer would have suited any
+  loading state anywhere; this one knows what it's waiting for. Driven by
+  MotionValues written straight to the DOM rather than React state, since it
+  updates every frame. Starts settled under `prefers-reduced-motion`, which
+  `globals.css` can't cover because this is JS-driven.
+- **Cover files are now garbage-collected.** An upscale candidate is written to
+  disk *before* anyone decides its fate, so closing mid-run, an unmount, a
+  crash or a restart each stranded one — and accept/discard, the only cleanup
+  paths, can't run in any of those cases. `sweepOrphanedCovers` runs at startup
+  beside the soft-delete sweep and removes any cover folder no row references,
+  which is self-healing regardless of cause. Its minimum-age floor is the whole
+  safety story: a candidate is unreferenced *by design* while the dialog is
+  deciding on it, so sweeping recent folders would delete the preview out from
+  under the user. Soft-deleted comics count as referencing their files, since
+  Undo has to be able to bring them back.
+- **Fixed, found by review:** replacing the cover of an upscaled comic left
+  `originalImagePath` pointing at the old original, so the comic still claimed
+  to be upscaled and still offered Revert — which would have restored the stale
+  original *and deleted the image just uploaded*. Silent, permanent loss of a
+  file the user had deliberately chosen, and CI was green throughout. Alongside
+  it: upscaling twice orphaned the intermediate, the delete sweep never
+  collected kept originals, arrow keys on the compare slider navigated the
+  detail view away (remounting the dialog and starting a fresh upscale on the
+  wrong comic), an already-at-cap cover would run the model to produce a
+  ~9600px image only to resample it straight back, and the upscaler's stderr
+  was dropped despite a comment promising it was logged.
+- **Testing:** the flow runs end-to-end in the browser suite against a stub
+  binary that honours the real one's `-i/-o/-s` contract and genuinely enlarges
+  via sharp — real route, real `processUpload`, real accept/revert, fake pixels.
+  A no-op copy would have made "did it actually get bigger?" unassertable, which
+  is the single most important thing to prove here. No GPU or model download in
+  CI, and no ~5s per image.
+- **Honest limitation, noted in the dialog:** at 600px sources these models
+  *invent* plausible detail rather than recovering what was lost. For a cover you
+  care about, a real high-res scan through **Replace cover** still beats any
+  upscale. The caveat lives in a tooltip rather than a paragraph — it's one-time
+  context, not something to re-read on every run.
+
 ## 2026-07-31 — Add-modal fixes: recoverable image choice, and focus on open
 
 - **Picking the wrong image had no way back.** Reported from real use. The

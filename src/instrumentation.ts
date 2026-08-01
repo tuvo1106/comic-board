@@ -7,9 +7,14 @@ export async function register() {
   // Guard for the Node runtime only — better-sqlite3/fs don't work at the
   // edge, and this file also runs once for the edge runtime bundle.
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { sweepDeletedComics } = await import("@/db/queries");
+    const { sweepDeletedComics, sweepOrphanedCovers } = await import("@/db/queries");
     const { logger } = await import("@/lib/logger");
     const swept = await sweepDeletedComics();
-    if (swept > 0) logger.info("startup sweep", { tag: "startup", sweptComics: swept });
+    // Order matters: hard-deleting first frees those comics' folders, so this
+    // pass collects them in the same run rather than a restart later.
+    const orphans = await sweepOrphanedCovers();
+    if (swept > 0 || orphans > 0) {
+      logger.info("startup sweep", { tag: "startup", sweptComics: swept, orphanedCovers: orphans });
+    }
   }
 }

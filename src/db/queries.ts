@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { newId, nameKey } from "@/lib/ids";
 import { positionAfterMax } from "@/lib/positions";
@@ -196,6 +196,7 @@ function rowToDTO(
     blurDataUrl: row.blurDataUrl,
     width: row.width,
     height: row.height,
+    upscaled: row.originalImagePath != null,
     position: row.position,
     createdAt: row.createdAt,
     authors: names.authors,
@@ -439,15 +440,68 @@ export function restoreComic(userId: string, id: string): boolean {
 export async function sweepDeletedComics(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
   const cutoff = Date.now() - maxAgeMs;
   const rows = db
-    .select({ id: comics.id, imagePath: comics.imagePath })
+    .select({
+      id: comics.id,
+      imagePath: comics.imagePath,
+      // An upscaled comic keeps its pre-upscale cover in a second folder. The
+      // sweep is the only thing that ever collects cover files, so missing this
+      // left that folder on disk forever once the row was gone.
+      originalImagePath: comics.originalImagePath,
+    })
     .from(comics)
     .where(and(isNotNull(comics.deletedAt), lt(comics.deletedAt, cutoff)))
     .all();
   for (const row of rows) {
     db.delete(comics).where(eq(comics.id, row.id)).run(); // cascades join rows
-    await storage.deletePrefix(coverDir(row.imagePath)); // full.webp + thumb.webp + folder
+    const dirs = new Set([coverDir(row.imagePath)]);
+    if (row.originalImagePath) dirs.add(coverDir(row.originalImagePath));
+    for (const dir of dirs) await storage.deletePrefix(dir); // full.webp + thumb.webp + folder
   }
   return rows.length;
+}
+
+/**
+ * Delete cover folders no comic references, last written more than `minAgeMs`
+ * ago (default 6h). Returns how many were removed.
+ *
+ * The accept/discard pair handles the ordinary paths, but an upscale candidate
+ * is written to disk *before* anyone decides its fate — so closing the dialog
+ * mid-run, navigating away, a crash, or a restart all leave a real folder that
+ * nothing will ever point at. Rather than chase each of those, this collects
+ * anything unreferenced: self-healing regardless of how the orphan happened,
+ * including ones predating this sweep.
+ *
+ * The age floor is the whole safety story. A candidate is unreferenced *by
+ * design* between being generated and being accepted, so sweeping recent
+ * folders would delete previews out from under the dialog showing them. Six
+ * hours is far beyond any plausible decision, and this only runs at startup.
+ *
+ * Not user-scoped: it asks "does any row anywhere point at this folder?", and
+ * scoping would make one account's covers look orphaned to another's sweep.
+ */
+export async function sweepOrphanedCovers(minAgeMs = 6 * 60 * 60 * 1000): Promise<number> {
+  const dirs = await storage.listCoverDirs();
+  if (dirs.length === 0) return 0;
+
+  // Includes soft-deleted rows: those still own their files until the deleted
+  // sweep hard-deletes them, and undo has to be able to bring them back.
+  const referenced = new Set<string>();
+  for (const row of db
+    .select({ imagePath: comics.imagePath, originalImagePath: comics.originalImagePath })
+    .from(comics)
+    .all()) {
+    referenced.add(coverDir(row.imagePath));
+    if (row.originalImagePath) referenced.add(coverDir(row.originalImagePath));
+  }
+
+  const cutoff = Date.now() - minAgeMs;
+  let removed = 0;
+  for (const dir of dirs) {
+    if (referenced.has(dir.key) || dir.modifiedAt > cutoff) continue;
+    await storage.deletePrefix(dir.key).catch(() => {});
+    removed += 1;
+  }
+  return removed;
 }
 
 /**
@@ -463,7 +517,11 @@ export async function replaceComicCover(
   image: ProcessedImage,
 ): Promise<ComicDTO | null> {
   const row = db
-    .select({ imagePath: comics.imagePath, thumbPath: comics.thumbPath })
+    .select({
+      imagePath: comics.imagePath,
+      thumbPath: comics.thumbPath,
+      originalImagePath: comics.originalImagePath,
+    })
     .from(comics)
     .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
     .get();
@@ -477,17 +535,144 @@ export async function replaceComicCover(
         blurDataUrl: image.blurDataUrl,
         width: image.width,
         height: image.height,
+        // Deliberately cleared. A replacement supersedes any upscale history:
+        // the kept original belonged to the cover being replaced, not to this
+        // one. Leaving it set kept `upscaled: true` and the Revert action alive
+        // for a cover that was never upscaled — and taking it would have
+        // restored the stale original *and deleted the image just uploaded*.
+        originalImagePath: null,
       })
       .where(eq(comics.id, id))
       .run();
     return getComicTx(tx, id)!;
   });
 
-  // Best-effort cleanup of the previous cover's whole folder (leaves no empty
-  // dir behind), now that the row points at the new one.
-  const oldDir = coverDir(row.imagePath);
-  if (oldDir !== coverDir(image.imagePath)) await storage.deletePrefix(oldDir).catch(() => {});
+  // Best-effort cleanup of the folders nothing points at any more: the cover
+  // being replaced, and any pre-upscale original now dropped above.
+  const keep = coverDir(image.imagePath);
+  for (const stale of [row.imagePath, row.originalImagePath]) {
+    if (!stale) continue;
+    const dir = coverDir(stale);
+    if (dir !== keep) await storage.deletePrefix(dir).catch(() => {});
+  }
   return dto;
+}
+
+/**
+ * Commit an accepted upscale: repoint the comic at the new image and remember
+ * the cover it replaced so it can be restored.
+ *
+ * Unlike `replaceComicCover` this does NOT delete the outgoing folder — that
+ * folder *is* the backup. `originalImagePath` is written only if it's still
+ * null, so upscaling an already-upscaled cover still reverts to the true
+ * original rather than to a generated intermediate. Returns null if the comic
+ * isn't owned by the user.
+ */
+export async function acceptUpscale(
+  userId: string,
+  id: string,
+  image: ProcessedImage,
+): Promise<ComicDTO | null> {
+  const row = db
+    .select({ imagePath: comics.imagePath, originalImagePath: comics.originalImagePath })
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
+    .get();
+  if (!row) return null;
+
+  // Upscaling an already-upscaled cover: the outgoing image is itself a
+  // generated one, and once we repoint away from it nothing references it —
+  // `originalImagePath` stays pinned to the true original, revert only ever
+  // deletes the *current* image, and the sweep only looks at deleted comics. So
+  // it has to be collected here or it leaks a 2400px webp per repeat upscale.
+  const supersededGenerated = row.originalImagePath ? row.imagePath : null;
+
+  const dto = db.transaction((tx) => {
+    tx.update(comics)
+      .set({
+        imagePath: image.imagePath,
+        thumbPath: image.thumbPath,
+        blurDataUrl: image.blurDataUrl,
+        width: image.width,
+        height: image.height,
+        originalImagePath: row.originalImagePath ?? row.imagePath,
+      })
+      .where(eq(comics.id, id))
+      .run();
+    return getComicTx(tx, id)!;
+  });
+
+  if (supersededGenerated && coverDir(supersededGenerated) !== coverDir(image.imagePath)) {
+    await storage.deletePrefix(coverDir(supersededGenerated)).catch(() => {});
+  }
+  return dto;
+}
+
+/**
+ * Undo an accepted upscale, restoring the kept original and deleting the
+ * generated cover. Dimensions are re-read from the restored file rather than
+ * stored separately — one source of truth, and the masonry needs them exact.
+ * Returns null if the comic isn't owned or was never upscaled.
+ */
+export async function revertUpscale(
+  userId: string,
+  id: string,
+  readSize: (key: string) => Promise<{ width: number; height: number; blurDataUrl: string }>,
+): Promise<ComicDTO | null> {
+  const row = db
+    .select({ imagePath: comics.imagePath, originalImagePath: comics.originalImagePath })
+    .from(comics)
+    .where(and(eq(comics.id, id), eq(comics.userId, userId), notDeleted()))
+    .get();
+  if (!row?.originalImagePath) return null;
+
+  const original = row.originalImagePath;
+  const meta = await readSize(original);
+
+  const dto = db.transaction((tx) => {
+    tx.update(comics)
+      .set({
+        imagePath: original,
+        thumbPath: original.replace(/[^/]+$/, "thumb.webp"),
+        blurDataUrl: meta.blurDataUrl,
+        width: meta.width,
+        height: meta.height,
+        originalImagePath: null,
+      })
+      .where(eq(comics.id, id))
+      .run();
+    return getComicTx(tx, id)!;
+  });
+
+  // Only now that nothing points at it, drop the generated cover.
+  if (coverDir(row.imagePath) !== coverDir(original)) {
+    await storage.deletePrefix(coverDir(row.imagePath)).catch(() => {});
+  }
+  return dto;
+}
+
+/**
+ * Is this cover key in use by any comic, as either its live cover or its kept
+ * pre-upscale original?
+ *
+ * Not user-scoped on purpose. It's the authorization check for a path supplied
+ * by the client (see the upscale route), and the question being asked is "is
+ * this a free-floating candidate?" — a key belonging to *anyone* answers no.
+ * Scoping it to the caller would let one account name another's cover and have
+ * it treated as adoptable.
+ */
+export function isCoverReferenced(imagePath: string): boolean {
+  const hit = db
+    .select({ id: comics.id })
+    .from(comics)
+    .where(or(eq(comics.imagePath, imagePath), eq(comics.originalImagePath, imagePath)))
+    .get();
+  return Boolean(hit);
+}
+
+/** Discard a previewed-but-unaccepted upscale's files. */
+export async function discardUpscale(imagePath: string): Promise<void> {
+  await storage.deletePrefix(coverDir(imagePath)).catch(() => {});
 }
 
 export function updateComicPosition(

@@ -7,7 +7,8 @@ export type SortField =
   | "publisher"
   | "coverDate"
   | "added"
-  | "rating";
+  | "rating"
+  | "size";
 
 export type SortDir = "asc" | "desc";
 
@@ -22,6 +23,9 @@ export const NATURAL_DIR: Record<SortField, SortDir> = {
   coverDate: "desc",
   added: "desc",
   rating: "desc",
+  // Ascending: the point of sorting by size is finding the *small* covers,
+  // which are the ones worth upscaling.
+  size: "asc",
 };
 
 export const SORT_LABELS: Record<SortField, string> = {
@@ -32,6 +36,7 @@ export const SORT_LABELS: Record<SortField, string> = {
   series: "Series",
   issue: "Issue #",
   publisher: "Publisher",
+  size: "Image size",
 };
 
 /** Fields offered in the Sort dropdown, in order. */
@@ -41,6 +46,7 @@ export const SORT_MENU_FIELDS: SortField[] = [
   "added",
   "rating",
   "series",
+  "size",
 ];
 
 export function isSortField(v: string | null): v is SortField {
@@ -51,7 +57,8 @@ export function isSortField(v: string | null): v is SortField {
     v === "publisher" ||
     v === "coverDate" ||
     v === "added" ||
-    v === "rating"
+    v === "rating" ||
+    v === "size"
   );
 }
 
@@ -74,6 +81,9 @@ const FIELD_VALUE: Record<Exclude<SortField, "manual">, (c: ComicDTO) => Val> = 
   coverDate: (c) => c.coverDate,
   added: (c) => c.createdAt,
   rating: (c) => c.rating,
+  // Total pixels, not width: it ranks a wide-but-short scan below a properly
+  // large one, which is what "how much detail is actually here" means.
+  size: (c) => c.width * c.height,
 };
 
 const isEmpty = (v: Val) => v == null || v === "";

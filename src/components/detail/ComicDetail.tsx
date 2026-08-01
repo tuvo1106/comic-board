@@ -3,7 +3,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBoards, useComic, useDeleteComic, useRestoreComic, useUpdateComic } from "@/lib/client-api";
+import {
+  useBoards,
+  useComic,
+  useDeleteComic,
+  useRestoreComic,
+  useRevertUpscale,
+  useUpdateComic,
+  useUpscalerInfo,
+} from "@/lib/client-api";
 import { navOrder } from "@/lib/nav-order";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import type { ComicDTO } from "@/lib/types";
@@ -13,6 +21,8 @@ import { StarRating } from "@/components/ui/StarRating";
 import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataForm";
 import { BoardMembershipList } from "@/components/board/BoardMembershipList";
 import { ReplaceCoverDialog } from "@/components/detail/ReplaceCoverDialog";
+import { UpscaleDialog } from "@/components/detail/UpscaleDialog";
+import { MAX_UPSCALE_WIDTH } from "@/lib/upscale/types";
 import {
   Check,
   ChevronLeft,
@@ -20,6 +30,7 @@ import {
   ImageIcon,
   Pencil,
   Plus,
+  Sparkles,
   Trash,
   X,
 } from "@/components/ui/icons";
@@ -53,6 +64,9 @@ export function ComicDetail({ id, asModal }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [upscaling, setUpscaling] = useState(false);
+  const { data: upscaler } = useUpscalerInfo();
+  const revertUpscale = useRevertUpscale();
   const [form, setForm] = useState<ComicFormValue | null>(null);
   // Which field to focus once the form mounts — set when the user clicks
   // directly on a display-mode field instead of the global Edit button.
@@ -142,6 +156,12 @@ export function ComicDetail({ id, asModal }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A dialog on top owns the keyboard. Without this, Left/Right on the
+      // upscale comparison's range slider ALSO navigated to another comic —
+      // which remounted the keyed dialog and started a fresh upscale on the new
+      // cover, orphaning the candidate you were looking at. Escape likewise
+      // closed the dialog and this modal together.
+      if (replacing || upscaling) return;
       if (editing) {
         // While editing, Escape backs out of edit mode; don't navigate covers.
         if (e.key === "Escape") cancelEdit();
@@ -153,7 +173,7 @@ export function ComicDetail({ id, asModal }: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, goto, prev, next, editing]);
+  }, [close, goto, prev, next, editing, replacing, upscaling]);
 
   const onDelete = async () => {
     try {
@@ -279,15 +299,32 @@ export function ComicDetail({ id, asModal }: Props) {
             <div className="aspect-[2/3] h-[45vh] max-w-full animate-pulse rounded-lg bg-surface-2 md:h-[76vh]" />
           )}
           {comic && (
-            <button
-              onClick={() => setReplacing(true)}
-              // Above the cover's own z-10: this overlays the image on purpose,
-              // and without an explicit layer it sits under the (now
-              // positioned) cover and stops being clickable at all.
-              className="absolute bottom-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface/90 px-3 py-1.5 text-sm font-medium text-fg shadow-lg ring-1 ring-border backdrop-blur transition hover:bg-surface"
-            >
-              <ImageIcon className="h-4 w-4" /> Replace cover
-            </button>
+            // Above the cover's own z-10: these overlay the image on purpose,
+            // and without an explicit layer they sit under the (now positioned)
+            // cover and stop being clickable at all.
+            <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5">
+              {/* Actions only. The dimensions used to sit up here too, which
+                  meant three things overlaying the artwork — they've moved to
+                  the file-info line in the metadata panel, next to the revert
+                  they belong with. */}
+              <button
+                onClick={() => setReplacing(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
+              >
+                <ImageIcon className="h-4 w-4" /> Replace cover
+              </button>
+              {/* Hidden at the ceiling as well as when unconfigured: the server
+                  refuses a no-op upscale, so offering it would just produce an
+                  error a few seconds later. */}
+              {upscaler?.available && comic.width < MAX_UPSCALE_WIDTH && (
+                <button
+                  onClick={() => setUpscaling(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
+                >
+                  <Sparkles className="h-4 w-4" /> Upscale
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -343,8 +380,7 @@ export function ComicDetail({ id, asModal }: Props) {
                 />
               </Field>
 
-              {(comic.publisher || comic.coverDate) && (
-                <div className="flex flex-wrap gap-x-6 gap-y-3">
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
                   {comic.publisher && (
                     <button
                       type="button"
@@ -369,8 +405,18 @@ export function ComicDetail({ id, asModal }: Props) {
                       <span className="text-sm">{formatDate(comic.coverDate)}</span>
                     </button>
                   )}
+                  {/* Same shape as its neighbours, but a plain div rather than a
+                      button: they click through to edit that field, and there's
+                      nothing here to edit — it's a property of the image file. */}
+                  <div className="px-1">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                      Image
+                    </p>
+                    <span className="text-sm text-fg">
+                      {comic.width} × {comic.height}px
+                    </span>
+                  </div>
                 </div>
-              )}
 
               {comic.authors.length > 0 && (
                 <Field label="Author" onClick={() => startEdit("authors")}>
@@ -395,6 +441,39 @@ export function ComicDetail({ id, asModal }: Props) {
               <Field label="Boards">
                 <BoardsField comicId={id} boardIds={comic.boardIds} onOpenBoard={close} />
               </Field>
+
+              {/* Only when there's actually a kept pre-upscale cover. No Field
+                  label: the pill already says what this is, and labelling it
+                  "Upscaled" above a pill reading "Upscaled" would be the same
+                  redundancy as the caption this replaced. The size itself moved
+                  up to sit with Publisher / Cover date — same kind of short
+                  scalar fact — so an ordinary cover shows none of this. */}
+              {comic.upscaled && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  {/* Same treatment as the board chips, so "this image was
+                      altered" carries weight without needing a sentence. */}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-1 text-xs text-fg ring-1 ring-accent/30">
+                    <Sparkles className="h-3 w-3" /> Upscaled
+                  </span>
+                  <button
+                    type="button"
+                    disabled={revertUpscale.isPending}
+                    onClick={async () => {
+                      try {
+                        await revertUpscale.mutateAsync(id);
+                        toast("Reverted to the original cover", "success");
+                      } catch (e) {
+                        toast((e as Error).message, "error");
+                      }
+                    }}
+                    className="text-xs text-muted underline underline-offset-2 transition hover:text-fg disabled:opacity-50"
+                  >
+                    {/* Just "Revert": the pill beside it already says what
+                        happened, so naming the object again adds nothing. */}
+                    {revertUpscale.isPending ? "Reverting…" : "Revert"}
+                  </button>
+                </div>
+              )}
             </motion.div>
           ) : null}
 
@@ -478,6 +557,16 @@ export function ComicDetail({ id, asModal }: Props) {
 
       {comic && (
         <ReplaceCoverDialog comic={comic} open={replacing} onClose={() => setReplacing(false)} />
+      )}
+      {comic && (
+        // Keyed so arrowing to another cover gets a fresh dialog rather than
+        // one holding the previous comic's candidate.
+        <UpscaleDialog
+          key={comic.id}
+          comic={comic}
+          open={upscaling}
+          onClose={() => setUpscaling(false)}
+        />
       )}
     </div>
   );

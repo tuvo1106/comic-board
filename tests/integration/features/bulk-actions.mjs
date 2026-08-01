@@ -5,7 +5,7 @@ import { BASE } from "../env.mjs";
 // listViewBasics). `labels[0]` is the header "select all"; labels[1..] are
 // each row's checkbox, DOM order. Ends by switching back to grid view.
 export async function bulkActions({ p, ck, sleep, apiJson }) {
-  const labels = await p.$$("main .overflow-x-auto label");
+  const labels = await p.$$("main [data-list-table] label");
   await labels[1].click();
   await p.keyboard.down("Shift");
   await labels[3].click(); // range-select rows 0-2
@@ -42,7 +42,7 @@ export async function bulkActions({ p, ck, sleep, apiJson }) {
 
   // A successful bulk action clears the selection (onDone), so the bar from
   // "Add tag" above is already gone — re-select before testing Delete.
-  const labels2 = await p.$$("main .overflow-x-auto label");
+  const labels2 = await p.$$("main [data-list-table] label");
   await labels2[1].click();
   await p.keyboard.down("Shift");
   await labels2[3].click();
@@ -99,7 +99,7 @@ async function bulkBoardMembership({ p, ck, sleep, apiJson }) {
     .filter((c) => c.boardIds.includes(targetBoard.id))
     .map((c) => c.id);
 
-  const boardLabels1 = await p.$$("main .overflow-x-auto label");
+  const boardLabels1 = await p.$$("main [data-list-table] label");
   await boardLabels1[1].click();
   await p.keyboard.down("Shift");
   await boardLabels1[3].click();
@@ -128,7 +128,7 @@ async function bulkBoardMembership({ p, ck, sleep, apiJson }) {
   await sleep(600);
   await (await p.$$("button[aria-label='List view']"))[0].click();
   await sleep(600);
-  const boardLabels2 = await p.$$("main .overflow-x-auto label");
+  const boardLabels2 = await p.$$("main [data-list-table] label");
   await boardLabels2[0].click(); // header "select all"
   await sleep(300);
   const [removeBtn] = await p.$$("xpath/.//button[normalize-space(.)='Remove from board']");

@@ -4,6 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 import { ROOT, PORT, BASE, CHROME, DATA_DIR, DIST_DIR, env, sleep } from "./env.mjs";
+import { writeFakeUpscaler } from "./fake-upscaler.mjs";
 
 function run(cmd, args) {
   const r = spawnSync(cmd, args, { cwd: ROOT, env, stdio: "inherit" });
@@ -55,6 +56,9 @@ export async function buildAndSeed() {
 
   fs.rmSync(DATA_DIR, { recursive: true, force: true });
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  // Must exist before the server starts: `UPSCALER_BIN` points at it, and the
+  // upscale UI renders only when that path is set.
+  writeFakeUpscaler();
   console.log("• migrating + seeding isolated test db…");
   run("npm", ["run", "db:migrate"]);
   run("npm", ["run", "db:seed"]);

@@ -4,6 +4,46 @@ import { BASE } from "../env.mjs";
 // without wiping the row's other metadata; the date cell commits on blur
 // (not per keystroke); sortable headers. Leaves the page in list view —
 // bulk-actions.mjs (which runs right after) depends on that.
+/**
+ * The Size column: read-only pixel dimensions, sortable ascending so the
+ * smallest covers — the ones worth upscaling — come first. Exists because
+ * picking upscale candidates out of a 400-cover collection is a list-view job,
+ * not something you can eyeball a cover at a time.
+ */
+export async function listViewSizeColumn({ p, ck, sleep }) {
+  // Sorting is URL state, and the very next feature (bulk actions) selects rows
+  // by position — leaving the board sorted by Size silently changed which
+  // comics it picked. Capture and restore, so this sits anywhere in the run
+  // order like the other self-contained features.
+  const entryUrl = await p.evaluate(() => location.href);
+
+  const sizes = () =>
+    p.$$eval("div", (els) =>
+      els
+        .map((e) => e.textContent.trim())
+        .filter((t) => /^\d{2,4}×\d{2,4}$/.test(t))
+        .map((t) => t.split("×").map(Number)),
+    );
+
+  const shown = await sizes();
+  ck(shown.length > 0, `the list shows each cover's pixel size (${shown.length} rows)`);
+
+  // Sort by it and confirm the order is by total pixels, not width.
+  await p.evaluate(() => {
+    [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Size")?.click();
+  });
+  await sleep(700);
+  const sorted = await sizes();
+  const px = sorted.map(([w, h]) => w * h);
+  ck(
+    px.length > 1 && px.every((v, i) => i === 0 || px[i - 1] <= v),
+    `sorting by Size puts the smallest first (${px[0]} … ${px[px.length - 1]} px)`,
+  );
+
+  await p.goto(entryUrl, { waitUntil: "networkidle0" });
+  await sleep(600);
+}
+
 export async function listViewBasics({ p, ck, sleep, apiJson, imgs }, { N }) {
   await p.goto(BASE, { waitUntil: "networkidle0" });
   await sleep(500);
@@ -54,9 +94,12 @@ export async function listViewBasics({ p, ck, sleep, apiJson, imgs }, { N }) {
   p.off("request", countDatePatch);
 
   // Sortable list-view headers: clicking "Series" sorts A→Z; clicking again flips Z→A.
+  // Selected via `[data-list-table]`, not a Tailwind class: the container's
+  // overflow classes are layout details that do change (making the header
+  // sticky changed them), and a test shouldn't break because a style did.
   const seriesInDom = async () =>
     p.evaluate(() => {
-      const wrap = document.querySelector("main .overflow-x-auto > div");
+      const wrap = document.querySelector("main [data-list-table] > div");
       return [...wrap.children]
         .slice(1) // drop the header row
         .map((r) => r.children[2]?.textContent.trim() ?? ""); // [checkbox, thumbnail, series]

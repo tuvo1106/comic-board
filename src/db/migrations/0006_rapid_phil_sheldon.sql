@@ -1,0 +1,1 @@
+ALTER TABLE `comics` ADD `original_image_path` text;
