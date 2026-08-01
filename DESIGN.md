@@ -27,7 +27,7 @@ portal-based overlays, unit + integration tests.
 CI (unit + integration). See §8 for the shipped slices; §9 for release status.
 
 **Also shipped post-1.0:** export/backup, Metron metadata autofill on upload,
-replace-cover. See [`CHANGELOG.md`](./CHANGELOG.md) for the full history and
+replace-cover, and (1.1.0) cover upscaling with preview + revert. See [`CHANGELOG.md`](./CHANGELOG.md) for the full history and
 [`ROADMAP.md`](./ROADMAP.md) for what's next.
 
 ---
@@ -71,6 +71,8 @@ Comic
   width, height INTEGER NOT NULL      -- aspect-ratio reservation
   position      REAL NOT NULL         -- My Comics drag order
   createdAt     INTEGER NOT NULL
+  deletedAt     INTEGER               -- soft delete; swept ~24h later (undo window)
+  originalImagePath TEXT              -- cover an accepted upscale replaced; null = never upscaled
 
 Board            (id PK, userId FK→User, name, tabPosition REAL, createdAt)
 BoardComic       (boardId FK, comicId FK, position REAL, addedAt) PK(boardId,comicId)
@@ -102,6 +104,13 @@ Notes:
   Tag, and free-text notes were dropped in favor of structured catalog metadata.
 - Deleting a board removes only its `BoardComic` rows; deleting a comic cascades
   out of every join table and deletes its image files.
+- **`originalImagePath` is what makes an upscale reversible.** It's written only
+  while still null, so upscaling twice still reverts to the true original rather
+  than a generated intermediate, and it's cleared by `replaceComicCover` — a
+  replacement supersedes any upscale history, and leaving it set would arm
+  Revert to delete the image just uploaded. Cover files are owned by whichever
+  of `imagePath` / `originalImagePath` points at them; anything else is an
+  orphan and `sweepOrphanedCovers` collects it at startup.
 
 ---
 
@@ -127,6 +136,11 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 | `GET /api/metadata/detail` | Fetch the full record for one search candidate (prefills the form). |
 | `GET /api/metadata/cover` | Proxy a provider's cover image (keeps the provider API key server-side). |
 | `GET /api/export` | Stream a zip backup (`collection.json` + every cover) — see "Backup & restore" in `README.md`. |
+| `GET /api/upscale` | Whether an upscaler is configured — gates the UI, like `/api/metadata` does for autofill. |
+| `POST /api/comics/:id/upscale` | Generate an upscale candidate and return it for preview. Does **not** touch the comic. |
+| `PUT /api/comics/:id/upscale` | Accept a candidate, keeping the cover it replaces so it stays revertible. |
+| `DELETE /api/comics/:id/upscale` | Discard a declined candidate's files. |
+| `POST /api/comics/:id/upscale/revert` | Restore the kept pre-upscale cover and delete the generated one. |
 | `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
 | `ALL /api/auth/[...all]` | better-auth handler (sign-up / sign-in / sign-out); HTTP-only session cookie. |
 

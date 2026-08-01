@@ -16,6 +16,7 @@ Built to the spec in [`DESIGN.md`](./DESIGN.md).
 - **SQLite + Drizzle ORM** (`better-sqlite3`) — zero-ops local persistence
 - **better-auth** — email/password accounts + HTTP-only session cookie
 - **sharp** — thumbnail + blur-placeholder generation on upload
+- **Real-ESRGAN** (optional, external binary) — cover upscaling; see below
 - **TanStack Query** — data fetching with optimistic updates
 - **zod** — shared request validation
 
@@ -100,6 +101,41 @@ src/
 - **Storage is abstracted** behind `StorageAdapter` (local FS today) so S3/R2 is
   a drop-in later. All DB access goes through the API layer, and every query is
   scoped to the signed-in user's id, so UI code stays out of ownership concerns.
+
+## Upscaling covers
+
+Optional, and off unless configured. Most covers imported from a metadata
+provider are around 600px wide — about half what a retina detail view wants —
+so the detail modal offers **Upscale**: it runs the cover through a local
+Real-ESRGAN model, shows the result against the current one with a draggable
+divider, and commits nothing until you accept. The cover it replaces is kept, so
+**Revert** is always available afterwards.
+
+Every upscale converges on a 2400px ceiling rather than a raw multiple, so the
+collection stays consistent and an already-large scan doesn't balloon. Sort by
+the **Size** column in list view to find the covers actually worth doing.
+
+Upstream Real-ESRGAN has no Homebrew formula; the easiest route on macOS is the
+Upscayl app, whose bundled binary and models run standalone:
+
+```bash
+brew install --cask upscayl
+```
+
+Then in `.env` (see `.env.example` for the alternatives):
+
+```
+UPSCALER_BIN=/Applications/Upscayl.app/Contents/Resources/bin/upscayl-bin
+UPSCALER_MODEL=digital-art-4x
+UPSCALER_MODEL_DIR=/Applications/Upscayl.app/Contents/Resources/models
+```
+
+Leave `UPSCALER_BIN` unset and the action isn't rendered at all, the same way
+`METRON_API_KEY` gates metadata autofill.
+
+> These models **invent** plausible detail rather than recovering what was lost.
+> On comic line art the result usually holds up, but for a cover you care about
+> a real high-res scan through **Replace cover** beats any upscale.
 
 ## Backup & restore
 

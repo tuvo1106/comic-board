@@ -308,6 +308,28 @@ change wasn't part of that once said plainly. Diff isn't kept anywhere —
 whoever picks this up writes it fresh, in `MetadataSearch.tsx`'s `PickedCard`,
 the same place `covers.length === 0` and `coverError` already branch.
 
+## 4i. Bulk upscaling — *deliberately deferred (1.1.0, 2026-07-31)*
+
+Single-cover upscaling shipped in 1.1.0. Doing a whole board or selection is
+the obvious follow-up and was left out on purpose, because it isn't the same
+feature scaled up:
+
+- **It can't live in a request.** ~400 covers is on the order of an hour of GPU
+  time, so it needs a job queue that survives navigation, progress, and
+  cancellation — none of which the single-cover flow has.
+- **The accept model doesn't transfer.** The whole point of the single flow is
+  that you *look* at each result before committing, and the size column exists
+  so you can pick the covers worth doing. Accept-all discards exactly the
+  judgment the feature is built around; per-item review of 400 results is worse
+  than doing them one at a time. That question needs answering before any code.
+- **Partial failure needs a story.** A run that dies at cover 200 leaves 200
+  accepted, some candidates on disk, and no obvious resume point.
+
+Worth revisiting if picking covers one at a time turns out to be the actual
+friction. Not blocked on anything — the upscaler already sits behind a
+one-method interface, and `sweepOrphanedCovers` already collects candidates
+nothing claimed.
+
 ## 5. Sharing — *skipped (decided 2026-07-29)*
 
 Would have been public read-only board links. Not wanted. (Its two
@@ -354,6 +376,11 @@ Known and deliberately unfixed: the top bar overflows a ~390px viewport (the
 avatar), on every page and predating the stats work. The app is desktop-first
 and dark-only by design; fixing it is a header-responsiveness pass, not a
 one-liner.
+
+Shipped 2026-07-31 (v1.1.0): cover upscaling with preview + revert, a sortable
+image-size column, and — from review rather than use — a set of cover-file
+lifecycle fixes, the worst of which let Revert delete a freshly uploaded
+replacement. See `CHANGELOG.md`.
 
 Shipped 2026-07-29: undo delete (1), list-view multi-select + bulk actions (2a),
 stats page (2c), autocomplete search (2e), drag tabs to reorder (3), the
