@@ -31,6 +31,24 @@
     Helvetica, Arial, sans-serif;
 }
 
+/*
+  The sticky chrome stack: the top bar, the board tabs and the filter row each
+  pin below the one above it. The heights are republished from the real
+  elements at runtime (`useChromeHeight`) — the values here are only the
+  first-paint defaults, and are what a route without that bar falls back to
+  (the filter row is board-only, hence 0). Derive offsets from these, never
+  from a literal.
+*/
+:root {
+  --h-top-bar: 63px;
+  --h-tabs: 45px;
+  --h-filters: 0px;
+
+  --top-tabs: var(--h-top-bar);
+  --top-filters: calc(var(--h-top-bar) + var(--h-tabs));
+  --h-chrome: calc(var(--top-filters) + var(--h-filters));
+}
+
 html,
 body {
   height: 100%;

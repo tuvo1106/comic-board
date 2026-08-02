@@ -61,6 +61,32 @@ describe("applyFilters", () => {
     const withIssue = [makeComic({ series: "X-Men", issueNumber: "266" })];
     expect(applyFilters(withIssue, f({ q: "266" }))).toHaveLength(0);
   });
+
+  describe("rating", () => {
+    const rated = [
+      makeComic({ rating: 4.5 }),
+      makeComic({ rating: 4.5 }),
+      makeComic({ rating: 5 }),
+      makeComic({ rating: null }),
+      makeComic({ rating: 0 }), // 0 is not a rating the UI can set — it's unrated
+    ];
+
+    it("selects a half-star bucket, and OR within the facet", () => {
+      expect(applyFilters(rated, f({ ratings: ["4.5"] }))).toHaveLength(2);
+      expect(applyFilters(rated, f({ ratings: ["4.5", "5"] }))).toHaveLength(3);
+    });
+
+    it("selects unrated, counting null and non-positive alike", () => {
+      expect(applyFilters(rated, f({ ratings: ["unrated"] }))).toHaveLength(2);
+    });
+
+    it("buckets off-step and out-of-range ratings the same way the histogram does", () => {
+      // The drill-through is only honest if these two agree — see `ratingBucket`.
+      const odd = [makeComic({ rating: 4.4 }), makeComic({ rating: 7 })];
+      expect(applyFilters(odd, f({ ratings: ["4.5"] }))).toHaveLength(1);
+      expect(applyFilters(odd, f({ ratings: ["5"] }))).toHaveLength(1);
+    });
+  });
 });
 
 describe("computeFacets", () => {
@@ -106,6 +132,20 @@ describe("computeFacets", () => {
     ]);
   });
 
+  it("offers rating buckets highest first with Unrated last, and only ones in use", () => {
+    const comics = [
+      makeComic({ rating: 4.5 }),
+      makeComic({ rating: 4.5 }),
+      makeComic({ rating: 2 }),
+      makeComic({ rating: null }),
+    ];
+    expect(computeFacets(comics).ratings).toEqual([
+      { value: "4.5", label: "4.5★", count: 2 },
+      { value: "2", label: "2★", count: 1 },
+      { value: "unrated", label: "Unrated", count: 1 },
+    ]);
+  });
+
   it("without filters, counts span the whole set (backward compatible)", () => {
     const comics = [
       makeComic({ publisher: "DC", authors: ["Alice"] }),
@@ -122,6 +162,7 @@ describe("filters URL round-trip", () => {
       publishers: ["Marvel"],
       authors: ["Stan Lee", "Steve Ditko"],
       tags: ["Key Issue"],
+      ratings: ["4.5", "unrated"],
       dateFrom: "1963-01-01",
       dateTo: "1970-12-31",
     });
@@ -144,6 +185,8 @@ describe("filters URL round-trip", () => {
   it("filtersActive / countActive reflect set facets", () => {
     expect(filtersActive(f())).toBe(false);
     expect(countActive(f({ publishers: ["DC"], tags: ["Variant"], dateFrom: "2020-01-01" }))).toBe(3);
+    expect(filtersActive(f({ ratings: ["unrated"] }))).toBe(true);
+    expect(countActive(f({ ratings: ["4.5", "unrated"] }))).toBe(2);
   });
 });
 
@@ -171,6 +214,15 @@ describe("activeChips", () => {
     expect(chips[0].remove).toEqual({ type: "toggle", key: "publishers", value: "DC" });
     expect(chips[2].remove).toEqual({ type: "date", field: "dateFrom" });
     expect(chips[3].remove).toEqual({ type: "date", field: "dateTo" });
+  });
+
+  it("shows rating chips in display form while removing by the stored value", () => {
+    const chips = activeChips(f({ ratings: ["4.5", "unrated"] }));
+    expect(chips.map((c) => [c.facet, c.label])).toEqual([
+      ["Rating", "4.5★"],
+      ["Rating", "Unrated"],
+    ]);
+    expect(chips[1].remove).toEqual({ type: "toggle", key: "ratings", value: "unrated" });
   });
 
   it("excludes the free-text query (it has its own search UI)", () => {

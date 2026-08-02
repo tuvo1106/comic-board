@@ -37,7 +37,7 @@ export function useFilters() {
 
   const toggle = useCallback(
     (
-      key: "series" | "publishers" | "authors" | "artists" | "characters" | "tags",
+      key: "series" | "publishers" | "authors" | "artists" | "characters" | "tags" | "ratings",
       value: string,
     ) => {
       const current = filters[key];

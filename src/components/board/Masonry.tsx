@@ -182,7 +182,14 @@ export function Masonry({
   /* eslint-disable react-hooks/refs -- intentional entrance-animation gate */
   const animateIn = stagger && !enteredRef.current;
   const grid = (
-    <div ref={setContainerRef} className="relative w-full" style={{ height: layout?.height ?? 0 }}>
+    // `isolate` keeps the cards' hover `z-10` inside this container, where it
+    // only has to beat its neighbours — without it a hovered card ties with the
+    // board's sticky toolbar and, being later in the DOM, paints over it.
+    <div
+      ref={setContainerRef}
+      className="relative isolate w-full"
+      style={{ height: layout?.height ?? 0 }}
+    >
       {layout &&
         visibleItems.map((comic, idx) => {
           const p = layout.placements.get(comic.id);

@@ -4,6 +4,53 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-08-01 — Rating histogram fixed and made clickable, a rating filter, best-rated artists
+
+- **The rating bars were lying about their own numbers.** Each bar's height was
+  a percentage of a column that also had to hold the value label, the axis
+  label and the gaps between them, so any bar over ~78% overflowed and
+  flex-shrink squashed it back: counts of 10 and 8 both rendered at ~124px, and
+  the tallest bar pushed its own axis label 3px below the others so the
+  baseline wasn't a line. Bars are now sized against a fixed plot height with
+  the value labels hanging above them — 10 and 8 draw at 120px and 96px, and
+  every bar sits on the same baseline.
+- **A rating filter on the board, and the histogram drills through to it.**
+  Reported as "it says I have 11 unrated but I don't see it in list view" —
+  the Ratings panel was the one chart the page's "Click any bar to see those
+  covers" didn't apply to, because no rating filter existed. There's now a
+  Rating facet (half-star buckets plus Unrated, highest first) backed by a
+  `rating` query param, and every non-empty bar links into it. Both sides
+  bucket through the same `ratingBucket`, so a bar reading 11 opens exactly 11
+  covers; a test pins that.
+- **New panel: best-rated cover artists.** Mean rating per artist, filling the
+  slot the release-year chart left empty in that 2-up grid. Unrated covers are
+  ignored rather than counted as zero, and an artist needs `MIN_RATED_COVERS`
+  (2) rated covers to appear — one 5★ cover is not an average. Bars are scaled
+  against a fixed 0–5, not against the leader, so the bar means the score.
+
+## 2026-08-01 — The board's view controls stay put, and the chrome stack measures itself
+
+- **Sort, columns and grid/list are pinned, and they live in the filter row.**
+  Reported as "the sort tabs are supposed to be sticky" — they were in `<main>`,
+  in normal flow, so changing sort from halfway down a board meant scrolling
+  back to the top first. They're sticky now, and merged into the filter row
+  rather than given a band of their own: two stacked strips of the same-sized
+  pills read as an extra layer of chrome. Save-as-board and Clear moved down
+  into the active-chips row, which is what freed the space — and fixed the
+  second report ("filtering for a character makes everything out of place"),
+  where those two buttons appearing mid-session wrapped `Date` onto a second
+  line and left the view controls floating in the middle of a double-height row.
+- **The cover count moved to the chips row and now reads "5 of 25 covers".**
+  Unfiltered it repeated the board's own tab badge verbatim, and it was the one
+  piece of bare text in a row of pills. It only says anything while filtering,
+  so it leads the row that only exists while filtering.
+- **Sticky offsets are measured, not hard-coded.** Each bar publishes its real
+  height to a CSS variable (`useChromeHeight`) and the one below pins to the
+  sum. The literals they replace had gone stale: the top bar was pinned at 57px
+  from the wordmark's height, the search box later grew it to 63px, and the tab
+  strip had been sliding 6px under it since. See
+  [`ENGINEERING_NOTES.md`](./ENGINEERING_NOTES.md).
+
 ## 2026-08-01 — Stats: dropped the decade chart, fixed loose stat-tile digits
 
 - **Removed "By decade".** Reported as saying nothing, and the data agrees

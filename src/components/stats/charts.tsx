@@ -8,8 +8,10 @@ import type { YearPoint } from "@/lib/stats";
  * library (see `CHANGELOG.md` for the measured reasoning).
  *
  * Buckets that aren't a real category ("Other", "No publisher", "Unknown",
- * "Unrated") render `muted`: dimmer and never linked, so a bar you can't act on
- * looks different from one you can.
+ * "Unrated") render `muted`: dimmer, so a synthetic bucket looks different from
+ * a real one. Muted and unlinked are separate questions — "No publisher" can't
+ * be expressed as a board filter and so has no link, while "Unrated" can and
+ * does.
  */
 
 export function Panel({
@@ -63,15 +65,32 @@ export interface BarRow {
   key: string;
   label: string;
   count: number;
+  /** Right-hand figure, when the raw `count` isn't how it should read (e.g. `4.5★`). */
+  value?: string;
   /** Board URL this row drills through to; omitted when no filter matches it. */
   href?: string;
   muted?: boolean;
 }
 
-/** Horizontal bars, one row per bucket, sized against the largest bucket. */
-export function BarList({ rows, empty = "Nothing to show yet." }: { rows: BarRow[]; empty?: string }) {
+/**
+ * Horizontal bars, one row per bucket, sized against the largest bucket — or
+ * against `max`, for a measure with a fixed ceiling.
+ *
+ * A rating is the case for `max`: on a relative scale the best artist's bar is
+ * always full, so a table of 4.9s and one of 2.1s draw identically. Against a
+ * fixed 5 the bar means the score itself.
+ */
+export function BarList({
+  rows,
+  empty = "Nothing to show yet.",
+  max: fixedMax,
+}: {
+  rows: BarRow[];
+  empty?: string;
+  max?: number;
+}) {
   if (rows.length === 0) return <p className="py-6 text-center text-xs text-muted">{empty}</p>;
-  const max = Math.max(...rows.map((r) => r.count), 1);
+  const max = fixedMax ?? Math.max(...rows.map((r) => r.count), 1);
 
   return (
     <ul className="space-y-1">
@@ -104,7 +123,7 @@ export function BarList({ rows, empty = "Nothing to show yet." }: { rows: BarRow
               />
             </span>
             <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted">
-              {row.count}
+              {row.value ?? row.count}
             </span>
           </>
         );
@@ -132,8 +151,26 @@ export interface HistogramColumn {
   key: string;
   label: string;
   count: number;
+  /** Board URL this column drills through to; omitted for empty buckets. */
+  href?: string;
   muted?: boolean;
 }
+
+/**
+ * The plot area's height in px. Bars are sized against *this*, not against a
+ * percentage of their column.
+ *
+ * The percentage version was wrong in two visible ways, because the column it
+ * measured against also had to hold the value label, the axis label and the
+ * gaps between them — about 35px of the 160px. Any bar over ~78% therefore
+ * overflowed its column, and flex-shrink (1 by default) squashed it back to
+ * whatever space was left: counts of 10 and 8 both rendered at ~124px, so a
+ * quarter more covers looked like the same bar. The tallest bar didn't shrink
+ * quite enough, so it pushed its own axis label 3px below every other one and
+ * the baseline stopped being a line. A fixed plot height has neither problem —
+ * the bar's box is the only thing in it.
+ */
+const PLOT_H = 120;
 
 /**
  * Vertical columns on a shared baseline — for the rating distribution, where the
@@ -142,21 +179,57 @@ export interface HistogramColumn {
 export function Histogram({ columns }: { columns: HistogramColumn[] }) {
   const max = Math.max(...columns.map((c) => c.count), 1);
   return (
-    <div className="flex h-40 items-end gap-1">
-      {columns.map((col) => (
-        <div key={col.key} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1">
-          <span className="text-center text-[10px] tabular-nums text-muted">
-            {col.count > 0 ? col.count : ""}
+    // `pt-4` is the strip the value labels sit in: they hang above their bar
+    // rather than taking layout height, so a full-height bar still has room.
+    <div className="flex flex-col gap-1 pt-4">
+      <div className="flex items-end gap-1" style={{ height: PLOT_H }}>
+        {columns.map((col) => {
+          const bar = (
+            <div
+              className={`relative w-full rounded-t transition ${
+                col.muted
+                  ? "bg-muted/40 group-hover:bg-muted/60"
+                  : "bg-accent/70 group-hover:bg-accent"
+              }`}
+              // A zero bucket keeps a 2px stub so the axis reads as continuous.
+              style={{
+                height: col.count === 0 ? 2 : Math.max(4, (col.count / max) * PLOT_H),
+              }}
+              title={`${col.label}: ${col.count}`}
+            >
+              {col.count > 0 && (
+                <span className="absolute inset-x-0 bottom-full pb-0.5 text-center text-[10px] tabular-nums text-muted">
+                  {col.count}
+                </span>
+              )}
+            </div>
+          );
+          return col.href ? (
+            <Link
+              key={col.key}
+              href={col.href}
+              className="group flex h-full min-w-0 flex-1 items-end"
+              aria-label={`${col.label}: ${col.count} ${col.count === 1 ? "cover" : "covers"}`}
+            >
+              {bar}
+            </Link>
+          ) : (
+            <div key={col.key} className="flex h-full min-w-0 flex-1 items-end">
+              {bar}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-1">
+        {columns.map((col) => (
+          <span
+            key={col.key}
+            className="min-w-0 flex-1 truncate text-center text-[10px] text-muted"
+          >
+            {col.label}
           </span>
-          <div
-            className={`w-full rounded-t ${col.muted ? "bg-muted/40" : "bg-accent/70"}`}
-            // A zero bucket keeps a 2px stub so the axis reads as continuous.
-            style={{ height: `${col.count === 0 ? 2 : Math.max(4, (col.count / max) * 100)}%` }}
-            title={`${col.label}: ${col.count}`}
-          />
-          <span className="truncate text-center text-[10px] text-muted">{col.label}</span>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

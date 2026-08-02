@@ -21,7 +21,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useChromeHeight } from "@/lib/use-chrome-height";
 import {
   keys,
   useBoards,
@@ -60,6 +61,8 @@ export function BoardTabs({ activeBoardId }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const updateBoard = useUpdateBoard();
+  const ref = useRef<HTMLDivElement>(null);
+  useChromeHeight(ref, "--h-tabs");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -93,7 +96,10 @@ export function BoardTabs({ activeBoardId }: Props) {
   const activeBoard = activeId ? boards?.find((b) => b.id === activeId) ?? null : null;
 
   return (
-    <div className="sticky top-[57px] z-30 border-b border-border bg-bg/80 backdrop-blur-xl">
+    <div
+      ref={ref}
+      className="sticky top-[var(--top-tabs)] z-30 border-b border-border bg-bg/80 backdrop-blur-xl"
+    >
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

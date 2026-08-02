@@ -91,18 +91,20 @@ export function ListView({ comics, currentBoardId, onOpen, sortField, sortDir, o
         this box is already a scroll container — but with auto height it never
         scrolls vertically, and a sticky child of a container that never scrolls
         never moves. Giving it a real height makes it the scrollport the header
-        sticks to. The offset clears the app chrome: top bar + board tabs +
-        filter row, which are themselves sticky at 0 / 57 / 99.
+        sticks to. The height clears the app chrome above via `--h-chrome`
+        (top bar + tabs + filter row, measured — see `use-chrome-height.ts`).
       */}
       <div
         data-list-table
-        // The offset tracks the sticky chrome above (top bar 57 + tabs 42 +
-        // filter row) — and the bulk action bar, which renders in normal flow
-        // directly above this box. Without the second figure, selecting a row
-        // pushed the table's bottom edge below the viewport and the page grew a
-        // second scrollbar outside the one the sticky header is anchored to.
+        // The second figure covers the bulk action bar, which renders in normal
+        // flow directly above this box. Without it, selecting a row pushed the
+        // table's bottom edge below the viewport and the page grew a second
+        // scrollbar outside the one the sticky header is anchored to. The 48px
+        // is `main`'s own vertical padding.
         className={`${
-          selected.size > 0 ? "max-h-[calc(100vh-252px)]" : "max-h-[calc(100vh-190px)]"
+          selected.size > 0
+            ? "max-h-[calc(100vh-var(--h-chrome)-110px)]"
+            : "max-h-[calc(100vh-var(--h-chrome)-48px)]"
         } overflow-auto rounded-xl border border-border`}
       >
         <div className="min-w-[900px]">

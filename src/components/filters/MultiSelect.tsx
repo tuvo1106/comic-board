@@ -7,6 +7,8 @@ import { Check, ChevronDown, Pencil } from "@/components/ui/icons";
 interface Option {
   value: string;
   count: number;
+  /** Display form, when the stored value isn't the readable one (e.g. `4.5` → `4.5★`). */
+  label?: string;
 }
 
 interface Props {
@@ -53,7 +55,9 @@ export function MultiSelect({ label, options, selected, onToggle, onRename }: Pr
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? options.filter((o) => o.value.toLowerCase().includes(q)) : options;
+    return q
+      ? options.filter((o) => (o.label ?? o.value).toLowerCase().includes(q))
+      : options;
   }, [options, query]);
 
   const active = selected.length > 0;
@@ -137,7 +141,7 @@ export function MultiSelect({ label, options, selected, onToggle, onRename }: Pr
                       >
                         {checked && <Check className="h-3 w-3" />}
                       </span>
-                      <span className="flex-1 truncate">{o.value}</span>
+                      <span className="flex-1 truncate">{o.label ?? o.value}</span>
                       <span className="text-xs text-muted">{o.count}</span>
                     </button>
                     {onRename && (

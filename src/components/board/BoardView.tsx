@@ -87,15 +87,13 @@ export function BoardView({ boardId }: { boardId?: string }) {
       {/* Header + tabs + upload modal are the group layout's (CollectionChrome).
           The filter bar stays here: it's board-scoped, and its facet counts are
           derived from this board's comics. */}
-      <FilterBar boardComics={comics ?? []} visibleComics={filtered} />
-
-      <main className="mx-auto max-w-[1800px] px-5 py-6">
-        {comics && comics.length > 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-xs text-muted">
-              {filtered.length} {filtered.length === 1 ? "cover" : "covers"}
-            </p>
-            <div className="flex items-center gap-2">
+      <FilterBar
+        boardComics={comics ?? []}
+        visibleComics={filtered}
+        trailing={
+          comics &&
+          comics.length > 0 && (
+            <div className="flex flex-shrink-0 items-center gap-2">
               {/* List view sorts via its column headers, so the dropdown is grid-only. */}
               {view === "grid" && (
                 <>
@@ -105,8 +103,11 @@ export function BoardView({ boardId }: { boardId?: string }) {
               )}
               <ViewToggle value={view} onChange={setView} />
             </div>
-          </div>
-        )}
+          )
+        }
+      />
+
+      <main className="mx-auto max-w-[1800px] px-5 py-6">
         {isLoading && <BoardSkeleton columns={columns} />}
         {isError && (
           <p className="py-20 text-center text-danger">

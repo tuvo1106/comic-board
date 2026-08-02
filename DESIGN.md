@@ -457,17 +457,22 @@ scan through **Replace cover** beats any upscale.
   **manual** tab falls back to the drag-drop zone with local preview. Either way,
   a multi-file queue carries series/publisher/authors/artists/boards forward
   across files, with board pre-selection.
-- **Stats** (`/stats`) — headline totals, publisher/decade bars, a rating
-  histogram, a release-year timeline, and series/artist/author/character
-  leaderboards. **No API route of its own:** the maths is pure
+- **Stats** (`/stats`) — headline totals, publisher bars, a rating histogram, a
+  release-year timeline, a best-rated cover artists panel (mean rating, floored
+  at `MIN_RATED_COVERS` rated covers so a single 5★ can't top it), and
+  series/artist/author/character leaderboards. **No API route of its own:** the maths is pure
   (`src/lib/stats.ts`) over the comics list `useComics()` already caches, the
   same client-side-bucketing choice as `computeFacets`. Time is keyed off
   `coverDate` (a property of the collection), never `createdAt` (an artifact of
   when you uploaded). Every breakdown sums to the collection — "No publisher",
   "Unknown", "Unrated" and "Other" buckets exist so bars can't quietly fail to
   add up. Bars are `<a>`s built via `filtersToParams`, so drill-through can't
-  drift from the board's URL contract; the rating histogram is unlinked because
-  no rating filter exists. Charts are hand-rolled divs + one inline SVG — no
+  drift from the board's URL contract; the rating histogram links too, through
+  the board's `rating` facet, and both sides bucket via the same `ratingBucket`
+  so a bar's count and the board it opens can't disagree. Vertical bars are
+  sized against a fixed plot height, never a percentage of a box that also
+  holds their labels — see `ENGINEERING_NOTES.md` for what that cost. Charts
+  are hand-rolled divs + one inline SVG — no
   charting dependency. Reached from **a trailing item in the board tab strip**,
   after the `+` and behind a divider, which takes the normal active highlight —
   so exactly one item in the strip is always current and getting back to the

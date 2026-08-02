@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
+import { useChromeHeight } from "@/lib/use-chrome-height";
 import { AccountSettingsDialog } from "@/components/auth/AccountSettingsDialog";
 import { Menu, MenuItem } from "@/components/ui/Menu";
 import { Download, Plus, Settings } from "@/components/ui/icons";
@@ -20,8 +21,14 @@ interface Props {
 }
 
 export function TopBar({ search, onSearch, onSearchCommit, onSearchSubmit, onAdd }: Props) {
+  const ref = useRef<HTMLElement>(null);
+  useChromeHeight(ref, "--h-top-bar");
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
+    <header
+      ref={ref}
+      className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl"
+    >
       <div className="mx-auto flex max-w-[1800px] items-center gap-4 px-5 py-3">
         {/* The wordmark is the way back to the board from any page that isn't one. */}
         <Link href="/" className="flex items-center gap-2 rounded-lg">

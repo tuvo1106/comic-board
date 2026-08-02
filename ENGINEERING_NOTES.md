@@ -129,6 +129,80 @@ width) was three lines; noticing was the whole job.
 
 ## Bugs
 
+### A bar chart where 10 and 8 drew the same height (2026-08-01)
+
+**Reported as "the bar graph isn't straight", then "141 looks barely above
+114". One cause, and it was in the CSS, not the maths.**
+
+Each rating bar was `height: N%` of its column. But the column also held the
+value label above the bar, the axis label below it and two gaps — about 35px of
+its 160px. So a bar's percentage was measured against space it couldn't have.
+Anything over ~78% overflowed, and `flex-shrink: 1` (the default nobody sets)
+squashed it back to whatever was left: 10 → 125px, 8 → 123px. A quarter more
+covers, two pixels taller. The tallest bar didn't shrink quite enough either,
+so it pushed its own axis label 3px below every other one — the crooked
+baseline, which is the part that got noticed first even though it was the
+smaller symptom.
+
+The fix is that the bars are sized against a `PLOT_H` constant and the value
+labels hang above them (`absolute bottom-full`), taking no layout height at
+all. 10 and 8 now draw at 120px and 96px on one baseline.
+
+The generalisable bit: **a percentage height is a claim about a box, and the
+box has to be one that contains only the thing being measured.** The
+`BarList` beside it was never wrong for exactly this reason — its bars are
+percentages of a bare `h-5` track with nothing else in it. Same component file,
+same author, same afternoon; the difference was whether the measured box had
+other tenants.
+
+**Postscript — the report that turned into a feature.** The third message was
+"it says I have 11 unrated but I don't see it in list view". The count was
+correct; the problem was that the page says *Click any bar to see those covers*
+and the Ratings panel was the one chart that couldn't, because the board had no
+rating filter — a limitation a code comment cheerfully documented rather than
+questioned. Adding the filter was the fix. The thing worth keeping: both the
+histogram's counts and the filter's matching now go through one `ratingBucket`
+function, because a drill-through whose destination disagrees with the number
+you clicked is worse than a bar that doesn't link at all.
+
+### Four hard-coded pixel offsets, one of which had been wrong for weeks (2026-08-01)
+
+**A layout with four stacked sticky bars, each pinned with a literal derived
+from the heights of the ones above it, is a system that can only be right at one
+moment.** Reported as "the sort tabs are supposed to be sticky when I scroll
+down" — true, and the smaller half of what was wrong.
+
+The board's view controls (count, sort, columns, grid/list) genuinely weren't
+sticky; they sat in `<main>` in normal flow. But putting them at the bottom of
+the stack meant computing where the bottom *was*, and measuring the real
+elements found the stack had already drifted: the top bar was pinned at `57px`,
+its actual height was `63px`, and the tab strip had been sliding 6px under it
+since the search box grew. The filter row's `99px` overlapped the tabs by 3px
+for the same reason. Neither is visible in a screenshot unless you're looking
+for it, and nothing in the type system or the 234 tests has an opinion about a
+number in a class name.
+
+The fix is that no bar knows its own offset any more. Each publishes its
+measured height to a CSS variable via a `ResizeObserver` and the next one pins
+to `calc()` of the sum, with the literals surviving only as first-paint
+defaults. That also handles the case no constant ever could: the filter row's
+facets wrap on a narrow viewport, so its height is a function of viewport width.
+
+**The second report is the more interesting one.** With the controls sticky in
+their own band, the response was "the sort pills living on a different height as
+filter is weird" — two strips of identically-sized pills, stacked, reading as
+one more layer of chrome than the app needs. Merging them into one row surfaced
+the *next* thing: "try filtering for a character, it makes everything out of
+place." Filtering reveals Save-as-board and Clear, ~245px appearing mid-session,
+which wrapped `Date` onto a second line and left the view controls centered
+against a now-double-height row. Those two buttons belong next to the chips they
+act on, not competing with the facets for the same line, so they moved down —
+which is also what made room for the view controls in the first place.
+
+Three reports, one underlying shape: **a row whose contents change at runtime
+can't be laid out by looking at it once.** The offsets, the wrapping and the
+mid-session appearance of the filter actions are the same bug told three ways.
+
 ### A dead end, then a false affordance: two wrong fixes before the right one (2026-07-29)
 
 **I shipped a stats page you couldn't get out of, "fixed" it in a way that was

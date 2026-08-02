@@ -3,7 +3,13 @@
 import { useMemo } from "react";
 import { useComics } from "@/lib/client-api";
 import { EMPTY_FILTERS, filtersToParams, type Filters } from "@/lib/filters";
-import { computeStats, type CountBucket, type YearPoint } from "@/lib/stats";
+import {
+  computeStats,
+  ratingBucket,
+  MIN_RATED_COVERS,
+  type CountBucket,
+  type YearPoint,
+} from "@/lib/stats";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import { BarList, Histogram, Panel, StatCard, YearChart, type BarRow } from "./charts";
 
@@ -79,8 +85,6 @@ export function StatsView() {
 
               <Panel
                 title="Ratings"
-                // No rating filter exists on the board, so unlike every other
-                // chart here these bars aren't links — hence the plain histogram.
                 subtitle={`${stats.totals.rated} of ${stats.totals.comics} rated`}
               >
                 <Histogram
@@ -88,6 +92,13 @@ export function StatsView() {
                     key: r.label,
                     label: r.label,
                     count: r.count,
+                    // Unrated links too — "11 unrated" is only useful if you can
+                    // get to the 11. `ratingBucket` is the same function the
+                    // counts came from, so the bar and the board agree.
+                    href:
+                      r.count > 0
+                        ? boardHref({ ratings: [ratingBucket(r.rating)] })
+                        : undefined,
                     muted: r.rating === null,
                   }))}
                 />
@@ -105,6 +116,28 @@ export function StatsView() {
                 }
               >
                 <YearChart points={stats.releaseYears} />
+              </Panel>
+
+              {/* Fills the slot the release-year panel leaves in this 2-up grid,
+                  and it's the one question the other charts can't answer: they
+                  all rank by volume, this one by how much you liked the work. */}
+              <Panel
+                title="Best-rated cover artists"
+                subtitle={`Average rating · ${MIN_RATED_COVERS}+ rated covers`}
+              >
+                <BarList
+                  // Fixed 0–5 scale: these bars are the score, not a share of
+                  // the leader's score.
+                  max={5}
+                  rows={stats.bestArtists.map((a) => ({
+                    key: a.value,
+                    label: a.label,
+                    count: a.average,
+                    value: a.average.toFixed(1),
+                    href: boardHref({ artists: [a.value] }),
+                  }))}
+                  empty={`No artist has ${MIN_RATED_COVERS} rated covers yet.`}
+                />
               </Panel>
             </div>
 

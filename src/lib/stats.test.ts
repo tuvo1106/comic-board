@@ -40,6 +40,21 @@ describe("computeStats", () => {
       });
     });
 
+    it("agrees with the histogram about what counts as rated", () => {
+      // A 0 is unrated in the Unrated bucket, so it must not be counted as
+      // rated here — the subtitle sits directly above that bar.
+      const stats = computeStats([
+        makeComic({ rating: 4 }),
+        makeComic({ rating: 0 }),
+        makeComic({ rating: null }),
+      ]);
+      const unrated = stats.ratings.find((b) => b.rating === null)!;
+      expect(stats.totals.rated).toBe(1);
+      expect(unrated.count).toBe(2);
+      expect(stats.totals.rated + unrated.count).toBe(stats.totals.comics);
+      expect(stats.totals.averageRating).toBe(4);
+    });
+
     it("reports no average when nothing is rated", () => {
       expect(computeStats([makeComic({ rating: null })]).totals.averageRating).toBeNull();
     });
@@ -183,6 +198,42 @@ describe("computeStats", () => {
         ["Batman", 2],
         ["Robin", 1],
       ]);
+    });
+
+    it("ranks best-rated artists by mean, ignoring unrated covers", () => {
+      const comics = [
+        makeComic({ artists: ["Alex Ross"], rating: 5 }),
+        makeComic({ artists: ["Alex Ross"], rating: 4 }),
+        // Unrated is not a zero — it must not drag the average down.
+        makeComic({ artists: ["Alex Ross"], rating: null }),
+        makeComic({ artists: ["Jim Lee"], rating: 3 }),
+        makeComic({ artists: ["Jim Lee"], rating: 3 }),
+      ];
+      expect(computeStats(comics).bestArtists).toEqual([
+        { value: "Alex Ross", label: "Alex Ross", average: 4.5, rated: 2 },
+        { value: "Jim Lee", label: "Jim Lee", average: 3, rated: 2 },
+      ]);
+    });
+
+    it("excludes artists below the rated-cover floor, however high they score", () => {
+      // One 5★ cover is not an average — it would otherwise top the chart.
+      const comics = [
+        makeComic({ artists: ["One Hit"], rating: 5 }),
+        makeComic({ artists: ["Steady"], rating: 3.5 }),
+        makeComic({ artists: ["Steady"], rating: 3.5 }),
+      ];
+      expect(computeStats(comics).bestArtists.map((a) => a.value)).toEqual(["Steady"]);
+    });
+
+    it("breaks an equal average by the number of rated covers behind it", () => {
+      const comics = [
+        makeComic({ artists: ["Few"], rating: 4 }),
+        makeComic({ artists: ["Few"], rating: 4 }),
+        makeComic({ artists: ["Many"], rating: 4 }),
+        makeComic({ artists: ["Many"], rating: 4 }),
+        makeComic({ artists: ["Many"], rating: 4 }),
+      ];
+      expect(computeStats(comics).bestArtists.map((a) => a.value)).toEqual(["Many", "Few"]);
     });
 
     it("caps each leaderboard at ten rows", () => {
