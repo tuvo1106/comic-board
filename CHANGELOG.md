@@ -4,6 +4,31 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-08-01 — 1.2.0 — Full-screen cover viewer, zoom to 1:1
+
+- **Click a cover — in the detail modal, or its own "Full screen" button — to
+  view it at full viewport,** past fit-to-screen up to 1:1 on an upscaled scan.
+  Zoom is a visible slider with a "Fit · 1:1" readout that's also the way back,
+  not a hidden gesture you have to discover. A single click on the cover zooms
+  to that point and zooms back out; scroll pans, pinch zooms; `F` toggles real
+  browser full-screen. The cover flies out of the detail modal and back — the
+  same shared-element language the board already uses to open a card — rather
+  than fading; it's a hand-rolled FLIP rather than Motion's `layoutId`, because
+  layout projection writes a transform onto the child element that silently
+  overrides the zoom's own.
+- **Zoom survives stepping to the next cover.** Arrowing between covers is a
+  route change, and Next remounts the whole detail view on the id change, so
+  component state doesn't survive it. The zoom lives in a module-level store
+  for the same reason `lib/nav-order.ts` already does, and a carried zoom is
+  remapped proportionally onto the next cover's box — a corner you zoomed into
+  stays that corner on a differently-sized cover.
+- **The zoom/pan/fit arithmetic lives in its own file** (`cover-zoom.ts`), pure
+  and unit-tested: fit-to-viewport, what "1:1" means, pan clamping,
+  zoom-about-a-point, tap-vs-drag, wheel-pan-vs-pinch-zoom. The two real bugs
+  here were both arithmetic — a viewer claiming "1:1" while showing a third of
+  the detail, and a zoom that silently reset on every arrow press — and both
+  were found by reasoning about the numbers, not by clicking through the UI.
+
 ## 2026-08-01 — Rating histogram fixed and made clickable, a rating filter, best-rated artists
 
 - **The rating bars were lying about their own numbers.** Each bar's height was
