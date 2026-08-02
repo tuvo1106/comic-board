@@ -145,18 +145,39 @@ export async function statsPage({ p, ck, sleep, apiJson, coverCount }) {
     );
   }
 
-  // The rating histogram deliberately has no links — there's no rating filter to
-  // send anyone to, and a bar that looks clickable but isn't is worse than a
-  // plain one.
+  // The rating histogram now drills through like every other chart: there's a
+  // board-side Rating facet, and both sides bucket via the same `ratingBucket`
+  // so a bar's count and the board it opens can't disagree.
   await p.goto(`${BASE}/stats`, { waitUntil: "networkidle0" });
   await sleep(900);
-  const ratingLinks = await p.evaluate(() => {
+  const ratingBar = await p.evaluate(() => {
     const panel = [...document.querySelectorAll("main section")].find(
       (s) => s.querySelector("h2")?.textContent.trim() === "Ratings",
     );
-    return panel ? panel.querySelectorAll("a").length : -1;
+    const a = panel?.querySelector("a[href^='/?rating=']");
+    if (!a) return null;
+    const label = a.getAttribute("aria-label") ?? "";
+    return { href: a.getAttribute("href"), count: Number(label.match(/(\d+)\s+covers?$/)?.[1]) };
   });
-  ck(ratingLinks === 0, `the rating histogram has no drill-through links (${ratingLinks})`);
+  ck(!!ratingBar, `found a rating bar to drill through (${ratingBar?.href})`);
+
+  if (ratingBar) {
+    await p.evaluate(() => document.querySelector("main a[href^='/?rating=']").click());
+    await sleep(1400);
+    const url = new URL(p.url());
+    ck(url.pathname === "/", "clicking a rating bar lands back on the board");
+    ck(url.searchParams.has("rating"), `the board is filtered by rating (?rating=${url.searchParams.get("rating")})`);
+    const shown = await coverCount();
+    ck(
+      shown === ratingBar.count,
+      `the board shows exactly the count the rating bar promised (${shown} vs ${ratingBar.count})`,
+    );
+  }
+
+  // Back to stats for the tab-strip checks below, which assume they're on
+  // that page — both drill-through blocks above navigate away from it.
+  await p.goto(`${BASE}/stats`, { waitUntil: "networkidle0" });
+  await sleep(600);
 
   // Getting back to the covers must be obvious, and the strip must never be in
   // a zero-selection state. Two earlier attempts failed here: no strip at all

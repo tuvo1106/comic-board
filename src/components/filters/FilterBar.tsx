@@ -37,7 +37,6 @@ export function FilterBar({ boardComics, visibleComics, trailing }: Props) {
   const renamePublisher = useRenamePublisher();
   const { toast } = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const chips = activeChips(filters);
   const ref = useRef<HTMLDivElement>(null);
   useChromeHeight(ref, "--h-filters");
 
@@ -116,7 +115,21 @@ export function FilterBar({ boardComics, visibleComics, trailing }: Props) {
         wrap on a narrow viewport, the view controls stay level with the first
         row of them instead of drifting to the middle of a double-height block.
       */}
-      <div className="mx-auto flex max-w-[1800px] items-start gap-2 px-5 py-2.5">
+      <div className="mx-auto flex max-w-[1800px] items-start gap-3 px-5 py-2.5">
+        {/*
+          Always on — this is "how much is on the board right now," not a
+          filter-only readout, and it needs to answer that whether or not
+          anything is filtered. It briefly lived only in the active-chips row
+          as "5 of 25 covers", which looked nicer while filtering but meant
+          there was no count at all the rest of the time — a real loss, not
+          just a missed test (the integration suite's `coverCount()` reads
+          this exact "N covers" text everywhere from "board loaded" to
+          "drill-through landed on the right subset").
+        */}
+        <p className="flex-shrink-0 whitespace-nowrap pt-2 text-xs text-muted">
+          {visibleComics.length} {visibleComics.length === 1 ? "cover" : "covers"}
+        </p>
+
         {/* Desktop: facets inline. */}
         <div className="hidden min-w-0 flex-wrap items-center gap-2 sm:flex">{facets}</div>
 
@@ -160,23 +173,6 @@ export function FilterBar({ boardComics, visibleComics, trailing }: Props) {
       */}
       {active && (
         <div className="mx-auto flex max-w-[1800px] items-center gap-2 px-5 pb-2.5">
-          {/*
-            The count only says anything while filtering — unfiltered it repeats
-            the board's own tab badge verbatim. So it leads this row, as the
-            result of the chips beside it, rather than sitting up among the
-            view controls as the one piece of bare text in a row of pills.
-          */}
-          <p className="flex-shrink-0 whitespace-nowrap text-xs text-muted">
-            <span className="font-medium text-fg">{visibleComics.length}</span> of{" "}
-            {boardComics.length} {boardComics.length === 1 ? "cover" : "covers"}
-          </p>
-          {/* Only when there's something to separate the count *from*: a bare
-              search term makes this row active but produces no chips (`q` has
-              the search box as its own UI), which left a divider trailing off
-              into nothing. */}
-          {chips.length > 0 && (
-            <div aria-hidden className="h-3.5 w-px flex-shrink-0 bg-border" />
-          )}
           <ActiveChips />
           <div className="flex-1" />
           <motion.div
