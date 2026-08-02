@@ -20,6 +20,9 @@ import { Menu } from "@/components/ui/Menu";
 import { StarRating } from "@/components/ui/StarRating";
 import { MetadataForm, type ComicFormValue } from "@/components/forms/MetadataForm";
 import { BoardMembershipList } from "@/components/board/BoardMembershipList";
+import { CoverBackdrop } from "@/components/detail/CoverBackdrop";
+import { coverView } from "@/components/detail/cover-view-store";
+import { CoverViewer } from "@/components/detail/CoverViewer";
 import { ReplaceCoverDialog } from "@/components/detail/ReplaceCoverDialog";
 import { UpscaleDialog } from "@/components/detail/UpscaleDialog";
 import { MAX_UPSCALE_WIDTH } from "@/lib/upscale/types";
@@ -27,6 +30,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Expand,
   ImageIcon,
   Pencil,
   Plus,
@@ -65,6 +69,39 @@ export function ComicDetail({ id, asModal }: Props) {
   const [editing, setEditing] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [upscaling, setUpscaling] = useState(false);
+  // The cover's on-screen box when the full-screen viewer opens, so it can fly
+  // from exactly where it was rather than fading in over the top.
+  const coverRef = useRef<HTMLImageElement>(null);
+  // Seeded from the module store, not initialised to `false`: arrowing to the
+  // next cover remounts this component (see `cover-view-store.ts`), and a
+  // freshly-initialised `false` is exactly how the viewer used to close itself
+  // half way through a navigation.
+  const [viewing, setViewingState] = useState(() => coverView.open);
+  const setViewing = (open: boolean) => {
+    if (open) coverView.openFrom(coverRef.current?.getBoundingClientRect() ?? null);
+    else coverView.close();
+    setViewingState(open);
+  };
+  const openViewer = () => setViewing(true);
+
+  /**
+   * Drop the viewer state when we leave the comic entirely, keep it when we're
+   * only stepping to the next one.
+   *
+   * Both look identical from in here — this component unmounts either way — so
+   * the test is the URL, which the router has already updated by the time this
+   * cleanup runs. Still on `/comic/…` means another `ComicDetail` is mounting
+   * behind us and the zoom should ride along; anything else means the modal is
+   * gone, and a leftover `open` would spring the *next* cover you open straight
+   * into full screen. Deliberately not a `popstate` listener: back is only one
+   * of the ways out, and this catches all of them.
+   */
+  useEffect(
+    () => () => {
+      if (!window.location.pathname.startsWith("/comic/")) coverView.close();
+    },
+    [],
+  );
   const { data: upscaler } = useUpscalerInfo();
   const revertUpscale = useRevertUpscale();
   const [form, setForm] = useState<ComicFormValue | null>(null);
@@ -107,6 +144,11 @@ export function ComicDetail({ id, asModal }: Props) {
   };
 
   const close = useCallback(() => {
+    // Leaving the comic entirely: drop the viewer state, or the next cover you
+    // open springs straight into full screen at the zoom you left behind.
+    // (Can't be done on unmount — this component unmounts on every step
+    // between covers, which is the state the store exists to survive.)
+    coverView.close();
     if (asModal) router.back();
     else router.push("/");
   }, [asModal, router]);
@@ -161,7 +203,7 @@ export function ComicDetail({ id, asModal }: Props) {
       // which remounted the keyed dialog and started a fresh upscale on the new
       // cover, orphaning the candidate you were looking at. Escape likewise
       // closed the dialog and this modal together.
-      if (replacing || upscaling) return;
+      if (replacing || upscaling || viewing) return;
       if (editing) {
         // While editing, Escape backs out of edit mode; don't navigate covers.
         if (e.key === "Escape") cancelEdit();
@@ -173,7 +215,7 @@ export function ComicDetail({ id, asModal }: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, goto, prev, next, editing, replacing, upscaling]);
+  }, [close, goto, prev, next, editing, replacing, upscaling, viewing]);
 
   const onDelete = async () => {
     try {
@@ -250,34 +292,11 @@ export function ComicDetail({ id, asModal }: Props) {
         {/* Cover — shared element with the board card. */}
         <div className="relative flex items-center justify-center overflow-hidden bg-black/40 p-4 md:w-[55%]">
           {comic && (
-            <>
-              {/* Blurred backdrop of the same cover, scaled up so the blur's
-                  soft edges don't reveal the container boundary.
-
-                  Two layers, because they do different jobs. `blurDataUrl` is a
-                  ~300-byte inline thumbnail: it paints instantly with no
-                  request, so a cold deep-link is never a flat black panel — but
-                  it's ~16px wide, so it has no detail to reveal no matter how
-                  little blur you put on it. The real thumbnail on top carries
-                  actual artwork, and is already being fetched for the cover
-                  itself, so it costs nothing extra. */}
-              <div
-                aria-hidden
-                className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl"
-                style={{ backgroundImage: `url(${comic.blurDataUrl})` }}
-              />
-              <div
-                aria-hidden
-                className="absolute inset-0 scale-110 bg-cover bg-center blur-lg"
-                style={{ backgroundImage: `url(${comic.thumbUrl})` }}
-              />
-              {/* Scrim: enough to keep the cover the subject, light enough that
-                  the artwork behind still reads. */}
-              <div aria-hidden className="absolute inset-0 bg-black/30" />
-            </>
+            <CoverBackdrop blurDataUrl={comic.blurDataUrl} thumbUrl={comic.thumbUrl} />
           )}
           {comic ? (
             <motion.img
+              ref={coverRef}
               layoutId={`cover-${id}`}
               src={decodedUrl === comic.imageUrl ? comic.imageUrl : comic.thumbUrl}
               alt={comic.series}
@@ -289,7 +308,8 @@ export function ComicDetail({ id, asModal }: Props) {
               // a transform during the layout animation, which promotes the
               // image; once the animation settled the transform went back to
               // `none` and the cover dropped behind the scrim.
-              className="relative z-10 max-h-[45vh] w-auto rounded-lg object-contain shadow-xl md:max-h-[80vh]"
+              onClick={openViewer}
+              className="relative z-10 max-h-[45vh] w-auto cursor-zoom-in rounded-lg object-contain shadow-xl md:max-h-[80vh]"
               layoutCrossfade={false}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
             />
@@ -307,9 +327,18 @@ export function ComicDetail({ id, asModal }: Props) {
                   meant three things overlaying the artwork — they've moved to
                   the file-info line in the metadata panel, next to the revert
                   they belong with. */}
+              {/* The cover itself opens the viewer too, but an <img> with an
+                  onClick isn't reachable by keyboard — this is the affordance
+                  that is. */}
+              <button
+                onClick={openViewer}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
+              >
+                <Expand className="h-4 w-4" /> Full screen
+              </button>
               <button
                 onClick={() => setReplacing(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
               >
                 <ImageIcon className="h-4 w-4" /> Replace cover
               </button>
@@ -319,7 +348,7 @@ export function ComicDetail({ id, asModal }: Props) {
               {upscaler?.available && comic.width < MAX_UPSCALE_WIDTH && (
                 <button
                   onClick={() => setUpscaling(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-surface/40 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-fg/80 shadow-lg ring-1 ring-border/50 backdrop-blur-sm transition hover:bg-surface/95 hover:text-fg hover:ring-border"
                 >
                   <Sparkles className="h-4 w-4" /> Upscale
                 </button>
@@ -568,6 +597,20 @@ export function ComicDetail({ id, asModal }: Props) {
           onClose={() => setUpscaling(false)}
         />
       )}
+
+      {/* SPIKE: full-screen cover viewer. Rendered over this modal rather than
+          replacing it, so closing lands back on the metadata you came from. */}
+      <AnimatePresence>
+        {comic && viewing && (
+          <CoverViewer
+            comic={comic}
+            prev={prev}
+            next={next}
+            onNavigate={goto}
+            onClose={() => setViewing(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
