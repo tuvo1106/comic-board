@@ -5,7 +5,9 @@ covers with metadata (series, issue, cover date, artists, characters), organize
 them into boards shown as tabs, drag to reorder, click for a shared-element
 detail view, and filter by any field with animated reflow.
 
-Built to the spec in [`DESIGN.md`](./DESIGN.md).
+Built to the spec in [`DESIGN.md`](./DESIGN.md). New to the codebase?
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) is the orientation — how a request
+travels, which layer calls which, and the seams it's built to be cut along.
 
 ## Stack
 

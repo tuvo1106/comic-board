@@ -2,6 +2,8 @@
 
 Guidance for AI agents working in this repo. Human-facing docs live in
 `README.md`; what's shipped is `CHANGELOG.md`; what's planned is `ROADMAP.md`.
+Before a first change, read `ARCHITECTURE.md` — it's short, and it's where the
+layering rule and the cross-file invariants are written down.
 
 ## Working the backlog
 
