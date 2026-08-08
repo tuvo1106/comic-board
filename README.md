@@ -163,3 +163,11 @@ exist — import is a restore, not signup.
 
 See [`CHANGELOG.md`](./CHANGELOG.md) for what's shipped and
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for commit conventions and the PR process.
+
+## License
+
+[MIT](./LICENSE)
