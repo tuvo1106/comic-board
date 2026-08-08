@@ -523,6 +523,10 @@ for movement, durations for fades.
 
 ## 7. Project structure
 
+The tree below is the inventory. For the rule it obeys — which layer may call
+which, and why nothing above `db/` imports Drizzle — see
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) §3.
+
 ```
 src/
   app/            page.tsx (My Comics), board/[id], comic/[id],

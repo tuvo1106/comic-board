@@ -2,6 +2,8 @@
 
 Guidance for AI agents working in this repo. Human-facing docs live in
 `README.md`; what's shipped is `CHANGELOG.md`; what's planned is `ROADMAP.md`.
+Before a first change, read `ARCHITECTURE.md` — it's short, and it's where the
+layering rule and the cross-file invariants are written down.
 
 ## Working the backlog
 
@@ -118,6 +120,16 @@ Then, in the browser, authenticate **before** loading the board.
 
 ## Conventions
 
+- Commit messages: [Conventional Commits](https://www.conventionalcommits.org/)
+  (`type(scope): subject`); no `Co-Authored-By` trailer. Enforced by a
+  `commit-msg` hook — run `lefthook install` once after cloning. See
+  [CONTRIBUTING.md](CONTRIBUTING.md) for the full commit/PR/ADR process.
+- **Never commit directly to `main`.** One PR per feature. Branch prefixes:
+  `feat/<slug>`, `fix/<slug>`, `chore/<slug>`, `docs/<slug>`, `spike/<slug>`.
+- **Build as if this repo were public.** No secrets, credentials, tokens, or
+  real user data committed — ever, not "temporarily," not in a branch you plan
+  to squash. A `no-secrets` pre-commit hook backs this up but isn't a
+  substitute for not doing it in the first place.
 - Dark-mode-only UI by design; the codebase uses `[color-scheme:dark]` — don't
   half-add a light theme.
 - Filter facets share a pill+popover pattern (`MultiSelect`, `DateRangeFilter`)
@@ -158,6 +170,9 @@ against. Before adding a comment or a doc, ask which of these it actually is:
    item collapses to one line plus a pointer (`→ CHANGELOG.md`), not a
    write-up. If you're editing a "shipped" section and it's growing rather
    than shrinking, that content is drifting into CHANGELOG's job.
+5. **`docs/adr/`**, for a decision made *during* implementation that's hard to
+   reverse, non-obvious, or rejected a plausible alternative — and doesn't fit
+   any of the above. See ADR-0001.
 
 **No CI checks any of this** — it's a norm to self-police, not a lint rule.
 When a PR touches several files' worth of comments or crosses into the

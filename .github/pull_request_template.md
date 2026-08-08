@@ -33,6 +33,7 @@ the dev database. -->
 - [ ] `CHANGELOG.md` — what shipped and why (required for anything user-visible)
 - [ ] `ROADMAP.md` — a finished item collapses to one line + `→ CHANGELOG.md`
 - [ ] `DESIGN.md` / `README.md` / `AGENTS.md` — only if behaviour or workflow moved
+- [ ] New decisions recorded as an ADR (`docs/adr/`)
 - [ ] Nothing landed in the wrong tier (a debugging story in a code comment, a
       shipped feature still written up in ROADMAP)
 
