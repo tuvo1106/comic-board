@@ -208,7 +208,7 @@ sequenceDiagram
     Search->>Meta: GET /cover?url=... (proxy — keeps the key server-side)
     Meta-->>Search: image bytes
     Search->>Form: prefill
-    Note over Form: cover artists and characters are left blank —<br/>Metron's variant/character data isn't reliable enough to autofill
+    Note over Form: cover artists and characters left blank — see §4.1
     User->>Form: edit fields, pick boards, submit
     Form->>Create: multipart (image + metadata JSON + boardIds)
     Create->>FS: processUpload → covers/&lt;id&gt;/ (full + thumb + blur)
