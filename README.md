@@ -9,6 +9,21 @@ Built to the spec in [`DESIGN.md`](./DESIGN.md). New to the codebase?
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) is the orientation — how a request
 travels, which layer calls which, and the seams it's built to be cut along.
 
+![Board grid view](./docs/assets/board-grid.jpg)
+
+Typeahead search suggests series, artists, and characters as you type, and
+every filter-bar facet (publisher, author, artist, character, tag, rating,
+date) narrows the grid live:
+
+![Search autocomplete](./docs/assets/search-autocomplete.jpg)
+![Cover artist facet filter](./docs/assets/facet-filter.jpg)
+
+Click a cover for the detail view, then **Full screen** to zoom past fit up
+to 1:1 — scroll to pan, pinch or the slider to zoom, `F` for real full-screen:
+
+![Comic detail modal](./docs/assets/detail-modal.jpg)
+![Full-screen zoom viewer](./docs/assets/zoom-viewer.gif)
+
 ## Stack
 
 - **Next.js 16** (App Router) + React 19 + TypeScript
@@ -44,26 +59,11 @@ register a new one at `/signup`. In production, set `BETTER_AUTH_SECRET` (the
 app refuses to boot without it).
 
 > **Port must match `BETTER_AUTH_URL`.** better-auth only accepts sign-in from
-> the origin in `BETTER_AUTH_URL` (`.env`), so the dev server has to run on that
-> same port or login fails with `Invalid origin`. Both default to **3939**
-> (`npm run dev` passes `-p 3939`); if you change one, change the other.
+> that origin (`.env`), so the dev server must run on the same port or login
+> fails with `Invalid origin`. Both default to **3939** — change one, change
+> the other.
 
 Uploaded images and the SQLite database live under `./data` (gitignored).
-
-## Scripts
-
-| Script | Purpose |
-|---|---|
-| `npm run dev` | Dev server |
-| `npm run build` / `npm run start` | Production build / serve |
-| `npm run db:migrate` | Apply Drizzle migrations |
-| `npm run db:generate` | Generate a migration after editing `src/db/schema.ts` |
-| `npm run db:seed` | Reset + seed sample data |
-| `npm run db:import <zip> -- --replace` | Restore a collection from an exported backup zip |
-| `npm test` | Unit tests (vitest) |
-| `npm run test:integration` | Browser E2E against an isolated DB (puppeteer) |
-| `npm run typecheck` | `tsc --noEmit` (kept separate from `build`; see Requirements) |
-| `npm run lint` | ESLint |
 
 ## How it's organized
 
@@ -89,42 +89,45 @@ src/
   lib/        # storage adapter, image processing, reorder (swap), filters, auth
 ```
 
-## Notes on key decisions
+## Metadata autofill
 
-- **"My Comics" is virtual** — every comic belongs to it implicitly (ordered by
-  `Comic.position`), so it can never be deleted or fall out of sync. Custom
-  boards store their own ordering in `board_comics.position`.
-- **Fixed-column masonry** — each flow position maps to a fixed column
-  (`i % columns`) rather than shortest-column packing, so drag-reordering a card
-  never reshuffles unrelated cards into different columns.
-- **Swap reorder** — dragging a card swaps its `position` with the drop
-  target's (two single-row writes); every other card stays put, so there's no
-  board-wide renumber. New cards append after the current max position.
-- **Storage is abstracted** behind `StorageAdapter` (local FS today) so S3/R2 is
-  a drop-in later. All DB access goes through the API layer, and every query is
-  scoped to the signed-in user's id, so UI code stays out of ownership concerns.
+Optional, off unless configured. The Add-comic modal's **Search database** tab
+looks up a series/issue against [Metron](https://metron.cloud/) and fills in
+publisher, cover date, artists, characters, and cover/variant images. Coverage
+is community-contributed, so new releases can come back thin.
+
+![Metron search with variant covers](./docs/assets/metron-variants.jpg)
+
+Without a key, that tab isn't rendered — just the plain upload flow. Enable it
+with a free [metron.cloud](https://metron.cloud/) account:
+
+```
+METRON_API_KEY=your-token   # from Metron's account settings
+```
 
 ## Upscaling covers
 
-Optional, and off unless configured. Most covers imported from a metadata
-provider are around 600px wide — about half what a retina detail view wants —
-so the detail modal offers **Upscale**: it runs the cover through a local
-Real-ESRGAN model, shows the result against the current one with a draggable
-divider, and commits nothing until you accept. The cover it replaces is kept, so
-**Revert** is always available afterwards.
+Optional, off unless configured. Covers from metadata providers are often
+~600px — about half what a retina detail view wants — so the detail modal
+offers **Upscale**: runs the cover through a local Real-ESRGAN model, previews
+it against the original with a draggable divider, and commits nothing until
+you accept. The replaced cover is kept, so **Revert** always works.
 
-Every upscale converges on a 2400px ceiling rather than a raw multiple, so the
-collection stays consistent and an already-large scan doesn't balloon. Sort by
-the **Size** column in list view to find the covers actually worth doing.
+![Upscale before/after slider](./docs/assets/upscale-slider.gif)
 
-Upstream Real-ESRGAN has no Homebrew formula; the easiest route on macOS is the
-Upscayl app, whose bundled binary and models run standalone:
+Every upscale caps at 2400px so the collection stays consistent. Sort by
+**Size** in list view to find covers worth doing.
+
+The app just shells out to whatever binary `UPSCALER_BIN` points at — not
+macOS-specific — but you need a Real-ESRGAN ncnn/Vulkan binary first. Easiest
+on macOS is the Upscayl app (bundled binary + models, no Homebrew formula
+upstream):
 
 ```bash
 brew install --cask upscayl
 ```
 
-Then in `.env` (see `.env.example` for the alternatives):
+Then in `.env` (see `.env.example` for alternatives):
 
 ```
 UPSCALER_BIN=/Applications/Upscayl.app/Contents/Resources/bin/upscayl-bin
@@ -132,32 +135,36 @@ UPSCALER_MODEL=digital-art-4x
 UPSCALER_MODEL_DIR=/Applications/Upscayl.app/Contents/Resources/models
 ```
 
-Leave `UPSCALER_BIN` unset and the action isn't rendered at all, the same way
-`METRON_API_KEY` gates metadata autofill.
+**Linux/Windows**: Upscayl ships desktop builds for both, or grab a binary
+from [Real-ESRGAN-ncnn-vulkan releases](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases)
+— upstream names the model `realesrgan-x4plus-anime` and usually finds its
+own model dir.
 
-> These models **invent** plausible detail rather than recovering what was lost.
-> On comic line art the result usually holds up, but for a cover you care about
-> a real high-res scan through **Replace cover** beats any upscale.
+**macOS**: runs Vulkan over Metal — check Upscayl's system requirements if
+you're on an older Mac.
+
+> These models **invent** detail rather than recover it. Comic line art
+> usually holds up, but for a cover you care about, a real scan via
+> **Replace cover** beats any upscale.
 
 ## Backup & restore
 
-The whole collection can be exported as a single zip — a `collection.json`
-manifest plus every cover's `full.webp`. Grab one from the account menu
-(**Export backup**) or `GET /api/export`; it's one click before any risky
-operation.
+Export the whole collection as a zip — a `collection.json` manifest plus every
+cover's `full.webp` — from the account menu (**Export backup**) or
+`GET /api/export`. One click before any risky operation.
 
-To restore, point `db:import` at a backup zip. It's a **replace**: it wipes the
-target account's comics, boards, and covers, then rebuilds them (regenerating
-ids/thumbnails/blur placeholders via the normal upload pipeline). It refuses to
-run without `--replace` so it can't clobber a collection by accident:
+`db:import` restores a backup zip. It's a **replace**: wipes the target
+account's comics, boards, and covers, then rebuilds them (regenerating
+ids/thumbnails/blur via the normal upload pipeline). Refuses to run without
+`--replace`:
 
 ```bash
 IMPORT_USER_EMAIL=you@example.com npm run db:import path/to/backup.zip -- --replace
 ```
 
-The `--` is required so npm forwards `--replace` to the script. The target
-account (`IMPORT_USER_EMAIL`, or `SEED_USER_EMAIL` as a fallback) must already
-exist — import is a restore, not signup.
+The `--` is required so npm forwards the flag. The target account
+(`IMPORT_USER_EMAIL`, falling back to `SEED_USER_EMAIL`) must already exist —
+this restores, it doesn't sign up.
 
 ## Roadmap
 

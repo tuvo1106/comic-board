@@ -70,34 +70,11 @@ product than the one being built — the app is oriented around *seeing*
 covers, not appraising or inventorying them. Revisit only if that framing
 changes.
 
-### 2f. Personal notes field — *prioritized (2026-08-10)*
+### 2f. Personal notes field — shipped (2026-08-12)
 
 A free-text `notes` column on `comics`, nullable, for open-ended personal
-annotation ("read at con", "signed by X", "spine damage noticed after
-purchase") — the kind of one-off remark that doesn't fit `rating` or `tags`.
-Distinct from **2d Collector fields** (skipped): `purchasePrice`/
-`currentValue`/`grade`/`condition` are structured valuation data that would
-have turned the app into an appraisal/inventory tool, which was explicitly
-rejected as a different product. A freeform `notes` field carries none of
-that framing — it's closer in spirit to today's tags (personal, unstructured)
-than to a collector schema, so 2d's objection doesn't apply here.
-
-Shape, following the precedent already in the codebase:
-
-- **Migration**: nullable `notes text` column on `comics` — same pattern as
-  `originalImagePath` (`src/db/migrations/0006_rapid_phil_sheldon.sql`, added
-  after the initial schema with no `NOT NULL`/default).
-- **`src/lib/schemas.ts`**: optional `notes` string on the create/update
-  comic Zod schemas, alongside `publisher`/`coverDate`/`rating`/`tags`.
-- **UI**: a multi-line editable field in `ComicDetail.tsx`'s inline-edit
-  fields (same area as rating/tags, ~lines 405-467). Not a list-view column —
-  free text doesn't fit a table cell the way `rating`/`tags` do
-  (`ListView.tsx:123-318`); leave list view alone unless that's wanted too.
-- **No facets/stats involvement** — this is unstructured, unlike
-  `tags`/`publisher` which back `computeFacets` and the stats page.
-
-Effort: small, well under a day — one migration, one schema field, one form
-field, no new API route (rides the existing comic-update endpoint).
+annotation. Shipped as scoped: one migration, one schema field, one inline
+form field, no new API route, no facets/stats involvement. → `CHANGELOG.md`
 
 ### 2e. Autocomplete the collection search — shipped (2026-07-29)
 
@@ -438,13 +415,14 @@ code changes expected unless the scanner finds something.
 
 What's actually active after review (2026-07-29):
 
-**Two items are prioritized (2026-08-10), both self-contained with no open
-design questions:**
+**One item is prioritized (2026-08-10), self-contained with no open design
+questions:**
 
-- **2f Personal notes field** — small, one migration + one form field.
 - **7 Prepare repo for public visibility** — half a day, mostly docs +
   secret scan, gated on nothing else in this list (independent of 4g, which
   is about the *running app*, not the repo).
+
+**2f Personal notes field** shipped 2026-08-12 — see `CHANGELOG.md`.
 
 Everything else remains **waiting on a trigger** — which is the point; none
 of it should be built speculatively:

@@ -4,6 +4,16 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-08-12 — Personal notes field on comics
+
+- **A freeform `notes` field for open-ended personal annotation** — "read at
+  con," "signed by X," "spine damage noticed after purchase." Nullable text
+  column, rides the existing comic create/update endpoints (no new API
+  route), edited inline in the detail view alongside rating/tags. Deliberately
+  unstructured and uninvolved in facets/stats, unlike `tags`/`publisher` —
+  scoped in `ROADMAP.md` item 2f as distinct from the collector-fields idea
+  (2d) that was skipped for turning the app into an appraisal tool.
+
 ## 2026-08-01 — 1.2.0 — Full-screen cover viewer, zoom to 1:1
 
 - **Click a cover — in the detail modal, or its own "Full screen" button — to
