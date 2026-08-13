@@ -106,10 +106,10 @@ Notes:
   out of every join table and deletes its image files.
 ### Cover file lifecycle
 
-Diagrammed because this is where the bugs were. Four of the issues found in the
-1.1.0 review were about *which folder exists and who owns it* — including one
-that let Revert delete a freshly uploaded replacement. A comic's two pointers
-are the whole ownership model: a folder referenced by neither is an orphan.
+Upload, replace, upscale, and delete all move a comic through this same state
+machine — worth seeing whole before touching any one of them. A comic's two
+pointers, `imagePath` and `originalImagePath`, are the entire ownership model:
+a folder referenced by neither is an orphan.
 
 ```mermaid
 stateDiagram-v2
@@ -144,14 +144,6 @@ Reading it as invariants:
   them at startup, after a minimum age so it can't take a preview still being
   decided on.
 
-- **`originalImagePath` is what makes an upscale reversible.** It's written only
-  while still null, so upscaling twice still reverts to the true original rather
-  than a generated intermediate, and it's cleared by `replaceComicCover` — a
-  replacement supersedes any upscale history, and leaving it set would arm
-  Revert to delete the image just uploaded. Cover files are owned by whichever
-  of `imagePath` / `originalImagePath` points at them; anything else is an
-  orphan and `sweepOrphanedCovers` collects it at startup.
-
 ---
 
 ## 4. API
@@ -181,8 +173,54 @@ Next route handlers under `/api`; zod-validated, 400 with field errors on failur
 | `PUT /api/comics/:id/upscale` | Accept a candidate, keeping the cover it replaces so it stays revertible. |
 | `DELETE /api/comics/:id/upscale` | Discard a declined candidate's files. |
 | `POST /api/comics/:id/upscale/revert` | Restore the kept pre-upscale cover and delete the generated one. |
+| `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
+| `ALL /api/auth/[...all]` | better-auth handler (sign-up / sign-in / sign-out); HTTP-only session cookie. |
 
-### Upscale: nothing is committed until you accept
+All non-auth routes resolve the session and **401 when absent**; every query is
+scoped to that user id. In practice that means wrapping the handler in
+`src/lib/api.ts`'s `authed(req, (userId) => …)`, which resolves the session once
+and 401s for you — the plain `handle(req, …)` form below is for routes that
+genuinely serve anonymous requests.
+
+### Upload: the flow that touches the most systems
+
+Worth a diagram because it's the widest flow in the app — the only one that
+crosses a third-party provider, the image pipeline, and a relational upsert in
+one request. Change any one piece (the provider client, `processUpload`, the
+name-table dedupe) and you need to see where it sits relative to the other two.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Search as MetadataSearch
+    participant Meta as /api/metadata/*
+    participant Form as MetadataForm
+    participant Create as POST /api/comics
+    participant FS as storage
+    participant DB
+
+    User->>Search: type series + issue
+    Search->>Meta: GET /search?q=...
+    Meta-->>Search: candidates (issue-level)
+    User->>Search: pick a candidate
+    Search->>Meta: GET /detail?ref=...
+    Meta-->>Search: series/issue/date/publisher/credits + cover + variants
+    Search->>Meta: GET /cover?url=... (proxy — keeps the key server-side)
+    Meta-->>Search: image bytes
+    Search->>Form: prefill
+    Note over Form: cover artists and characters are left blank —<br/>Metron's variant/character data isn't reliable enough to autofill
+    User->>Form: edit fields, pick boards, submit
+    Form->>Create: multipart (image + metadata JSON + boardIds)
+    Create->>FS: processUpload → covers/&lt;id&gt;/ (full + thumb + blur)
+    Create->>DB: upsert authors/artists/characters/tags (case-insensitive dedupe),<br/>insert comic, board memberships
+    Create-->>Form: normalized comic DTO
+```
+
+The **manual** tab (drag-drop, no provider) skips straight from `User` to
+`Form` with a local file preview — same `Create` path from there on, since
+`POST /api/comics` doesn't know or care where the image came from.
+
+### Upscale: worth seeing before you touch it
 
 The non-obvious part is that the candidate is a **real stored image before
 anyone decides its fate** — that's what makes preview possible, and also what
@@ -223,20 +261,13 @@ authorize it with `isCoverReferenced`: a candidate is by definition unreferenced
 and any key already in use — a live cover or a kept original, **any account's** —
 is refused. Without that, a crafted path could repoint one comic at another's
 artwork, or delete a live cover.
-| `GET /images/[...path]` | Serve stored covers, `Cache-Control: immutable`. |
-| `ALL /api/auth/[...all]` | better-auth handler (sign-up / sign-in / sign-out); HTTP-only session cookie. |
 
-All non-auth routes resolve the session and **401 when absent**; every query is
-scoped to that user id. In practice that means wrapping the handler in
-`src/lib/api.ts`'s `authed(req, (userId) => …)`, which resolves the session once
-and 401s for you — the plain `handle(req, …)` form below is for routes that
-genuinely serve anonymous requests.
+### The auth gate: two layers checking different things
 
-### The auth gate, and the loop it used to cause
-
-Two layers that check different things, which is easy to misread as redundancy:
-the middleware is **edge-safe and only checks that a cookie exists**, while the
-API does real session validation. The gap between them produced a real bug.
+Every request passes through two layers that check different things, easy to
+misread as redundancy: the middleware is **edge-safe and only checks that a
+cookie exists**, while the API does real session validation — worth seeing
+together before changing either one.
 
 ```mermaid
 sequenceDiagram

@@ -121,8 +121,9 @@ Then, in the browser, authenticate **before** loading the board.
 ## Conventions
 
 - Commit messages: [Conventional Commits](https://www.conventionalcommits.org/)
-  (`type(scope): subject`); no `Co-Authored-By` trailer. Enforced by a
-  `commit-msg` hook — run `lefthook install` once after cloning. See
+  (`type(scope): subject`); no `Co-Authored-By` trailer (convention, not
+  enforced — the hook only checks format/length). Run `lefthook install` once
+  after cloning; it's not wired into `npm install`. See
   [CONTRIBUTING.md](CONTRIBUTING.md) for the full commit/PR/ADR process.
 - **Never commit directly to `main`.** One PR per feature. Branch prefixes:
   `feat/<slug>`, `fix/<slug>`, `chore/<slug>`, `docs/<slug>`, `spike/<slug>`.
