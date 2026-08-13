@@ -53,6 +53,9 @@ export const comics = sqliteTable("comics", {
   // so upscaling twice still reverts to the true original rather than to an
   // intermediate generated one.
   originalImagePath: text("original_image_path"),
+  // Freeform personal annotation ("read at con", "signed by X"); unstructured,
+  // unlike rating/tags — no facet or stats involvement.
+  notes: text("notes"),
 }, (t) => [
   // `listComics` — the app's hottest read: user's comics in board order
   // (WHERE user_id = ? AND deleted_at IS NULL ORDER BY position). Ordering

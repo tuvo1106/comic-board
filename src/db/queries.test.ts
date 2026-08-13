@@ -307,6 +307,24 @@ describe("partial update preserves untouched associations (rating regression)", 
   });
 });
 
+describe("notes", () => {
+  it("defaults to null and can be set, updated, and cleared", () => {
+    const c = makeComic(userA);
+    expect(c.notes).toBeNull();
+
+    q.updateComic(userA, c.id, { notes: "signed by X" });
+    expect(q.getComic(userA, c.id)!.notes).toBe("signed by X");
+
+    q.updateComic(userA, c.id, { notes: null });
+    expect(q.getComic(userA, c.id)!.notes).toBeNull();
+  });
+
+  it("can be set at creation", () => {
+    const c = makeComic(userA, { notes: "read at con" });
+    expect(c.notes).toBe("read at con");
+  });
+});
+
 describe("replaceComicCover", () => {
   it("swaps the image but keeps metadata + board membership", async () => {
     const comic = makeComic(userA, { series: "Batman", authors: ["Bob Kane"] });

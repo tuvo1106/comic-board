@@ -22,6 +22,11 @@ describe("comicUpdateSchema (partial patch)", () => {
     expect(comicUpdateSchema.parse({ rating: null })).toEqual({ rating: null });
   });
 
+  it("allows setting and clearing notes", () => {
+    expect(comicUpdateSchema.parse({ notes: "signed by X" })).toEqual({ notes: "signed by X" });
+    expect(comicUpdateSchema.parse({ notes: null })).toEqual({ notes: null });
+  });
+
   it("validates rating range and 0.5 steps", () => {
     expect(() => comicUpdateSchema.parse({ rating: 0 })).toThrow();
     expect(() => comicUpdateSchema.parse({ rating: 5.5 })).toThrow();
@@ -43,5 +48,12 @@ describe("comicMetaSchema (upload)", () => {
 
   it("requires a non-empty series", () => {
     expect(() => comicMetaSchema.parse({ series: "" })).toThrow();
+  });
+
+  it("notes is optional", () => {
+    expect(comicMetaSchema.parse({ series: "New Series" }).notes).toBeUndefined();
+    expect(comicMetaSchema.parse({ series: "New Series", notes: "read at con" }).notes).toBe(
+      "read at con",
+    );
   });
 });

@@ -194,6 +194,7 @@ export function UploadModal({ open, onClose, defaultBoardId }: Props) {
           artists: form.artists,
           characters: form.characters,
           tags: form.tags,
+          notes: form.notes.trim() || null,
           boardIds: selectedBoards,
         },
       });

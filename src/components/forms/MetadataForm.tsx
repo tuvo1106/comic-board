@@ -13,6 +13,7 @@ export interface ComicFormValue {
   artists: string[]; // cover artists
   characters: string[];
   tags: string[];
+  notes: string;
 }
 
 export const EMPTY_FORM: ComicFormValue = {
@@ -24,6 +25,7 @@ export const EMPTY_FORM: ComicFormValue = {
   artists: [],
   characters: [],
   tags: [],
+  notes: "",
 };
 
 interface Props {
@@ -136,6 +138,18 @@ export function MetadataForm({ value, onChange, focusField }: Props) {
           suggestions={(meta?.tags ?? []).map((t) => t.value)}
           placeholder="e.g. facsimile, homage, key issue"
           autoFocus={focusField === "tags"}
+        />
+      </div>
+
+      <div>
+        <Label>Notes</Label>
+        <textarea
+          value={value.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          placeholder="Add personal notes here..."
+          rows={3}
+          autoFocus={focusField === "notes"}
+          className="w-full resize-y rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent placeholder:text-muted"
         />
       </div>
     </div>
