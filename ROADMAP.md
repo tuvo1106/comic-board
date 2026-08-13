@@ -353,61 +353,17 @@ exposure itself.
 Change email/password from an account-menu dialog, on better-auth's built-in
 endpoints — no new API route. → `CHANGELOG.md`
 
-## 7. Prepare repo for public visibility — *prioritized (2026-08-10)*
+## 7. Prepare repo for public visibility — shipped (2026-08-13)
 
-Flipping the GitHub repo (`git@github.com:tuvo1106/comic-board.git`) from
-private to public. Distinct from **4g**: that item is about the *running
-app* being reachable beyond localhost (auth rate limiting, `/images/**`
-exposure); this item is about the *repository/codebase* being safe and
-presentable to read on GitHub — the two are independent and can land in
-either order.
+Flipping the GitHub repo from private to public needed the codebase itself
+safe and presentable to read cold, distinct from **4g** (the *running app*
+being reachable beyond localhost). Full-history secret scan clean,
+`CODE_OF_CONDUCT.md` added, `CONTRIBUTING.md`/`ARCHITECTURE.md` confirmed
+accurate, README rewritten with real screenshots and platform docs.
+→ `CHANGELOG.md`.
 
-Baseline audit (2026-08-10) — already in good shape:
-
-- **No secrets in tracked files.** `.env` exists locally but was confirmed
-  never tracked or committed (`git log --all` shows no `.env` commits);
-  `.gitignore` excludes `.env*` with a `!.env.example` carve-out. No API-key
-  patterns found in the tracked tree.
-- **`.env.example` is already thorough** — documents `BETTER_AUTH_SECRET`,
-  `BETTER_AUTH_URL`, `METRON_API_KEY`, `UPSCALER_BIN`/`MODEL`/`MODEL_DIR`,
-  `DATA_DIR`, `DATABASE_PATH`, `SEED_USER_*`, `IMPORT_USER_EMAIL`, all
-  commented. `README.md:41-46` covers the auth env vars too.
-- **Open-source scaffolding already landed** (`dd09963`): MIT `LICENSE`,
-  `CONTRIBUTING.md`, `.github/pull_request_template.md` +
-  `ISSUE_TEMPLATE/{bug_report,feature_request,config}.md`, `ARCHITECTURE.md`,
-  `docs/adr/` log.
-- **No personal data tracked** — `data/` (the real collection, covers +
-  sqlite db) is gitignored; no hardcoded personal paths, emails, or usernames
-  found in tracked `src`/`.md` files.
-
-Still open before flipping visibility:
-
-- **Full-history secret scan.** The audit above only checked the current
-  tracked tree and `.env`-specific history, not a proper pass — run
-  `gitleaks` or `trufflehog` over full history before going public, in case
-  something was committed and later removed (still recoverable from git
-  history even if absent from the working tree).
-- **`CODE_OF_CONDUCT.md` is missing** — everything else in the standard
-  open-source file set exists; this is the one gap.
-- **`.DS_Store` isn't explicitly gitignored** by this repo's own
-  `.gitignore` — currently absent from `git ls-files` only because of a
-  global gitignore on this machine, which a contributor cloning fresh
-  wouldn't have. Add it explicitly rather than relying on that.
-- **Docs accuracy pass** — re-read `README.md`, `ARCHITECTURE.md`, and
-  `CONTRIBUTING.md` end to end as a stranger would, since they were written
-  for personal/internal use and haven't been checked against "someone
-  outside this project reads this cold." Confirm setup steps actually work
-  from a clean clone (no assumed local state), and that `METRON_API_KEY`'s
-  optionality (app runs without a configured metadata provider — see 4f) is
-  explicit rather than implied.
-- **API/provider requirements for users** — document what a new user needs
-  to supply themselves to run the app (a Metron account for metadata
-  autofill, the upscaler binary/model if they want that feature) versus
-  what works with zero config, so the README doesn't read as if all
-  features are available out of the box.
-
-Effort: half a day — mostly reading/writing docs and running a scanner, no
-code changes expected unless the scanner finds something.
+The actual flip to public (the GitHub repo visibility setting itself) is a
+one-click action still to be done when wanted — nothing else gates it.
 
 ---
 
@@ -415,14 +371,9 @@ code changes expected unless the scanner finds something.
 
 What's actually active after review (2026-07-29):
 
-**One item is prioritized (2026-08-10), self-contained with no open design
-questions:**
-
-- **7 Prepare repo for public visibility** — half a day, mostly docs +
-  secret scan, gated on nothing else in this list (independent of 4g, which
-  is about the *running app*, not the repo).
-
-**2f Personal notes field** shipped 2026-08-12 — see `CHANGELOG.md`.
+**7 Prepare repo for public visibility** shipped 2026-08-13 and **2f Personal
+notes field** shipped 2026-08-12 — see `CHANGELOG.md` for both. Nothing else
+is currently prioritized.
 
 Everything else remains **waiting on a trigger** — which is the point; none
 of it should be built speculatively:

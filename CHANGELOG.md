@@ -4,6 +4,23 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-08-13 — Repo prepared for public visibility
+
+- **Full-history secret scan came back clean** (gitleaks, all 147 commits) —
+  the earlier audit had only checked the current tree and `.env` history.
+- **`CODE_OF_CONDUCT.md` added**, the one gap in an otherwise-complete
+  open-source file set.
+- **`CONTRIBUTING.md` and `ARCHITECTURE.md` confirmed accurate read cold** —
+  no changes needed.
+- **README rewritten for a first-time visitor**: seven screenshots/GIFs of
+  the actual app (board grid, search/filter, detail view, full-screen zoom,
+  Metron autofill with variant covers, the upscale before/after slider),
+  moved above the setup instructions rather than buried after them; platform
+  notes for the upscaler beyond macOS (Linux/Windows binaries, the Metal
+  requirement); explicit `METRON_API_KEY` optionality; redundant sections cut
+  (a Scripts table that just repeated `package.json`, a key-decisions list
+  that duplicated `ARCHITECTURE.md`); prose tightened throughout.
+
 ## 2026-08-12 — Personal notes field on comics
 
 - **A freeform `notes` field for open-ended personal annotation** — "read at
