@@ -17,6 +17,7 @@ export const comicMetaSchema = z.object({
     .refine((v) => (v * 2) % 1 === 0, "Rating must be in 0.5 steps")
     .optional()
     .nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
   authors: z.array(z.string().trim().min(1).max(120)).default([]),
   artists: z.array(z.string().trim().min(1).max(120)).default([]), // cover artists
   characters: z.array(z.string().trim().min(1).max(120)).default([]),
@@ -47,6 +48,7 @@ export const comicUpdateSchema = z.object({
     .refine((v) => (v * 2) % 1 === 0, "Rating must be in 0.5 steps")
     .nullable()
     .optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
   authors: z.array(z.string().trim().min(1).max(120)).optional(),
   artists: z.array(z.string().trim().min(1).max(120)).optional(),
   characters: z.array(z.string().trim().min(1).max(120)).optional(),

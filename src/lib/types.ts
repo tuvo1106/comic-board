@@ -7,6 +7,7 @@ export interface ComicDTO {
   publisher: string | null;
   coverDate: string | null;
   rating: number | null; // 0.5–5 in 0.5 steps; null = unrated
+  notes: string | null; // freeform personal annotation
   imageUrl: string; // full-size
   thumbUrl: string; // masonry thumbnail
   blurDataUrl: string;

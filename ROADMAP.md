@@ -70,6 +70,35 @@ product than the one being built — the app is oriented around *seeing*
 covers, not appraising or inventorying them. Revisit only if that framing
 changes.
 
+### 2f. Personal notes field — *prioritized (2026-08-10)*
+
+A free-text `notes` column on `comics`, nullable, for open-ended personal
+annotation ("read at con", "signed by X", "spine damage noticed after
+purchase") — the kind of one-off remark that doesn't fit `rating` or `tags`.
+Distinct from **2d Collector fields** (skipped): `purchasePrice`/
+`currentValue`/`grade`/`condition` are structured valuation data that would
+have turned the app into an appraisal/inventory tool, which was explicitly
+rejected as a different product. A freeform `notes` field carries none of
+that framing — it's closer in spirit to today's tags (personal, unstructured)
+than to a collector schema, so 2d's objection doesn't apply here.
+
+Shape, following the precedent already in the codebase:
+
+- **Migration**: nullable `notes text` column on `comics` — same pattern as
+  `originalImagePath` (`src/db/migrations/0006_rapid_phil_sheldon.sql`, added
+  after the initial schema with no `NOT NULL`/default).
+- **`src/lib/schemas.ts`**: optional `notes` string on the create/update
+  comic Zod schemas, alongside `publisher`/`coverDate`/`rating`/`tags`.
+- **UI**: a multi-line editable field in `ComicDetail.tsx`'s inline-edit
+  fields (same area as rating/tags, ~lines 405-467). Not a list-view column —
+  free text doesn't fit a table cell the way `rating`/`tags` do
+  (`ListView.tsx:123-318`); leave list view alone unless that's wanted too.
+- **No facets/stats involvement** — this is unstructured, unlike
+  `tags`/`publisher` which back `computeFacets` and the stats page.
+
+Effort: small, well under a day — one migration, one schema field, one form
+field, no new API route (rides the existing comic-update endpoint).
+
 ### 2e. Autocomplete the collection search — shipped (2026-07-29)
 
 A typeahead on the top-bar search built from the already-cached `/api/meta`
@@ -347,15 +376,78 @@ exposure itself.
 Change email/password from an account-menu dialog, on better-auth's built-in
 endpoints — no new API route. → `CHANGELOG.md`
 
+## 7. Prepare repo for public visibility — *prioritized (2026-08-10)*
+
+Flipping the GitHub repo (`git@github.com:tuvo1106/comic-board.git`) from
+private to public. Distinct from **4g**: that item is about the *running
+app* being reachable beyond localhost (auth rate limiting, `/images/**`
+exposure); this item is about the *repository/codebase* being safe and
+presentable to read on GitHub — the two are independent and can land in
+either order.
+
+Baseline audit (2026-08-10) — already in good shape:
+
+- **No secrets in tracked files.** `.env` exists locally but was confirmed
+  never tracked or committed (`git log --all` shows no `.env` commits);
+  `.gitignore` excludes `.env*` with a `!.env.example` carve-out. No API-key
+  patterns found in the tracked tree.
+- **`.env.example` is already thorough** — documents `BETTER_AUTH_SECRET`,
+  `BETTER_AUTH_URL`, `METRON_API_KEY`, `UPSCALER_BIN`/`MODEL`/`MODEL_DIR`,
+  `DATA_DIR`, `DATABASE_PATH`, `SEED_USER_*`, `IMPORT_USER_EMAIL`, all
+  commented. `README.md:41-46` covers the auth env vars too.
+- **Open-source scaffolding already landed** (`dd09963`): MIT `LICENSE`,
+  `CONTRIBUTING.md`, `.github/pull_request_template.md` +
+  `ISSUE_TEMPLATE/{bug_report,feature_request,config}.md`, `ARCHITECTURE.md`,
+  `docs/adr/` log.
+- **No personal data tracked** — `data/` (the real collection, covers +
+  sqlite db) is gitignored; no hardcoded personal paths, emails, or usernames
+  found in tracked `src`/`.md` files.
+
+Still open before flipping visibility:
+
+- **Full-history secret scan.** The audit above only checked the current
+  tracked tree and `.env`-specific history, not a proper pass — run
+  `gitleaks` or `trufflehog` over full history before going public, in case
+  something was committed and later removed (still recoverable from git
+  history even if absent from the working tree).
+- **`CODE_OF_CONDUCT.md` is missing** — everything else in the standard
+  open-source file set exists; this is the one gap.
+- **`.DS_Store` isn't explicitly gitignored** by this repo's own
+  `.gitignore` — currently absent from `git ls-files` only because of a
+  global gitignore on this machine, which a contributor cloning fresh
+  wouldn't have. Add it explicitly rather than relying on that.
+- **Docs accuracy pass** — re-read `README.md`, `ARCHITECTURE.md`, and
+  `CONTRIBUTING.md` end to end as a stranger would, since they were written
+  for personal/internal use and haven't been checked against "someone
+  outside this project reads this cold." Confirm setup steps actually work
+  from a clean clone (no assumed local state), and that `METRON_API_KEY`'s
+  optionality (app runs without a configured metadata provider — see 4f) is
+  explicit rather than implied.
+- **API/provider requirements for users** — document what a new user needs
+  to supply themselves to run the app (a Metron account for metadata
+  autofill, the upscaler binary/model if they want that feature) versus
+  what works with zero config, so the README doesn't read as if all
+  features are available out of the box.
+
+Effort: half a day — mostly reading/writing docs and running a scanner, no
+code changes expected unless the scanner finds something.
+
 ---
 
 ## Suggested order
 
 What's actually active after review (2026-07-29):
 
-**Nothing is queued on appetite.** With the stats page shipped, every remaining
-item is **waiting on a trigger** — which is the point; none of it should be built
-speculatively:
+**Two items are prioritized (2026-08-10), both self-contained with no open
+design questions:**
+
+- **2f Personal notes field** — small, one migration + one form field.
+- **7 Prepare repo for public visibility** — half a day, mostly docs +
+  secret scan, gated on nothing else in this list (independent of 4g, which
+  is about the *running app*, not the repo).
+
+Everything else remains **waiting on a trigger** — which is the point; none
+of it should be built speculatively:
 
 - **4a Dockerize** — when there's an actual host to deploy to.
 - **4g exposure prerequisites** — *before* the app is reachable from anywhere

@@ -49,6 +49,7 @@ function toForm(c: ComicDTO): ComicFormValue {
     artists: c.artists,
     characters: c.characters,
     tags: c.tags,
+    notes: c.notes ?? "",
   };
 }
 
@@ -250,6 +251,7 @@ export function ComicDetail({ id, asModal }: Props) {
           artists: form.artists,
           characters: form.characters,
           tags: form.tags,
+          notes: form.notes.trim() || null,
         },
       });
       toast("Changes saved", "success");
@@ -465,6 +467,11 @@ export function ComicDetail({ id, asModal }: Props) {
               {comic.tags.length > 0 && (
                 <Field label="Tags" onClick={() => startEdit("tags")}>
                   <ChipRow values={comic.tags} />
+                </Field>
+              )}
+              {comic.notes && (
+                <Field label="Notes" onClick={() => startEdit("notes")}>
+                  <p className="whitespace-pre-wrap text-sm text-fg">{comic.notes}</p>
                 </Field>
               )}
               <Field label="Boards">

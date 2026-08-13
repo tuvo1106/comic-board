@@ -258,6 +258,7 @@ export interface UploadArgs {
     publisher?: string | null;
     coverDate?: string | null;
     rating?: number | null;
+    notes?: string | null;
     authors: string[];
     artists: string[];
     characters: string[];
@@ -323,6 +324,7 @@ export interface UpdateComicArgs {
     publisher?: string | null;
     coverDate?: string | null;
     rating?: number | null;
+    notes?: string | null;
     authors?: string[];
     artists?: string[];
     characters?: string[];

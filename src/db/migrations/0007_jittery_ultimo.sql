@@ -1,0 +1,1 @@
+ALTER TABLE `comics` ADD `notes` text;
