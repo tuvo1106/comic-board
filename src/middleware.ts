@@ -22,6 +22,7 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Guard everything except API routes, Next internals, and served images.
-  matcher: ["/((?!api|_next/static|_next/image|images|favicon.ico).*)"],
+  // Guard everything except API routes, Next internals, served images, and the
+  // app icons — /login's own tab needs them before anyone has a session.
+  matcher: ["/((?!api|_next/static|_next/image|images|favicon.ico|icon.svg|apple-icon.png).*)"],
 };

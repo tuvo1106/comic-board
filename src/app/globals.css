@@ -14,15 +14,22 @@
   component for dark assumptions, make those sprinkles conditional), not a
   drop-in override. Don't half-add it.
 */
+/* Ink, cream and the cover red are shared with the logo (src/app/icon.svg). */
 @theme {
-  --color-bg: #0e0f13;
-  --color-surface: #16181f;
-  --color-surface-2: #1e212b;
-  --color-border: #2a2e3a;
-  --color-fg: #eef0f5;
-  --color-muted: #9aa2b4;
-  --color-accent: #6d8bff;
+  --color-bg: #111114;
+  --color-surface: #19191d;
+  --color-surface-2: #212126;
+  --color-border: #303036;
+  --color-fg: #f3f1ec;
+  --color-muted: #a3a09a;
+  /*
+    No single red passes AA both as a fill under white text and as text on
+    these surfaces, so it's split: `accent` for fills/borders/icons,
+    `accent-text` for red text. Keep text off plain `text-accent`.
+  */
+  --color-accent: #d93a25;
   --color-accent-fg: #ffffff;
+  --color-accent-text: #f5654a;
   --color-danger: #ff5c72;
 
   --radius-card: 12px;
