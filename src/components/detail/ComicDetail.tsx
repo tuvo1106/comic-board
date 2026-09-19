@@ -566,7 +566,7 @@ export function ComicDetail({ id, asModal }: Props) {
                       <button
                         onClick={onDelete}
                         disabled={deleteComic.isPending}
-                        className="rounded-md bg-danger px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+                        className="rounded-md border border-danger/60 px-3 py-1.5 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:opacity-50"
                       >
                         {deleteComic.isPending ? "Deleting…" : "Delete"}
                       </button>

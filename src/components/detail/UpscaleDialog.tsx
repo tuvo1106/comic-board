@@ -342,7 +342,7 @@ function Compare({
         value={split}
         onChange={(e) => onSplit(Number(e.target.value))}
         aria-label="Compare upscaled against current"
-        className="w-full accent-[var(--accent)]"
+        className="w-full accent-accent"
       />
     </div>
   );

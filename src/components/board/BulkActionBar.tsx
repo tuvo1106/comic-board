@@ -238,7 +238,7 @@ export function BulkActionBar({
             </button>
             <button
               onClick={doDelete}
-              className="rounded-lg bg-danger px-3.5 py-2 text-sm font-semibold text-white hover:brightness-110"
+              className="rounded-lg border border-danger/60 px-3.5 py-2 text-sm font-semibold text-danger hover:bg-danger/10"
             >
               Delete
             </button>
