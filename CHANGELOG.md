@@ -4,6 +4,43 @@ Notable work, newest first, grouped by theme rather than one line per commit —
 `git log` has the full detail. This is the record of **what shipped**; see
 [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
+## 2026-09-19 — App icon, logo, and a red accent theme (PR #20)
+
+- **A real app icon, replacing the "C" placeholder tile.** A longbox of
+  issues with a caped hero on the front cover, hand-drawn as SVG from a
+  raster concept (kept at `docs/assets/logo-reference.png`). The concept's
+  eight thin spines and detailed silhouette didn't survive icon sizes, so the
+  mark was redrawn for 16px first: two thick spines, a burst behind the hero,
+  and a hands-on-hips pose whose negative space still reads at 32px. It ships
+  as `src/app/icon.svg` plus a `favicon.ico` (16/32/48) and a full-bleed
+  `apple-icon.png` — iOS applies its own corner mask. Next's file conventions
+  emit the `<link>` tags, and the same SVG is the logo in `TopBar` and
+  `AuthForm`.
+- **The icon routes had to be exempted from the auth middleware.** The matcher
+  only excluded `favicon.ico`, so a signed-out `/login` tab had its
+  `/icon.svg` and `/apple-icon.png` requests redirected to `/login` itself.
+- **README wordmark** (`docs/assets/logo.svg`): the mark plus "COMIC / BOARD"
+  in Lilita One, converted to outlines so it doesn't depend on installed
+  fonts, with a thick ink stroke so it reads on GitHub's light and dark
+  themes alike.
+- **The theme moved to the logo's palette.** Neutrals shifted from blue-gray to
+  the icon's ink, the foreground to its cream, and the accent from periwinkle
+  to the cover red. Yellow was tried first and dropped as too loud; red is the
+  logo's dominant color. The accent is split into two tokens because no single
+  red passes WCAG AA both as a fill under white text and as text on the dark
+  surfaces: `accent` (`#d93a25`, 4.6:1 under white) for fills, borders and
+  icons, and `accent-text` (`#f5654a`, 5.7:1 on surface) for the two places
+  red is used as text. The logo's own `#e8412c` only reaches 4.0:1 under
+  white.
+- **Delete buttons are outlined, not filled.** With a red accent, solid
+  `bg-danger` confirms looked like primary actions. The four delete confirms
+  (card menu, board tab, bulk bar, detail view) are now a danger border and
+  text instead. `--color-danger` stays pink-red rather than moving off red, to
+  keep the "red means destructive" convention.
+- **Fixed: the Upscale before/after slider ignored the theme.** It used
+  `accent-[var(--accent)]`, a variable that never existed (the token is
+  `--color-accent`), so it had always rendered in the browser's default blue.
+
 ## 2026-08-13 — Repo prepared for public visibility
 
 - **Full-history secret scan came back clean** (gitleaks, all 147 commits) —
