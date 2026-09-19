@@ -1,3 +1,5 @@
+<p align="center"><img src="./docs/assets/logo.svg" alt="Comic Board logo" width="420"></p>
+
 # Comic Board
 
 A Pinterest-style board for collecting and browsing comic book covers. Upload

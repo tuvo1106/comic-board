@@ -40,7 +40,7 @@ function Label({ children, required }: { children: React.ReactNode; required?: b
   return (
     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
       {children}
-      {required && <span className="text-accent"> *</span>}
+      {required && <span className="text-accent-text"> *</span>}
     </label>
   );
 }

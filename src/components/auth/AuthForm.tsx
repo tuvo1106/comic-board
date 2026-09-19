@@ -38,9 +38,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-accent font-black text-accent-fg">
-            C
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" className="h-9 w-9" />
           <span className="text-lg font-bold">Comic Board</span>
         </div>
 
@@ -127,7 +126,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             {isSignup ? "Already have an account? " : "New here? "}
             <Link
               href={isSignup ? "/login" : "/signup"}
-              className="font-medium text-accent hover:underline"
+              className="font-medium text-accent-text hover:underline"
             >
               {isSignup ? "Sign in" : "Create an account"}
             </Link>

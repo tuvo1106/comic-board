@@ -32,9 +32,8 @@ export function TopBar({ search, onSearch, onSearchCommit, onSearchSubmit, onAdd
       <div className="mx-auto flex max-w-[1800px] items-center gap-4 px-5 py-3">
         {/* The wordmark is the way back to the board from any page that isn't one. */}
         <Link href="/" className="flex items-center gap-2 rounded-lg">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-accent-fg font-black">
-            C
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" className="h-8 w-8" />
           <h1 className="text-lg font-bold tracking-tight">Comic Board</h1>
         </Link>
 
